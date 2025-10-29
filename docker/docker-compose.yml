@@ -1,0 +1,38 @@
+version: '3'
+services:
+  horizon-postgres:
+    platform: linux/amd64
+    image: postgres:12-bullseye
+    restart: on-failure
+    environment:
+      - POSTGRES_HOST_AUTH_METHOD=trust
+      - POSTGRES_DB=horizon
+    ports:
+      - "5432:5432"
+    volumes:
+      - "horizon-db-data:/var/lib/postgresql/data"
+
+  horizon:
+    platform: linux/amd64
+    depends_on:
+      - horizon-postgres
+    build:
+      # set build context to the root directory of the go monorepo
+      context: ../../../
+      args: 
+         STELLAR_CORE_VERSION: ${STELLAR_CORE_VERSION:-}
+      dockerfile: services/horizon/docker/Dockerfile.dev
+    restart: on-failure
+    ports:
+      - "8000:8000"
+      - "11725:11725"
+    environment:
+      - DATABASE_URL=postgres://postgres@host.docker.internal:5432/horizon?sslmode=disable
+      - NETWORK=testnet
+      - PER_HOUR_RATE_LIMIT=0
+    command: ["--apply-migrations"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  horizon-db-data:

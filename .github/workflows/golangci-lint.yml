@@ -1,0 +1,29 @@
+name: Linters
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+  # Optional: allow read access to pull request. Use with `only-new-issues` option.
+  pull-requests: read
+
+jobs:
+  golangci:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # required for new-from-rev option in .golangci.yml
+      - uses: ./.github/actions/setup-go
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.1.6
+          args: -v --issues-exit-code=0 --config=.golangci.yml # exit without errors for now - won't fail the build
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          only-new-issues: true
+        continue-on-error: true

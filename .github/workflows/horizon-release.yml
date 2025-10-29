@@ -1,0 +1,40 @@
+name: Horizon release
+
+on:
+  push:
+    tags: ['horizon-v*']
+
+jobs:
+
+  publish-artifacts:
+    runs-on: ubuntu-22.04
+    name: Upload artifacts to GitHub release
+    steps:
+      - name: Run deprecation tests
+        shell: bash
+        run: |
+          export VERSION=${GITHUB_REF_NAME#horizon-v}
+          echo "Searching for \"Action needed in release ${VERSION}\" tags..."
+          # Negate the result so process exits with 1 if anything found
+          ! egrep -irn -A 1 --include=*.go "Action.+needed.+in.+release:.+$VERSION" ./
+
+      - uses: actions/checkout@v2
+
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: "1.23"
+
+      - name: Check dependencies
+        run: ./gomod.sh
+
+      - name: Build binaries
+        run: go run ./support/scripts/build_release_artifacts/main.go
+
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@483c1e56f95e88835747b1c7c60581215016cbf2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
+          file: ./dist/*
+          file_glob: true
+          overwrite: true

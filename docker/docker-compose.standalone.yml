@@ -1,0 +1,53 @@
+version: '3'
+services:
+  core-postgres:
+    image: postgres:9.6.17-alpine
+    restart: on-failure
+    environment:
+      - POSTGRES_PASSWORD=mysecretpassword
+      - POSTGRES_DB=stellar
+    ports:
+      - "5641:5641"
+    command: ["-p", "5641"]
+    volumes:
+      - "core-db-data:/var/lib/postgresql/data"
+
+  core:
+    platform: linux/amd64
+    image: ${CORE_IMAGE:-stellar/stellar-core:21}
+    depends_on:
+      - core-postgres
+      - core-upgrade
+    restart: on-failure
+    ports:
+      - "11625:11625"
+      - "11626:11626"
+      # add extra port for history archive server
+      - "1570:1570"
+    entrypoint: /usr/bin/env
+    command: /start standalone
+    volumes:
+      - ./stellar-core-standalone.cfg:/stellar-core.cfg
+      - ./core-start.sh:/start
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  horizon:
+    environment:
+      - HISTORY_ARCHIVE_URLS=http://host.docker.internal:1570
+      - NETWORK_PASSPHRASE=Standalone Network ; February 2017
+      - CAPTIVE_CORE_CONFIG_APPEND_PATH=/captive-core-standalone.cfg
+      - STELLAR_CORE_URL=http://host.docker.internal:11626
+    volumes:
+      - ./captive-core-standalone.cfg:/captive-core-standalone.cfg
+
+  # this container will invoke a request to upgrade stellar core to protocol 17 (by default)
+  core-upgrade:
+    restart: on-failure
+    image: curlimages/curl:7.69.1
+    command: ["-v", "-f", "http://host.docker.internal:11626/upgrades?mode=set&upgradetime=1970-01-01T00:00:00Z&protocolversion=${PROTOCOL_VERSION:-18}"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  core-db-data:

@@ -1,0 +1,6 @@
+version: '3'
+services:
+  horizon:
+    platform: linux/amd64
+    environment:
+      - NETWORK=pubnet
