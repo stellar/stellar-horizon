@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/services/horizon/internal/test/integration"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/test/integration"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

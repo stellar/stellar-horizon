@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/services/horizon/internal/test"
+	"github.com/stellar/stellar-horizon/internal/test"
 )
 
 func TestLoaderConcurrentInserts(t *testing.T) {

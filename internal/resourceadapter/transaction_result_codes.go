@@ -4,7 +4,7 @@ import (
 	"context"
 
 	protocol "github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/services/horizon/internal/txsub"
+	"github.com/stellar/stellar-horizon/internal/txsub"
 )
 
 // Populate fills out the details

@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/mock"
 
-	"github.com/stellar/go/services/horizon/internal/db2"
+	"github.com/stellar/stellar-horizon/internal/db2"
 )
 
 type MockQSigners struct {

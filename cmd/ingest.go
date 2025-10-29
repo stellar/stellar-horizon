@@ -15,14 +15,14 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/stellar/go/historyarchive"
-	horizon "github.com/stellar/go/services/horizon/internal"
-	"github.com/stellar/go/services/horizon/internal/db2/history"
-	"github.com/stellar/go/services/horizon/internal/httpx"
-	"github.com/stellar/go/services/horizon/internal/ingest"
 	"github.com/stellar/go/support/config"
 	support "github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/db"
 	"github.com/stellar/go/support/log"
+	horizon "github.com/stellar/stellar-horizon/internal"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
+	"github.com/stellar/stellar-horizon/internal/httpx"
+	"github.com/stellar/stellar-horizon/internal/ingest"
 )
 
 var ingestBuildStateSequence uint32

@@ -6,10 +6,10 @@ import (
 
 	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/protocols/horizon/operations"
-	horizonContext "github.com/stellar/go/services/horizon/internal/context"
-	"github.com/stellar/go/services/horizon/internal/db2/history"
 	"github.com/stellar/go/support/render/hal"
 	"github.com/stellar/go/xdr"
+	horizonContext "github.com/stellar/stellar-horizon/internal/context"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
 )
 
 // NewOperation creates a new operation resource, finding the appropriate type to use

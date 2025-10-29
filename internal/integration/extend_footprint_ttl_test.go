@@ -7,7 +7,7 @@ import (
 
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/protocols/horizon/operations"
-	"github.com/stellar/go/services/horizon/internal/test/integration"
+	"github.com/stellar/stellar-horizon/internal/test/integration"
 )
 
 func TestExtendFootprintTtl(t *testing.T) {

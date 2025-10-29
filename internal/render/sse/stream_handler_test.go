@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stellar/go/services/horizon/internal/ledger"
+	"github.com/stellar/stellar-horizon/internal/ledger"
 )
 
 type testingFactory struct {

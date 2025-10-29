@@ -14,11 +14,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/go/network"
-	"github.com/stellar/go/services/horizon/internal/corestate"
-	hProblem "github.com/stellar/go/services/horizon/internal/render/problem"
-	"github.com/stellar/go/services/horizon/internal/txsub"
 	"github.com/stellar/go/support/render/problem"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/corestate"
+	hProblem "github.com/stellar/stellar-horizon/internal/render/problem"
+	"github.com/stellar/stellar-horizon/internal/txsub"
 )
 
 func TestStellarCoreMalformedTx(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 
 	"github.com/stellar/go/amount"
 	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/services/horizon/internal/paths"
+	"github.com/stellar/stellar-horizon/internal/paths"
 )
 
 func extractAsset(asset string, t, c, i *string) error {

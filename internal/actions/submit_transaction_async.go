@@ -6,10 +6,10 @@ import (
 
 	"github.com/stellar/go/protocols/horizon"
 	proto "github.com/stellar/go/protocols/stellarcore"
-	hProblem "github.com/stellar/go/services/horizon/internal/render/problem"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/problem"
+	hProblem "github.com/stellar/stellar-horizon/internal/render/problem"
 )
 
 type coreClient interface {

@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/stellar/go/services/horizon/internal/test"
+	"github.com/stellar/stellar-horizon/internal/test"
 )
 
 func TestTryStateVerificationLock(t *testing.T) {

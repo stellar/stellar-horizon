@@ -16,17 +16,17 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/services/horizon/internal/actions"
-	horizonContext "github.com/stellar/go/services/horizon/internal/context"
-	"github.com/stellar/go/services/horizon/internal/db2/history"
-	"github.com/stellar/go/services/horizon/internal/httpx"
-	"github.com/stellar/go/services/horizon/internal/paths"
-	horizonProblem "github.com/stellar/go/services/horizon/internal/render/problem"
-	"github.com/stellar/go/services/horizon/internal/simplepath"
-	"github.com/stellar/go/services/horizon/internal/test"
 	"github.com/stellar/go/support/db"
 	"github.com/stellar/go/support/render/problem"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/actions"
+	horizonContext "github.com/stellar/stellar-horizon/internal/context"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
+	"github.com/stellar/stellar-horizon/internal/httpx"
+	"github.com/stellar/stellar-horizon/internal/paths"
+	horizonProblem "github.com/stellar/stellar-horizon/internal/render/problem"
+	"github.com/stellar/stellar-horizon/internal/simplepath"
+	"github.com/stellar/stellar-horizon/internal/test"
 )
 
 func mockPathFindingClient(
