@@ -15,10 +15,10 @@ import (
 	"github.com/stellar/go/strkey"
 
 	"github.com/stellar/go/ingest"
+	"github.com/stellar/go/xdr"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/ingest/contractevents"
 	. "github.com/stellar/stellar-horizon/internal/test/transactions"
-	"github.com/stellar/go/xdr"
 )
 
 func TestTransactionOperationID(t *testing.T) {

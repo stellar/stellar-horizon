@@ -6,10 +6,10 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 
-	"github.com/stellar/stellar-horizon/internal/db2"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/toid"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/db2"
 )
 
 // TransactionByHash is a query that loads a single row from the

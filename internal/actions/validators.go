@@ -9,9 +9,9 @@ import (
 	"github.com/gorilla/schema"
 
 	"github.com/stellar/go/amount"
-	"github.com/stellar/stellar-horizon/internal/assets"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/assets"
 )
 
 // Validateable allow structs to define their own custom validations.

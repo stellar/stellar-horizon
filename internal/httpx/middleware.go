@@ -11,6 +11,11 @@ import (
 	"github.com/go-chi/chi/middleware"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/stellar/go/support/db"
+	supportErrors "github.com/stellar/go/support/errors"
+	supportHttp "github.com/stellar/go/support/http"
+	"github.com/stellar/go/support/log"
+	"github.com/stellar/go/support/render/problem"
 	"github.com/stellar/stellar-horizon/internal/actions"
 	horizonContext "github.com/stellar/stellar-horizon/internal/context"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
@@ -20,11 +25,6 @@ import (
 	"github.com/stellar/stellar-horizon/internal/ledger"
 	"github.com/stellar/stellar-horizon/internal/render"
 	hProblem "github.com/stellar/stellar-horizon/internal/render/problem"
-	"github.com/stellar/go/support/db"
-	supportErrors "github.com/stellar/go/support/errors"
-	supportHttp "github.com/stellar/go/support/http"
-	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/support/render/problem"
 )
 
 // requestCacheHeadersMiddleware adds caching headers to each response.

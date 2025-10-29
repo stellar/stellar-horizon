@@ -16,9 +16,9 @@ import (
 
 	"github.com/stellar/go/network"
 	proto "github.com/stellar/go/protocols/stellarcore"
-	"github.com/stellar/stellar-horizon/internal/corestate"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/support/render/problem"
+	"github.com/stellar/stellar-horizon/internal/corestate"
 )
 
 const (

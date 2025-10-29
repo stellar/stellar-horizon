@@ -7,10 +7,10 @@ import (
 	"testing"
 
 	"github.com/stellar/go/ingest"
-	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/go/support/db"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"

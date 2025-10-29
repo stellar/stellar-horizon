@@ -9,13 +9,13 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/sirupsen/logrus"
+	"github.com/stellar/go/support/db"
+	"github.com/stellar/go/support/render/hal"
 	"github.com/stellar/stellar-horizon/internal/db2/schema"
 	"github.com/stellar/stellar-horizon/internal/ledger"
 	"github.com/stellar/stellar-horizon/internal/operationfeestats"
 	tdb "github.com/stellar/stellar-horizon/internal/test/db"
 	"github.com/stellar/stellar-horizon/internal/test/scenarios"
-	"github.com/stellar/go/support/db"
-	"github.com/stellar/go/support/render/hal"
 )
 
 // TODO - remove ref to core db once scenario tests are removed.

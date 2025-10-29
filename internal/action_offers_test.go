@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/xdr"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/ingest"
-	"github.com/stellar/go/xdr"
 )
 
 func TestOfferActions_Show(t *testing.T) {

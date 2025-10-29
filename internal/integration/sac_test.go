@@ -19,11 +19,11 @@ import (
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/protocols/horizon/effects"
 	"github.com/stellar/go/protocols/horizon/operations"
-	"github.com/stellar/stellar-horizon/internal/db2/history"
-	"github.com/stellar/stellar-horizon/internal/test/integration"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
+	"github.com/stellar/stellar-horizon/internal/test/integration"
 )
 
 const sac_contract = "soroban_sac_test.wasm"

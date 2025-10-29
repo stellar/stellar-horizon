@@ -19,8 +19,6 @@ import (
 	"github.com/stellar/go/ingest"
 	"github.com/stellar/go/ingest/ledgerbackend"
 	"github.com/stellar/go/ingest/loadtest"
-	"github.com/stellar/stellar-horizon/internal/db2/history"
-	"github.com/stellar/stellar-horizon/internal/ingest/filters"
 	apkg "github.com/stellar/go/support/app"
 	"github.com/stellar/go/support/datastore"
 	"github.com/stellar/go/support/db"
@@ -28,6 +26,8 @@ import (
 	logpkg "github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/storage"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
+	"github.com/stellar/stellar-horizon/internal/ingest/filters"
 )
 
 const (

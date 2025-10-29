@@ -8,11 +8,11 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/xdr"
 	"github.com/stellar/stellar-horizon/internal/corestate"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/ingest"
 	"github.com/stellar/stellar-horizon/internal/test"
-	"github.com/stellar/go/xdr"
 )
 
 func TestTransactionActions_Show(t *testing.T) {

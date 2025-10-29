@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/go/ingest"
-	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
 )
 
 func TestAccountFilterAllowsWhenMatch(t *testing.T) {

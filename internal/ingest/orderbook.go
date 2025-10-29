@@ -10,10 +10,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/stellar/go/exp/orderbook"
-	"github.com/stellar/stellar-horizon/internal/db2/history"
-	"github.com/stellar/stellar-horizon/internal/ingest/processors"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
+	"github.com/stellar/stellar-horizon/internal/ingest/processors"
 )
 
 const (

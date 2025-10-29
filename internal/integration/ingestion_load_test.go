@@ -15,13 +15,13 @@ import (
 	"github.com/stellar/go/ingest"
 	"github.com/stellar/go/ingest/ledgerbackend"
 	"github.com/stellar/go/ingest/loadtest"
+	"github.com/stellar/go/support/db"
+	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go/xdr"
 	horizoncmd "github.com/stellar/stellar-horizon/cmd"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	horizoningest "github.com/stellar/stellar-horizon/internal/ingest"
 	"github.com/stellar/stellar-horizon/internal/test/integration"
-	"github.com/stellar/go/support/db"
-	"github.com/stellar/go/txnbuild"
-	"github.com/stellar/go/xdr"
 )
 
 func TestLoadTestLedgerBackend(t *testing.T) {

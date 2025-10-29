@@ -11,12 +11,12 @@ import (
 
 	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/protocols/stellarcore"
-	hProblem "github.com/stellar/stellar-horizon/internal/render/problem"
-	"github.com/stellar/stellar-horizon/internal/resourceadapter"
-	"github.com/stellar/stellar-horizon/internal/txsub"
 	"github.com/stellar/go/support/render/hal"
 	"github.com/stellar/go/support/render/problem"
 	"github.com/stellar/go/xdr"
+	hProblem "github.com/stellar/stellar-horizon/internal/render/problem"
+	"github.com/stellar/stellar-horizon/internal/resourceadapter"
+	"github.com/stellar/stellar-horizon/internal/txsub"
 )
 
 type NetworkSubmitter interface {

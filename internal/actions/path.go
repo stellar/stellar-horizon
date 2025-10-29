@@ -8,16 +8,16 @@ import (
 
 	"github.com/stellar/go/amount"
 	"github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/support/errors"
+	"github.com/stellar/go/support/render/hal"
+	"github.com/stellar/go/support/render/problem"
+	"github.com/stellar/go/xdr"
 	horizonContext "github.com/stellar/stellar-horizon/internal/context"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/paths"
 	horizonProblem "github.com/stellar/stellar-horizon/internal/render/problem"
 	"github.com/stellar/stellar-horizon/internal/resourceadapter"
 	"github.com/stellar/stellar-horizon/internal/simplepath"
-	"github.com/stellar/go/support/errors"
-	"github.com/stellar/go/support/render/hal"
-	"github.com/stellar/go/support/render/problem"
-	"github.com/stellar/go/xdr"
 )
 
 // FindPathsHandler is the http handler for the find payment paths endpoint

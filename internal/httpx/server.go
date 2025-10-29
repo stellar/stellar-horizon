@@ -11,13 +11,13 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/stellar/go/support/db"
+	"github.com/stellar/go/support/log"
+	"github.com/stellar/go/support/render/problem"
 	"github.com/stellar/stellar-horizon/internal/db2"
 	"github.com/stellar/stellar-horizon/internal/ledger"
 	hProblem "github.com/stellar/stellar-horizon/internal/render/problem"
 	"github.com/stellar/stellar-horizon/internal/render/sse"
-	"github.com/stellar/go/support/db"
-	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/support/render/problem"
 )
 
 type ServerMetrics struct {

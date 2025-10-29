@@ -5,9 +5,9 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 
-	"github.com/stellar/stellar-horizon/internal/db2"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/db2"
 )
 
 // IsAuthRequired returns true if the account has the "AUTH_REQUIRED" option

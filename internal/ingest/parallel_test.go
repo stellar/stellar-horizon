@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/go/support/errors"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
 )
 
 func TestCalculateParallelLedgerBatchSize(t *testing.T) {

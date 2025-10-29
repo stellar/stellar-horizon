@@ -17,6 +17,9 @@ import (
 	"github.com/rs/cors"
 	"github.com/stellar/throttled"
 
+	"github.com/stellar/go/support/db"
+	supporthttp "github.com/stellar/go/support/http"
+	"github.com/stellar/go/support/render/problem"
 	"github.com/stellar/stellar-horizon/internal/actions"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/ledger"
@@ -24,9 +27,6 @@ import (
 	"github.com/stellar/stellar-horizon/internal/render"
 	"github.com/stellar/stellar-horizon/internal/render/sse"
 	"github.com/stellar/stellar-horizon/internal/txsub"
-	"github.com/stellar/go/support/db"
-	supporthttp "github.com/stellar/go/support/http"
-	"github.com/stellar/go/support/render/problem"
 )
 
 type RouterConfig struct {

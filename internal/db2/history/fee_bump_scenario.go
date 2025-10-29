@@ -14,9 +14,9 @@ import (
 
 	"github.com/stellar/go/ingest"
 	"github.com/stellar/go/network"
-	"github.com/stellar/stellar-horizon/internal/test"
 	"github.com/stellar/go/toid"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/test"
 )
 
 func ledgerToMap(ledger Ledger) map[string]interface{} {

@@ -8,8 +8,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/go/toid"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
 )
 
 type loadTestSnapshot struct {

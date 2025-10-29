@@ -6,9 +6,9 @@ import (
 	"net/http"
 
 	hProtocol "github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/support/render/problem"
 	horizonContext "github.com/stellar/stellar-horizon/internal/context"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
-	"github.com/stellar/go/support/render/problem"
 )
 
 // these admin HTTP endpoints are documented in services/horizon/internal/httpx/static/admin_oapi.yml

@@ -7,10 +7,10 @@ import (
 
 	"github.com/stellar/go/amount"
 	protocol "github.com/stellar/go/protocols/horizon"
-	horizonContext "github.com/stellar/stellar-horizon/internal/context"
-	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/go/support/render/hal"
 	"github.com/stellar/go/xdr"
+	horizonContext "github.com/stellar/stellar-horizon/internal/context"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
 )
 
 // PopulateOffer constructs an offer response struct from an offer row extracted from the

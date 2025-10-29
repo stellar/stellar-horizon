@@ -3,8 +3,8 @@ package sse
 import (
 	"net/http"
 
-	"github.com/stellar/stellar-horizon/internal/ledger"
 	"github.com/stellar/go/support/errors"
+	"github.com/stellar/stellar-horizon/internal/ledger"
 	"github.com/stellar/throttled"
 )
 

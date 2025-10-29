@@ -7,15 +7,15 @@ import (
 	"strings"
 
 	"github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/support/errors"
+	"github.com/stellar/go/support/render/hal"
+	"github.com/stellar/go/support/render/problem"
+	"github.com/stellar/go/xdr"
 	horizonContext "github.com/stellar/stellar-horizon/internal/context"
 	"github.com/stellar/stellar-horizon/internal/db2"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/ledger"
 	"github.com/stellar/stellar-horizon/internal/resourceadapter"
-	"github.com/stellar/go/support/errors"
-	"github.com/stellar/go/support/render/hal"
-	"github.com/stellar/go/support/render/problem"
-	"github.com/stellar/go/xdr"
 )
 
 // AssetStatsHandler is the action handler for the /asset endpoint

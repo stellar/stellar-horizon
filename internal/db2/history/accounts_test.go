@@ -5,9 +5,9 @@ import (
 
 	"github.com/guregu/null"
 	"github.com/guregu/null/zero"
+	"github.com/stellar/go/xdr"
 	"github.com/stellar/stellar-horizon/internal/db2"
 	"github.com/stellar/stellar-horizon/internal/test"
-	"github.com/stellar/go/xdr"
 	"github.com/stretchr/testify/assert"
 )
 

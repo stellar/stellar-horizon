@@ -16,6 +16,9 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/support/db"
+	"github.com/stellar/go/support/render/problem"
+	"github.com/stellar/go/xdr"
 	"github.com/stellar/stellar-horizon/internal/actions"
 	horizonContext "github.com/stellar/stellar-horizon/internal/context"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
@@ -24,9 +27,6 @@ import (
 	horizonProblem "github.com/stellar/stellar-horizon/internal/render/problem"
 	"github.com/stellar/stellar-horizon/internal/simplepath"
 	"github.com/stellar/stellar-horizon/internal/test"
-	"github.com/stellar/go/support/db"
-	"github.com/stellar/go/support/render/problem"
-	"github.com/stellar/go/xdr"
 )
 
 func mockPathFindingClient(

@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/stellar/go/ingest/ledgerbackend"
-	"github.com/stellar/stellar-horizon/internal/ingest/processors"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/ingest/processors"
 )
 
 func TestBuildStateTestSuite(t *testing.T) {

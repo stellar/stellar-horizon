@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/stellar/stellar-horizon/internal/test"
 	"github.com/stellar/go/toid"
+	"github.com/stellar/stellar-horizon/internal/test"
 )
 
 func TestDeleteUnretainedHistory(t *testing.T) {

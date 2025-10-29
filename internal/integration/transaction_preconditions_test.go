@@ -13,9 +13,9 @@ import (
 	sdk "github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
-	"github.com/stellar/stellar-horizon/internal/test/integration"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/test/integration"
 )
 
 func TestTransactionPreconditionsTimeBounds(t *testing.T) {

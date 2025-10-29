@@ -15,8 +15,8 @@ import (
 
 	"github.com/stellar/go/ingest"
 	"github.com/stellar/go/ingest/ledgerbackend"
-	"github.com/stellar/stellar-horizon/internal/test"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/test"
 )
 
 type memoryChangeReader struct {

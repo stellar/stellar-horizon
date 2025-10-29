@@ -15,12 +15,12 @@ import (
 	"github.com/stellar/go/ingest"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/protocols/horizon/base"
-	"github.com/stellar/stellar-horizon/internal/db2/history"
-	"github.com/stellar/stellar-horizon/internal/ingest/contractevents"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/db"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
+	"github.com/stellar/stellar-horizon/internal/ingest/contractevents"
 )
 
 // EffectProcessor process effects

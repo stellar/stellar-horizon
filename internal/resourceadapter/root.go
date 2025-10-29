@@ -5,10 +5,10 @@ import (
 	"net/url"
 
 	"github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/support/render/hal"
 	horizonContext "github.com/stellar/stellar-horizon/internal/context"
 	"github.com/stellar/stellar-horizon/internal/ingest"
 	"github.com/stellar/stellar-horizon/internal/ledger"
-	"github.com/stellar/go/support/render/hal"
 )
 
 // Populate fills in the details

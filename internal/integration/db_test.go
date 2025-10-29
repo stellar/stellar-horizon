@@ -17,17 +17,17 @@ import (
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	hProtocol "github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/support/collections/set"
+	"github.com/stellar/go/support/db"
+	"github.com/stellar/go/support/db/dbtest"
+	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go/xdr"
 	horizoncmd "github.com/stellar/stellar-horizon/cmd"
 	horizon "github.com/stellar/stellar-horizon/internal"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/db2/schema"
 	"github.com/stellar/stellar-horizon/internal/ingest/filters"
 	"github.com/stellar/stellar-horizon/internal/test/integration"
-	"github.com/stellar/go/support/collections/set"
-	"github.com/stellar/go/support/db"
-	"github.com/stellar/go/support/db/dbtest"
-	"github.com/stellar/go/txnbuild"
-	"github.com/stellar/go/xdr"
 )
 
 func submitLiquidityPoolOps(itest *integration.Test, tt *assert.Assertions) (submittedOperations []txnbuild.Operation, lastLedger int32) {
