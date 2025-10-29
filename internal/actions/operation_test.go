@@ -310,7 +310,7 @@ func TestGetOperationsFilterByTxID(t *testing.T) {
 	tt := test.Start(t)
 	defer tt.Finish()
 
-	q := &history.Q{tt.HorizonSession()}
+	q := &history.Q{SessionInterface: tt.HorizonSession()}
 	handler := GetOperationsHandler{
 		LedgerState: &ledger.State{},
 	}
@@ -351,7 +351,7 @@ func TestGetOperationsFilterByTxID(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		t.Run(fmt.Sprintf(tc.desc), func(t *testing.T) {
+		t.Run(tc.desc, func(t *testing.T) {
 			records, err := handler.GetResourcePage(
 				httptest.NewRecorder(),
 				makeRequest(

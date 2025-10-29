@@ -177,7 +177,7 @@ export STELLAR_CORE_BINARY_PATH="/usr/bin/stellar-core"
 export CAPTIVE_CORE_STORAGE_PATH="$CONTAINER_WORKING_DIR"
 export HISTORY_ARCHIVE_CACHING="FALSE"
 
-BASE_BRANCH=${BASE_BRANCH:-master}
+BASE_BRANCH=${BASE_BRANCH:-main}
 cd horizon
 if [ ! -z "$BRANCH" ]; then
 	if [[ "$BRANCH" == pull/* ]]; then

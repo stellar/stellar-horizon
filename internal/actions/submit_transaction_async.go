@@ -90,7 +90,7 @@ func (handler AsyncSubmitTransactionHandler) GetResource(_ HeaderWriter, r *http
 	}
 
 	if resp.IsException() {
-		logger.WithField("envelope_xdr", raw).WithError(errors.Errorf(resp.Exception)).Error("Transaction submission exception from stellar-core")
+		logger.WithField("envelope_xdr", raw).WithError(errors.New(resp.Exception)).Error("Transaction submission exception from stellar-core")
 		return nil, &problem.P{
 			Type:   "transaction_submission_exception",
 			Title:  "Transaction Submission Exception",
@@ -119,7 +119,7 @@ func (handler AsyncSubmitTransactionHandler) GetResource(_ HeaderWriter, r *http
 
 		return response, nil
 	default:
-		logger.WithField("envelope_xdr", raw).WithError(errors.Errorf(resp.Error)).Error("Received invalid submission status from stellar-core")
+		logger.WithField("envelope_xdr", raw).WithError(errors.New(resp.Error)).Error("Received invalid submission status from stellar-core")
 		return nil, &problem.P{
 			Type:   "transaction_submission_invalid_status",
 			Title:  "Transaction Submission Invalid Status",
