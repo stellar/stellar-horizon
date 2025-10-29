@@ -6,7 +6,7 @@ For details about what's in this repository and how it is organized read the [RE
 
 If you're aiming to submit a contribution make sure to also read the [contributing guidelines](CONTRIBUTING.md).
 
-If you're making changes to Horizon, look for documentation in its [docs](services/horizon/internal/docs) directory for specific instructions.
+If you're making changes to Horizon, look for documentation in its [docs](./internal/docs) directory for specific instructions.
 
 ## Requirements
 To checkout, build, and run most tests these tools are required:

@@ -34,7 +34,7 @@ const sac_contract = "soroban_sac_test.wasm"
 const LongTermTTL = 10000
 
 // Tests use precompiled wasm bin files that are added to the testdata directory.
-// Refer to ./services/horizon/internal/integration/contracts/README.md on how to recompile
+// Refer to ./internal/integration/contracts/README.md on how to recompile
 // contract code if needed to new wasm.
 
 func TestContractMintToAccount(t *testing.T) {

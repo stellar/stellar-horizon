@@ -15,4 +15,4 @@ binary-build:
 		/bin/bash -c '\
 			git config --global --add safe.directory /go/src/github.com/stellar/go && \
 			cd /go/src/github.com/stellar/go && \
-			go build -o stellar-horizon -trimpath -v ./services/horizon'
+			go build -o stellar-horizon -trimpath -v .'

@@ -91,7 +91,7 @@ jobs:
 
       - name: Build Horizon reproducible build
         run: |
-          go build -v -trimpath -buildvcs=false ./services/horizon
+          go build -v -trimpath -buildvcs=false .
           touch empty
 
       - name: Calculate the source hash

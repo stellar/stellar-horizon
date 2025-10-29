@@ -28,7 +28,7 @@ https://www.rust-lang.org/tools/install
 3. Compile the contract source code to WASM and copy it to `testdata/`:
 
 ```bash
-cd ./services/horizon/internal/integration/contracts
+cd ./internal/integration/contracts
 cargo update
 cargo build --target wasm32-unknown-unknown --release
 cp target/wasm32-unknown-unknown/release/*.wasm ../testdata/

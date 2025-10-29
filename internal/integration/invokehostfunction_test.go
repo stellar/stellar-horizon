@@ -26,7 +26,7 @@ const increment_contract = "soroban_increment_contract.wasm"
 const constructor_contract = "soroban_constructor_contract.wasm"
 
 // Tests use precompiled wasm bin files that are added to the testdata directory.
-// Refer to ./services/horizon/internal/integration/contracts/README.md on how to recompile
+// Refer to ./internal/integration/contracts/README.md on how to recompile
 // contract code if needed to new wasm.
 
 func TestContractInvokeHostFunctionInstallContract(t *testing.T) {
