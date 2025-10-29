@@ -2,7 +2,7 @@ name: Horizon
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
 
 jobs:
@@ -137,13 +137,13 @@ jobs:
           docker run -e BRANCH=$(git rev-parse HEAD) -e FROM=10000063 -e TO=10000127 stellar/horizon-verify-range
 
       # Push image
-      - if: github.ref == 'refs/heads/master'
+      - if: github.ref == 'refs/heads/main'
         name: Login to DockerHub
         uses: docker/login-action@bb984efc561711aaa26e433c32c3521176eae55b
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - if: github.ref == 'refs/heads/master'
+      - if: github.ref == 'refs/heads/main'
         name: Push to DockerHub
         run: docker push stellar/horizon-verify-range:latest
