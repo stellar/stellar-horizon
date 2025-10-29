@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/stellar/go/services/horizon/internal/db2/history"
 	"github.com/stellar/go/support/db"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
 )
 
 type CtxKey string

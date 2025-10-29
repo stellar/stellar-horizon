@@ -6,7 +6,7 @@ import (
 	sq "github.com/Masterminds/squirrel"
 
 	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/services/horizon/internal/test"
+	"github.com/stellar/stellar-horizon/internal/test"
 )
 
 type transactionParticipant struct {

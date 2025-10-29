@@ -5,6 +5,6 @@ set -e
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 GOTOP="$( cd "$DIR/../../../../../../../.." && pwd )"
 
-go generate github.com/stellar/go/services/horizon/internal/db2/schema
-go generate github.com/stellar/go/services/horizon/internal/test
+go generate github.com/stellar/stellar-horizon/internal/db2/schema
+go generate github.com/stellar/stellar-horizon/internal/test
 go install github.com/stellar/go/services/horizon

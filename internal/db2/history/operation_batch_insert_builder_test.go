@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/guregu/null"
-	"github.com/stellar/go/services/horizon/internal/test"
 	"github.com/stellar/go/toid"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/test"
 )
 
 func TestAddOperation(t *testing.T) {

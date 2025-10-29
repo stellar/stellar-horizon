@@ -14,18 +14,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/stellar/go/services/horizon/internal/actions"
-	horizonContext "github.com/stellar/go/services/horizon/internal/context"
-	"github.com/stellar/go/services/horizon/internal/db2/history"
-	"github.com/stellar/go/services/horizon/internal/httpx"
-	"github.com/stellar/go/services/horizon/internal/ingest"
-	"github.com/stellar/go/services/horizon/internal/ledger"
-	hProblem "github.com/stellar/go/services/horizon/internal/render/problem"
-	"github.com/stellar/go/services/horizon/internal/test"
-	tdb "github.com/stellar/go/services/horizon/internal/test/db"
 	"github.com/stellar/go/support/db"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/actions"
+	horizonContext "github.com/stellar/stellar-horizon/internal/context"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
+	"github.com/stellar/stellar-horizon/internal/httpx"
+	"github.com/stellar/stellar-horizon/internal/ingest"
+	"github.com/stellar/stellar-horizon/internal/ledger"
+	hProblem "github.com/stellar/stellar-horizon/internal/render/problem"
+	"github.com/stellar/stellar-horizon/internal/test"
+	tdb "github.com/stellar/stellar-horizon/internal/test/db"
 )
 
 func requestHelperRemoteAddr(ip string) func(r *http.Request) {

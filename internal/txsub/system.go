@@ -7,13 +7,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/stellar/go/services/horizon/internal/ledger"
+	"github.com/stellar/stellar-horizon/internal/ledger"
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/stellar/go/services/horizon/internal/db2/history"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
 )
 
 type HorizonDB interface {

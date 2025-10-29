@@ -9,10 +9,10 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 
-	"github.com/stellar/go/services/horizon/internal/db2"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/toid"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/db2"
 )
 
 // LedgerSequence return the ledger in which the effect occurred.

@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"
 
-	"github.com/stellar/go/services/horizon/internal/db2"
-	"github.com/stellar/go/services/horizon/internal/test"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/db2"
+	"github.com/stellar/stellar-horizon/internal/test"
 )
 
 func TestAssetContractStats(t *testing.T) {

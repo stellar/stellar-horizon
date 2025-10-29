@@ -7,9 +7,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/stellar/go/services/horizon/internal/test"
 	"github.com/stellar/go/support/db"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/test"
 )
 
 func TestClaimableBalanceLoader(t *testing.T) {

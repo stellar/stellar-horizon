@@ -7,12 +7,12 @@ import (
 	"github.com/guregu/null"
 	"strconv"
 
-	horizonContext "github.com/stellar/go/services/horizon/internal/context"
 	"github.com/stellar/go/xdr"
+	horizonContext "github.com/stellar/stellar-horizon/internal/context"
 
 	protocol "github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/services/horizon/internal/db2/history"
 	"github.com/stellar/go/support/render/hal"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
 )
 
 // Populate fills out the details

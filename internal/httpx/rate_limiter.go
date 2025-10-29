@@ -7,9 +7,9 @@ import (
 
 	"github.com/stellar/throttled"
 
-	"github.com/stellar/go/services/horizon/internal/ledger"
-	hProblem "github.com/stellar/go/services/horizon/internal/render/problem"
 	"github.com/stellar/go/support/render/problem"
+	"github.com/stellar/stellar-horizon/internal/ledger"
+	hProblem "github.com/stellar/stellar-horizon/internal/render/problem"
 )
 
 const lruCacheSize = 50000
