@@ -1,7 +1,7 @@
 FROM golang:1.23-bookworm AS builder
 
 ARG VERSION="devel"
-WORKDIR /go/src/github.com/stellar/go
+WORKDIR /go/src/github.com/stellar/stellar-horizon
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . ./

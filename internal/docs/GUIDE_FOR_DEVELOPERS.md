@@ -10,9 +10,9 @@ This document describes how to build Horizon from source, so that you can test a
 - [stellar-core](#building-stellar-core)
 
 ## The Go Monorepo
-All the code for Horizon resides in our Go monorepo.
+All the code for Horizon resides in this repository:
 ```bash
-git clone https://github.com/stellar/go.git
+git clone https://github.com/stellar/stellar-horizon.git
 ```
 If you want to contribute to the project, consider forking the repository and cloning the fork instead.
 

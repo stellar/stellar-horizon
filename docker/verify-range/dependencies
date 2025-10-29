@@ -14,8 +14,8 @@ apt-get update
 echo "apt cache-policy ${apt-cache policy stellar-core}"
 apt-get install -y stellar-core=${STELLAR_CORE_VERSION}
 
-git clone https://github.com/stellar/go.git stellar-go
-cd stellar-go
+git clone https://github.com/stellar/stellar-horizon.git horizon
+cd horizon
 
 # By default "git fetch" only fetches refs/<branchname>
 # Below ensures we also fetch PR refs
