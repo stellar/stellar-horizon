@@ -26,7 +26,6 @@ debug
 *.prof
 *.test
 *.index
-*.xdr
 *.db
 *.conf
 *.lock
