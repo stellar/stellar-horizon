@@ -1653,7 +1653,7 @@ func findDockerComposePath() string {
 	}
 
 	// Directly jump down to the folder that should contain the configs
-	return filepath.Join(current, "services", "horizon", "docker")
+	return filepath.Join(current, "docker")
 }
 
 // MergeMaps returns a new map which contains the keys and values of *all* input
