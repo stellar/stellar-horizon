@@ -1,0 +1,11 @@
+{
+    "CanonicalAssetList": [
+        "BITC:ABC123456",
+        "DOGT:DEF123456"
+    ],
+    "AssetIssuerList": [],
+    "AssetCodeList ": [],
+    "ResolveLiquidityPoolAsAsset": true,
+    "TraverseEffects": false,
+    "Activated": true
+}

@@ -1,0 +1,248 @@
+#! /usr/bin/env bash
+set -e
+
+# the container runtime can provide externally mounted volume at /data. 
+# in batch job environment, the volume is the same for all batch jobs. 
+# so we partition sub-directories under so if container is batch job worker 
+# at an index N, the concurrent jobs will safely use the same volume at same time
+CONTAINER_WORKING_DIR="/data/job_${AWS_BATCH_JOB_ARRAY_INDEX:-0}"
+echo "Job working directory path on data volume: $CONTAINER_WORKING_DIR"
+
+cleanup() {
+    # need to purge these files at end as the db and the downloaed datastore
+    # files can be significatn GB's in size and in a cloud batch environment
+    # we don't want to keep them around after the job is done, i.e. pay for that space still.
+    sudo -u postgres --preserve-env=PGDATA /usr/lib/postgresql/14/bin/pg_ctl stop -D "$PGDATA"
+    if [ -d "$CONTAINER_WORKING_DIR" ]; then
+        sudo rm -rf "$CONTAINER_WORKING_DIR"
+        echo "Purged working data files from $CONTAINER_WORKING_DIR"
+    fi
+}
+trap cleanup EXIT
+
+# Ensure CONTAINER_WORKING_DIR exists and is empty
+rm -rf "$CONTAINER_WORKING_DIR"/*
+mkdir -p "$CONTAINER_WORKING_DIR"
+
+dump_horizon_db() {
+    local db_version="$1"
+    local compare_dir_path="$2"
+    local db_url="postgres://postgres:postgres@localhost:5432/horizon_${db_version}?sslmode=disable"
+
+    echo "dumping history_effects"
+    psql "$db_url" -t -A -F"," --variable="FETCH_COUNT=100" -c "select history_effects.history_operation_id, history_effects.order, type, details, history_accounts.address, address_muxed from history_effects left join history_accounts on history_accounts.id = history_effects.history_account_id order by history_operation_id asc, \"order\" asc" > "${compare_dir_path}_effects"
+    echo "dumping history_ledgers"
+    psql "$db_url" -t -A -F"," --variable="FETCH_COUNT=100" -c "select sequence, ledger_hash, previous_ledger_hash, transaction_count, operation_count, closed_at, id, total_coins, fee_pool, base_fee, base_reserve, max_tx_set_size, protocol_version, ledger_header, successful_transaction_count, failed_transaction_count from history_ledgers order by sequence asc" > "${compare_dir_path}_ledgers"
+    echo "dumping history_operations"
+    # skip is_payment column which was only introduced in the most recent horizon v2.27.0
+    psql "$db_url" -t -A -F"," --variable="FETCH_COUNT=100" -c "select id, transaction_id, application_order, type, details, source_account, source_account_muxed from history_operations order by id asc" > "${compare_dir_path}_operations"
+    echo "dumping history_operation_claimable_balances"
+    psql "$db_url" -t -A -F"," --variable="FETCH_COUNT=100" -c "select history_operation_id, claimable_balance_id from history_operation_claimable_balances left join history_claimable_balances on history_claimable_balances.id = history_operation_claimable_balances.history_claimable_balance_id order by history_operation_id asc, claimable_balance_id asc" > "${compare_dir_path}_operation_claimable_balances"
+    echo "dumping history_operation_liquidity_pools"
+    psql "$db_url" -t -A -F"," --variable="FETCH_COUNT=100" -c "select history_operation_id, liquidity_pool_id from history_operation_liquidity_pools left join history_liquidity_pools on history_liquidity_pools.id = history_operation_liquidity_pools.history_liquidity_pool_id order by history_operation_id asc, liquidity_pool_id asc" > "${compare_dir_path}_operation_liquidity_pools"
+    echo "dumping history_operation_participants"
+    psql "$db_url" -t -A -F"," --variable="FETCH_COUNT=100" -c "select history_operation_id, address from history_operation_participants left join history_accounts on history_accounts.id = history_operation_participants.history_account_id order by history_operation_id asc, address asc" > "${compare_dir_path}_operation_participants"
+    echo "dumping history_trades"
+    psql "$db_url" -t -A -F"," --variable="FETCH_COUNT=100" -c "select history_trades.history_operation_id, history_trades.order, history_trades.ledger_closed_at, CASE WHEN history_trades.base_is_seller THEN history_trades.price_n ELSE history_trades.price_d END, CASE WHEN history_trades.base_is_seller THEN history_trades.price_d ELSE history_trades.price_n END, CASE WHEN history_trades.base_is_seller THEN history_trades.base_offer_id ELSE history_trades.counter_offer_id END, CASE WHEN history_trades.base_is_seller THEN history_trades.counter_offer_id ELSE history_trades.base_offer_id END, CASE WHEN history_trades.base_is_seller THEN baccount.address ELSE caccount.address END, CASE WHEN history_trades.base_is_seller THEN caccount.address ELSE baccount.address END, CASE WHEN history_trades.base_is_seller THEN basset.asset_type ELSE casset.asset_type END, CASE WHEN history_trades.base_is_seller THEN basset.asset_code ELSE casset.asset_code END, CASE WHEN history_trades.base_is_seller THEN basset.asset_issuer ELSE casset.asset_issuer END, CASE WHEN history_trades.base_is_seller THEN casset.asset_type ELSE basset.asset_type END, CASE WHEN history_trades.base_is_seller THEN casset.asset_code ELSE basset.asset_code END, CASE WHEN history_trades.base_is_seller THEN casset.asset_issuer ELSE basset.asset_issuer END from history_trades left join history_accounts baccount on baccount.id = history_trades.base_account_id left join history_accounts caccount on caccount.id = history_trades.counter_account_id left join history_assets basset on basset.id = history_trades.base_asset_id left join history_assets casset on casset.id = history_trades.counter_asset_id order by history_operation_id asc, \"order\" asc" > "${compare_dir_path}_trades"
+    echo "dumping history_transactions"
+    # Note: we skip `tx_meta` field here because it's a data structure (C++ unordered_map) which can be in different order
+    # in different Stellar-Core instances. The final fix should probably: unmarshal `tx_meta`, sort it, marshal and compare.
+    psql "$db_url" -t -A -F"," --variable="FETCH_COUNT=100" -c "select transaction_hash, ledger_sequence, application_order, account, account_sequence, max_fee, operation_count, id, tx_envelope, tx_result, tx_fee_meta, signatures, memo_type, memo, time_bounds, successful, fee_charged, inner_transaction_hash, fee_account, inner_signatures, new_max_fee, account_muxed, fee_account_muxed from history_transactions order by id asc" > "${compare_dir_path}_transactions"
+    echo "dumping history_transaction_claimable_balances"
+    psql "$db_url" -t -A -F"," --variable="FETCH_COUNT=100" -c "select history_transaction_id, claimable_balance_id from history_transaction_claimable_balances left join history_claimable_balances on history_claimable_balances.id = history_transaction_claimable_balances.history_claimable_balance_id order by history_transaction_id, claimable_balance_id" > "${compare_dir_path}_transaction_claimable_balances"
+    echo "dumping history_transaction_liquidity_pools"
+    psql "$db_url" -t -A -F"," --variable="FETCH_COUNT=100" -c "select history_transaction_id, liquidity_pool_id from history_transaction_liquidity_pools left join history_liquidity_pools on history_liquidity_pools.id = history_transaction_liquidity_pools.history_liquidity_pool_id order by history_transaction_id, liquidity_pool_id" > "${compare_dir_path}_transaction_liquidity_pools"
+    echo "dumping history_transaction_participants"
+    psql "$db_url" -t -A -F"," --variable="FETCH_COUNT=100" -c "select history_transaction_id, address from history_transaction_participants left join history_accounts on history_accounts.id = history_transaction_participants.history_account_id order by history_transaction_id, address" > "${compare_dir_path}_transaction_participants"
+}
+
+alter_tables_unlogged() {
+    local db_version="$1"
+    local db_url="postgres://postgres:postgres@localhost:5432/horizon_${db_version}?sslmode=disable"
+    # UNLOGGED for performance reasons (order is important because some tables reference others)
+    psql "$db_url" -c "ALTER TABLE accounts SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE accounts_data SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE accounts_signers SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE claimable_balances SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE exp_asset_stats SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE history_trades SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE history_accounts SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE history_assets SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE history_claimable_balances SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE history_liquidity_pools SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE history_effects SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE history_ledgers SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE history_operation_claimable_balances SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE history_operation_liquidity_pools SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE history_operation_participants SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE history_operations SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE history_transaction_claimable_balances SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE history_transaction_liquidity_pools SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE history_transaction_participants SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE history_transactions SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE offers SET UNLOGGED;"
+    psql "$db_url" -c "ALTER TABLE trust_lines SET UNLOGGED;"
+}
+
+function compare() {
+	local expected="$CONTAINER_WORKING_DIR/compare/old_$1"
+	local actual="$CONTAINER_WORKING_DIR/compare/new_$1"
+
+	# Files can be very large, leading to `diff` running out of memory.
+	# As a workaround, since files are expected to be identical,
+	# we compare the hashes first.
+	local hash=$(shasum -a 256 "$expected" | cut -f 1 -d ' ')
+	local check_command="$hash  $actual"
+
+	if ! ( echo "$check_command" | shasum -a 256 -c ); then
+		diff --speed-large-files "$expected" "$actual"
+	fi
+}
+
+if [ ! -z "$GCP_CREDS" ]; then
+    echo "$GCP_CREDS" > /tmp/gcp.json
+	chmod 600 /tmp/gcp.json
+	export GOOGLE_APPLICATION_CREDENTIALS="/tmp/gcp.json"
+	echo "Configured GCP credentials"
+fi	
+
+if [ ! -z "$DATASTORE_CONFIG_PLAIN" ]; then
+    echo "$DATASTORE_CONFIG_PLAIN" > /tmp/datastore-config.toml
+	export DATASTORE_CONFIG="/tmp/datastore-config.toml"
+	echo "Configured Datastore credentials"
+	cat /tmp/datastore-config.toml
+fi	
+
+# configure postgres
+if [ -z "${PGDATA}" ]; then
+    export PGDATA="$CONTAINER_WORKING_DIR/postgres"
+fi
+
+rm -rf "$PGDATA"/*
+mkdir -p "$PGDATA"
+
+sudo chown -R postgres "$PGDATA"
+sudo chmod -R 775 "$PGDATA"
+
+sudo -u postgres --preserve-env=PGDATA /usr/lib/postgresql/14/bin/initdb
+sudo -u postgres --preserve-env=PGDATA /usr/lib/postgresql/14/bin/pg_ctl start
+
+sudo -u postgres createdb horizon_new
+sudo -u postgres createdb horizon_old
+sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+
+# Calculate params for AWS Batch
+if [ ! -z "$AWS_BATCH_JOB_ARRAY_INDEX" ]; then
+	# The batch should have three env variables:
+	# * BATCH_START_LEDGER - start ledger of the job, must be equal 1 or a
+	#   checkpoint ledger (i + 1) % 64 == 0.
+	# * BATCH_SIZE - size of the batch in ledgers, must be multiple of 64!
+	# * BRANCH - git branch to build
+	#
+	# Ex: BATCH_START_LEDGER=63, BATCH_SIZE=64 will create the following ranges:
+	# AWS_BATCH_JOB_ARRAY_INDEX=0: [63, 127]
+	# AWS_BATCH_JOB_ARRAY_INDEX=1: [127, 191]
+	# AWS_BATCH_JOB_ARRAY_INDEX=2: [191, 255]
+	# AWS_BATCH_JOB_ARRAY_INDEX=3: [255, 319]
+	# ...
+
+	if [ $BATCH_START_LEDGER -eq 1 ]; then
+		export FROM=`expr "$BATCH_SIZE" \* "$AWS_BATCH_JOB_ARRAY_INDEX" + "$BATCH_START_LEDGER" - "2"`
+		export TO=`expr "$BATCH_SIZE" \* "$AWS_BATCH_JOB_ARRAY_INDEX" + "$BATCH_START_LEDGER" + "$BATCH_SIZE" - "2"`
+		if [ $FROM -eq -1 ]; then
+			export FROM="1"
+		fi
+	else
+		export FROM=`expr "$BATCH_SIZE" \* "$AWS_BATCH_JOB_ARRAY_INDEX" + "$BATCH_START_LEDGER"`
+		export TO=`expr "$BATCH_SIZE" \* "$AWS_BATCH_JOB_ARRAY_INDEX" + "$BATCH_START_LEDGER" + "$BATCH_SIZE"`
+	fi
+fi
+
+export LEDGER_COUNT=`expr "$TO" - "$FROM" + "1"`
+echo "FROM: $FROM TO: $TO"
+
+if [ ! -z "$DATASTORE_CONFIG" ]; then
+    export LEDGERBACKEND=datastore
+fi
+
+# pubnet horizon config
+export NETWORK_PASSPHRASE="Public Global Stellar Network ; September 2015"
+export HISTORY_ARCHIVE_URLS="https://s3-eu-west-1.amazonaws.com/history.stellar.org/prd/core-live/core_live_001"
+export DATABASE_URL_NEW="postgres://postgres:postgres@localhost:5432/horizon_new?sslmode=disable"
+export DATABASE_URL_OLD="postgres://postgres:postgres@localhost:5432/horizon_old?sslmode=disable"
+# set the ccore settings by default, 
+# if DATASTORE_CONFIG is set, horizon commands will ignore the captive core settings.
+export CAPTIVE_CORE_CONFIG_APPEND_PATH="/captive-core-pubnet.cfg"
+export STELLAR_CORE_BINARY_PATH="/usr/bin/stellar-core"
+export CAPTIVE_CORE_STORAGE_PATH="$CONTAINER_WORKING_DIR"
+export HISTORY_ARCHIVE_CACHING="FALSE"
+
+BASE_BRANCH=${BASE_BRANCH:-master}
+cd stellar-go
+if [ ! -z "$BRANCH" ]; then
+	if [[ "$BRANCH" == pull/* ]]; then
+		# BRANCH is a PR ref like pull/1234/head
+		git fetch origin "$BRANCH"
+		git checkout -B remote-pr-branch FETCH_HEAD
+	else
+		git pull origin
+		git checkout $BRANCH
+	fi
+fi
+git log -1 --pretty=oneline
+/usr/local/go/bin/go build -v -o "$CONTAINER_WORKING_DIR/horizon_new" ./services/horizon/. 
+git clean -xfd
+git checkout "$BASE_BRANCH"
+git log -1 --pretty=oneline
+/usr/local/go/bin/go build -v -o "$CONTAINER_WORKING_DIR/horizon_old" ./services/horizon/.
+
+cd "$CONTAINER_WORKING_DIR"
+rm -rf "$CONTAINER_WORKING_DIR/compare"
+mkdir -p "$CONTAINER_WORKING_DIR/compare"
+
+run_new_horizon() {
+    mkdir -p "$CONTAINER_WORKING_DIR"/new_runtime
+    cd "$CONTAINER_WORKING_DIR"/new_runtime
+    echo "Starting dump_horizon_db new_history with LEDGERBACKEND=$LEDGERBACKEND and DATASTORE_CONFIG=$DATASTORE_CONFIG"
+    "$CONTAINER_WORKING_DIR/horizon_new" --db-url "$DATABASE_URL_NEW" db migrate up 
+    alter_tables_unlogged "new"
+    "$CONTAINER_WORKING_DIR/horizon_new" --db-url "$DATABASE_URL_NEW" ingest verify-range --from $FROM --to $TO --verify-state
+    dump_horizon_db "new" "$CONTAINER_WORKING_DIR/compare/new_history"
+    echo "Done dump_horizon_db new_history"
+}
+
+run_old_horizon() {
+    mkdir -p "$CONTAINER_WORKING_DIR"/old_runtime
+    cd "$CONTAINER_WORKING_DIR"/old_runtime
+    echo "Starting dump_horizon_db old_history with LEDGERBACKEND=$LEDGERBACKEND and DATASTORE_CONFIG=$DATASTORE_CONFIG"
+    "$CONTAINER_WORKING_DIR/horizon_old" --db-url "$DATABASE_URL_OLD" db migrate up
+    alter_tables_unlogged "old"
+    REINGEST_FROM=$((FROM + 1)) # verify-range does not ingest starting ledger
+    "$CONTAINER_WORKING_DIR/horizon_old" --db-url "$DATABASE_URL_OLD" db reingest range $REINGEST_FROM $TO
+    dump_horizon_db "old" "$CONTAINER_WORKING_DIR/compare/old_history"
+    echo "Done dump_horizon_db old_history"
+}
+
+if [ ! -z "$DATASTORE_CONFIG" ]; then
+    (run_new_horizon) &
+    (run_old_horizon) &
+    wait
+else
+    # don't attempt to run parallel with captive cores
+    run_new_horizon
+    run_old_horizon
+fi
+
+# Now run the compare functions
+compare history_effects
+compare history_ledgers
+compare history_operations
+compare history_operation_claimable_balances
+compare history_operation_participants
+compare history_trades
+compare history_transactions
+compare history_transaction_claimable_balances
+compare history_transaction_participants
+
+
+echo "OK"

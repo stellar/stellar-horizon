@@ -1,0 +1,203 @@
+openapi: 3.0.3
+info:
+  title: Horizon Admin API
+  version: 1.0.0
+  description: |-
+    The Admin API is optionally published on separate local port and provides access to 
+    some aspects of server config and settings. It is only enabled if runtime parameter `--admin-port=<port>` is specified.
+servers:
+  - url: http://localhost:4200/
+paths:
+  /metrics:
+    get:
+      responses:
+        '200':
+          description: OK
+          headers: {}
+          content:
+            text/plain:
+              example: |
+                # HELP go_gc_duration_seconds A summary of the GC invocation durations.
+                # TYPE go_gc_duration_seconds summary
+                go_gc_duration_seconds{quantile="0"} 2.7834e-05
+                go_gc_duration_seconds{quantile="0.25"} 0.000158374
+                go_gc_duration_seconds{quantile="0.5"} 0.000334749
+                go_gc_duration_seconds{quantile="0.75"} 0.000922251
+                go_gc_duration_seconds{quantile="1"} 0.02497575
+                go_gc_duration_seconds_sum 2.140231182
+                go_gc_duration_seconds_count 7466
+                ... many, many more
+      summary: Get latest metrics on server runtime
+      operationId: Get latest metrics on server runtime
+      description: ''
+      tags: []
+      parameters: []
+  /pprof/heap:
+    get:
+      responses:
+        '200':
+          description: OK
+          headers: {}
+          content:
+            application/octet-stream:
+              example: |
+                ... binary
+      summary: Get golang performance heap dump
+      operationId: Get golang performance heap dump
+      description: ''
+      tags: []
+      parameters: []
+  /pprof/profile:
+    get:
+      responses:
+        '200':
+          description: OK
+          headers: {}
+          content:
+            application/octet-stream:
+              example: |
+                ... binary        
+      summary: Get golang performance profile dump
+      operationId: Get golang performance profile dump
+      description: ''
+      tags: []
+      parameters: []
+  /ingestion/filters/asset:
+    get:
+      responses:
+        '200':
+          description: OK
+          headers: {}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetConfigExisting'
+      summary: Get Asset Filter Config
+      operationId: Get Asset Filter Config
+      description: Retrieve the configuration for the Asset Filter.
+      tags: []
+      parameters: []
+    put:
+      responses:
+        '200':
+          description: OK
+          headers: {}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetConfigExisting'
+      summary: Update the Asset Filter Config
+      operationId: Update the Asset Filter Config
+      description: Send the new configuration model which will replace current for Asset Filter.
+      tags: []
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetConfigNew'
+  /ingestion/filters/account:
+    get:
+      responses:
+        '200':
+          description: OK
+          headers: {}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountConfigExisting'
+      summary: Get Account Filter Config
+      operationId: Get Account Filter Config
+      description: Retrieve the configuration for the Account Filter.
+      tags: []
+      parameters: []
+    put:
+      responses:
+        '200':
+          description: OK
+          headers: {}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountConfigExisting'
+      summary: Update the Account Filter Config
+      operationId: Update the Account Filter Config
+      description: Send the new configuration model which will replace current for Account Filter.
+      tags: []
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountConfigNew'
+components:
+  schemas: 
+    AssetConfigNew:
+      title: New Asset Config Model
+      type: object
+      properties: 
+        whitelist:
+          type: array
+          items:
+            type: string
+          description: |-
+            a list of canonical asset ids which the asset filter will inspect ledger transactions, if any transaction operations reference the asset id, then the transaction is ingested to local horizon history database, otherwise it will be skipped.
+          example: 
+            - 'usdc:1234'
+            - 'dotx:1234'
+            - 'abdc:1234'
+        enabled:
+          type: boolean
+          description: |- 
+            if disabled, the asset filter will not be executed during ingeestion.
+          example: true
+      required:
+        - whitelist
+        - enabled
+    AccountConfigNew:
+      title: New Account Config Model
+      type: object
+      properties: 
+        whitelist:
+          type: array
+          items:
+            type: string
+          description: |-
+            a list of account ids which account filter will inspect ledger transactions, if any transaction operations reference the account, then the transaction is ingested to local horizon history database, otherwise it will be skipped.
+          example: 
+            - 'accountid1'
+            - 'accountid2'
+            - 'accountid3'
+        enabled:
+          type: boolean
+          description: |- 
+            if disabled, the account filter will not be executed during ingeestion.
+          example: true
+      required:
+        - whitelist
+        - enabled
+    AccountConfigExisting:
+      title: Existing Account Config Model
+      type: object
+      allOf:
+      - $ref: '#/components/schemas/AccountConfigNew'
+      - properties:
+          last_modified:
+            type: integer
+            description: |- 
+              unix epoch timestamp in seconds.
+            example: 1647121423
+    AssetConfigExisting:
+      title: Existing Asset Config Model
+      type: object
+      allOf:
+      - $ref: '#/components/schemas/AssetConfigNew'
+      - properties:
+          last_modified:
+            type: integer
+            description: |- 
+              unix epoch timestamp in seconds.
+            example: 1647121423        
+tags: []
