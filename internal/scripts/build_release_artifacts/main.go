@@ -5,7 +5,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,7 +24,6 @@ var builds = []buildConfig{
 	{"windows", "amd64"},
 }
 
-var binFilter = flag.String("bin", "", "restrict build to single binary")
 var osFilter = flag.String("os", "", "restrict build to single os")
 var archFilter = flag.String("arch", "", "restrict build to single arch")
 var keepDir = flag.Bool("keep", false, "when true, artifact directories are not removed after packaging")
@@ -40,13 +38,7 @@ func main() {
 	log.SetLevel(log.InfoLevel)
 	run("rm", "-rf", "dist/*")
 
-	if os.Getenv("TRAVIS_EVENT_TYPE") == "cron" {
-		buildNightlies()
-		os.Exit(0)
-	} else if circleTag := os.Getenv("CIRCLE_TAG"); circleTag != "" {
-		buildByTag(circleTag)
-		os.Exit(0)
-	} else if ghTag := getGitHubTagName(); ghTag != "" {
+	if ghTag := getGitHubTagName(); ghTag != "" {
 		buildByTag(ghTag)
 		os.Exit(0)
 	} else {
@@ -69,32 +61,6 @@ func getGitHubTagName() string {
 		return ""
 	}
 	return strings.TrimPrefix(ref, githubTagRefPrefix)
-}
-
-// package searches the `tools` and `services` packages of this repo to find
-// the source directory.  This is used within the script to find the README and
-// other files that should be packaged with the binary.
-func binPkgNames() []string {
-	result := []string{}
-	result = append(result, binNamesForDir("services")...)
-	result = append(result, binNamesForDir("tools")...)
-	return result
-}
-
-func binNamesForDir(dir string) []string {
-	files, err := ioutil.ReadDir(dir)
-	if err != nil {
-		panic(errors.Wrap(err, "read-dir failed"))
-	}
-
-	result := []string{}
-	for _, file := range files {
-		if file.IsDir() && file.Name() != "internal" {
-			result = append(result, filepath.Join(dir, file.Name()))
-		}
-	}
-
-	return result
 }
 
 func build(pkg, dest, version, buildOS, buildArch string) {
@@ -135,33 +101,6 @@ func build(pkg, dest, version, buildOS, buildArch string) {
 	}
 }
 
-func buildNightlies() {
-	version := runOutput("git", "describe", "--always", "--dirty", "--tags")
-	repo := repoName()
-
-	for _, pkg := range binPkgNames() {
-		bin := filepath.Base(pkg)
-
-		if *binFilter != "" && *binFilter != bin {
-			continue
-		}
-
-		for _, cfg := range getBuildConfigs() {
-			dest := prepareDest(pkg, bin, "nightly", cfg.OS, cfg.Arch)
-
-			build(
-				fmt.Sprintf("%s/%s", repo, pkg),
-				filepath.Join(dest, bin),
-				version,
-				cfg.OS,
-				cfg.Arch,
-			)
-
-			packageArchive(dest, cfg.OS)
-		}
-	}
-}
-
 func buildByTag(tag string) {
 	bin, version := extractFromTag(tag)
 	if bin == "" {
@@ -199,26 +138,18 @@ func buildSnapshots() {
 	version := fmt.Sprintf("snapshot-%s", rev)
 	repo := repoName()
 
-	for _, pkg := range binPkgNames() {
-		bin := filepath.Base(pkg)
+	for _, cfg := range getBuildConfigs() {
+		dest := prepareDest(".", "horizon", "snapshot", cfg.OS, cfg.Arch)
 
-		if *binFilter != "" && *binFilter != bin {
-			continue
-		}
+		build(
+			fmt.Sprintf("%s/.", repo),
+			filepath.Join(dest, "horizon"),
+			version,
+			cfg.OS,
+			cfg.Arch,
+		)
 
-		for _, cfg := range getBuildConfigs() {
-			dest := prepareDest(pkg, bin, "snapshot", cfg.OS, cfg.Arch)
-
-			build(
-				fmt.Sprintf("%s/%s", repo, pkg),
-				filepath.Join(dest, bin),
-				version,
-				cfg.OS,
-				cfg.Arch,
-			)
-
-			packageArchive(dest, cfg.OS)
-		}
+		packageArchive(dest, cfg.OS)
 	}
 }
 
@@ -350,7 +281,7 @@ func repoName() string {
 	if os.Getenv("REPO") != "" {
 		return os.Getenv("REPO")
 	}
-	return "github.com/stellar/go"
+	return "github.com/stellar/stellar-horizon"
 
 }
 
