@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/stellar/go/network"
+
 	"github.com/stellar/stellar-horizon/internal/test"
 
 	"github.com/stretchr/testify/assert"
@@ -159,7 +160,7 @@ func TestSetCaptiveCoreConfig(t *testing.T) {
 			config: Config{
 				NetworkPassphrase:     network.PublicNetworkPassphrase,
 				HistoryArchiveURLs:    network.PublicNetworkhistoryArchiveURLs,
-				CaptiveCoreConfigPath: "../../../ingest/ledgerbackend/configs/captive-core-pubnet.cfg",
+				CaptiveCoreConfigPath: "testdata/captive-core-pubnet.cfg",
 				CaptiveCoreBinaryPath: "/path/to/captive-core/binary",
 			},
 		},
@@ -193,7 +194,7 @@ func TestSetCaptiveCoreConfig(t *testing.T) {
 			config: Config{
 				NetworkPassphrase:     network.PublicNetworkPassphrase,
 				HistoryArchiveURLs:    network.PublicNetworkhistoryArchiveURLs,
-				CaptiveCoreConfigPath: "../../../ingest/ledgerbackend/configs/captive-core-testnet.cfg",
+				CaptiveCoreConfigPath: "testdata/captive-core-testnet.cfg",
 				CaptiveCoreBinaryPath: "/path/to/captive-core/binary",
 			},
 			errStr: fmt.Sprintf("invalid captive core toml file: invalid captive core toml: "+
