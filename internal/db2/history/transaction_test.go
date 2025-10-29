@@ -9,11 +9,11 @@ import (
 	sq "github.com/Masterminds/squirrel"
 	"github.com/guregu/null"
 
-	"github.com/stellar/go/services/horizon/internal/db2"
+	"github.com/stellar/stellar-horizon/internal/db2"
 	"github.com/stellar/go/xdr"
 
 	"github.com/stellar/go/ingest"
-	"github.com/stellar/go/services/horizon/internal/test"
+	"github.com/stellar/stellar-horizon/internal/test"
 	"github.com/stellar/go/toid"
 )
 

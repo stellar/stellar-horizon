@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	horizon "github.com/stellar/go/services/horizon/internal"
+	horizon "github.com/stellar/stellar-horizon/internal"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/support/log"
 )

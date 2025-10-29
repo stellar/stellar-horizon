@@ -13,7 +13,7 @@ import (
 	"github.com/stellar/go/ingest"
 	"github.com/stellar/go/ingest/ledgerbackend"
 	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/services/horizon/internal/test/integration"
+	"github.com/stellar/stellar-horizon/internal/test/integration"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
 )

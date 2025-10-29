@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stellar/go/services/horizon/internal/db2/history"
-	"github.com/stellar/go/services/horizon/internal/ingest/processors"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
+	"github.com/stellar/stellar-horizon/internal/ingest/processors"
 	"github.com/stellar/go/xdr"
 
 	"github.com/stretchr/testify/mock"

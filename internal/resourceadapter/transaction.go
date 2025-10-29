@@ -7,11 +7,11 @@ import (
 	"github.com/guregu/null"
 	"strconv"
 
-	horizonContext "github.com/stellar/go/services/horizon/internal/context"
+	horizonContext "github.com/stellar/stellar-horizon/internal/context"
 	"github.com/stellar/go/xdr"
 
 	protocol "github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/services/horizon/internal/db2/history"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/go/support/render/hal"
 )
 

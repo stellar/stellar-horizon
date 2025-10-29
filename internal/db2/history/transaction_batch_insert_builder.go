@@ -12,7 +12,7 @@ import (
 	"github.com/lib/pq"
 
 	"github.com/stellar/go/ingest"
-	"github.com/stellar/go/services/horizon/internal/utf8"
+	"github.com/stellar/stellar-horizon/internal/utf8"
 	"github.com/stellar/go/support/db"
 	"github.com/stellar/go/toid"
 	"github.com/stellar/go/xdr"

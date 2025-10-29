@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stellar/go/ingest"
-	"github.com/stellar/go/services/horizon/internal/ingest/processors"
+	"github.com/stellar/stellar-horizon/internal/ingest/processors"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/xdr"
 )

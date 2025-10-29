@@ -7,7 +7,7 @@ import (
 	"github.com/stellar/throttled"
 
 	"github.com/stellar/go/network"
-	"github.com/stellar/go/services/horizon/internal/test"
+	"github.com/stellar/stellar-horizon/internal/test"
 	supportLog "github.com/stellar/go/support/log"
 )
 

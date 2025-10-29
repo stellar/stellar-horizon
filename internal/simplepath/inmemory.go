@@ -5,7 +5,7 @@ import (
 
 	"github.com/go-errors/errors"
 	"github.com/stellar/go/exp/orderbook"
-	"github.com/stellar/go/services/horizon/internal/paths"
+	"github.com/stellar/stellar-horizon/internal/paths"
 	"github.com/stellar/go/xdr"
 )
 

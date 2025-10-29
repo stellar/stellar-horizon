@@ -5,7 +5,7 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 
-	"github.com/stellar/go/services/horizon/internal/db2"
+	"github.com/stellar/stellar-horizon/internal/db2"
 	"github.com/stellar/go/support/errors"
 )
 

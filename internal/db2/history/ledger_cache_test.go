@@ -3,7 +3,7 @@ package history
 import (
 	"testing"
 
-	"github.com/stellar/go/services/horizon/internal/test"
+	"github.com/stellar/stellar-horizon/internal/test"
 )
 
 func TestLedgerCache(t *testing.T) {

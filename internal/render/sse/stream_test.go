@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"testing"
 
-	hProblem "github.com/stellar/go/services/horizon/internal/render/problem"
+	hProblem "github.com/stellar/stellar-horizon/internal/render/problem"
 	"github.com/stellar/go/support/render/problem"
 	"github.com/stellar/go/support/test"
 	"github.com/stretchr/testify/assert"

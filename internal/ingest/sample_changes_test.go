@@ -12,7 +12,7 @@ import (
 
 	"github.com/stellar/go/historyarchive"
 	"github.com/stellar/go/ingest"
-	"github.com/stellar/go/services/horizon/internal/ingest/processors"
+	"github.com/stellar/stellar-horizon/internal/ingest/processors"
 	logpkg "github.com/stellar/go/support/log"
 	"github.com/stellar/go/xdr"
 )

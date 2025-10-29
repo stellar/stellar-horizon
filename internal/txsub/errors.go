@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/stellar/go/services/horizon/internal/codes"
+	"github.com/stellar/stellar-horizon/internal/codes"
 	"github.com/stellar/go/xdr"
 )
 

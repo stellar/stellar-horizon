@@ -12,7 +12,7 @@ import (
 	"github.com/stellar/go/xdr"
 
 	. "github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/services/horizon/internal/db2/history"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/go/support/test"
 	stellarTime "github.com/stellar/go/support/time"
 	"github.com/stretchr/testify/assert"

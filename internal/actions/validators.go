@@ -2,14 +2,14 @@ package actions
 
 import (
 	"encoding/hex"
-	"github.com/stellar/go/services/horizon/internal/db2/history"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"strings"
 
 	"github.com/asaskevich/govalidator"
 	"github.com/gorilla/schema"
 
 	"github.com/stellar/go/amount"
-	"github.com/stellar/go/services/horizon/internal/assets"
+	"github.com/stellar/stellar-horizon/internal/assets"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/xdr"
 )

@@ -3,8 +3,8 @@ package horizon
 import (
 	"testing"
 
-	"github.com/stellar/go/services/horizon/internal/db2/history"
-	"github.com/stellar/go/services/horizon/internal/ingest"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
+	"github.com/stellar/stellar-horizon/internal/ingest"
 	"github.com/stellar/go/xdr"
 )
 

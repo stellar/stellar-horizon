@@ -9,11 +9,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/stellar/go/exp/orderbook"
-	"github.com/stellar/go/services/horizon/internal/db2/history"
-	"github.com/stellar/go/services/horizon/internal/ingest"
-	"github.com/stellar/go/services/horizon/internal/paths"
-	"github.com/stellar/go/services/horizon/internal/simplepath"
-	"github.com/stellar/go/services/horizon/internal/txsub"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
+	"github.com/stellar/stellar-horizon/internal/ingest"
+	"github.com/stellar/stellar-horizon/internal/paths"
+	"github.com/stellar/stellar-horizon/internal/simplepath"
+	"github.com/stellar/stellar-horizon/internal/txsub"
 	"github.com/stellar/go/support/db"
 	"github.com/stellar/go/support/log"
 )

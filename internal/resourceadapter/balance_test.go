@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	. "github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/services/horizon/internal/db2/history"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/go/xdr"
 	"github.com/stretchr/testify/assert"
 )
