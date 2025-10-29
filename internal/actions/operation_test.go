@@ -14,13 +14,13 @@ import (
 
 	"github.com/stellar/go/ingest"
 	"github.com/stellar/go/protocols/horizon/operations"
-	"github.com/stellar/go/services/horizon/internal/db2/history"
-	"github.com/stellar/go/services/horizon/internal/ledger"
-	"github.com/stellar/go/services/horizon/internal/render/problem"
-	"github.com/stellar/go/services/horizon/internal/test"
 	supportProblem "github.com/stellar/go/support/render/problem"
 	"github.com/stellar/go/toid"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
+	"github.com/stellar/stellar-horizon/internal/ledger"
+	"github.com/stellar/stellar-horizon/internal/render/problem"
+	"github.com/stellar/stellar-horizon/internal/test"
 )
 
 func TestInvokeHostFnDetailsInPaymentOperations(t *testing.T) {

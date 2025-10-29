@@ -9,9 +9,9 @@ import (
 	sq "github.com/Masterminds/squirrel"
 
 	"github.com/stellar/go/protocols/horizon/effects"
-	"github.com/stellar/go/services/horizon/internal/db2"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/toid"
+	"github.com/stellar/stellar-horizon/internal/db2"
 )
 
 const genesisLedger = 2

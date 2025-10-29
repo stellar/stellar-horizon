@@ -9,9 +9,9 @@ import (
 
 	"github.com/stellar/go/clients/horizonclient"
 	hProtocol "github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/services/horizon/internal/ingest/filters"
-	"github.com/stellar/go/services/horizon/internal/test/integration"
 	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/stellar-horizon/internal/ingest/filters"
+	"github.com/stellar/stellar-horizon/internal/test/integration"
 )
 
 func TestFilteringWithNoFilters(t *testing.T) {

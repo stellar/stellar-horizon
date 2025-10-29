@@ -24,11 +24,11 @@ import (
 	"github.com/stellar/go/ingest/loadtest"
 	"github.com/stellar/go/keypair"
 	proto "github.com/stellar/go/protocols/stellarcore"
-	internalingest "github.com/stellar/go/services/horizon/internal/ingest"
-	"github.com/stellar/go/services/horizon/internal/test/integration"
 	supportlog "github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
+	internalingest "github.com/stellar/stellar-horizon/internal/ingest"
+	"github.com/stellar/stellar-horizon/internal/test/integration"
 )
 
 const loadTestNetworkPassphrase = "load test network"

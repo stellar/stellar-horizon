@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/services/horizon/internal/paths"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/paths"
 	"github.com/stretchr/testify/assert"
 )
 

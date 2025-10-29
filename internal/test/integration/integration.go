@@ -26,7 +26,7 @@ import (
 	"github.com/stellar/go/ingest/ledgerbackend"
 	"github.com/stellar/go/support/log"
 
-	"github.com/stellar/go/services/horizon/internal/test"
+	"github.com/stellar/stellar-horizon/internal/test"
 
 	"github.com/2opremio/pretty"
 	"github.com/creachadair/jrpc2"
@@ -40,14 +40,14 @@ import (
 	"github.com/stellar/go/keypair"
 	proto "github.com/stellar/go/protocols/horizon"
 	coreproto "github.com/stellar/go/protocols/stellarcore"
-	horizoncmd "github.com/stellar/go/services/horizon/cmd"
-	horizon "github.com/stellar/go/services/horizon/internal"
-	"github.com/stellar/go/services/horizon/internal/ingest"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/db/dbtest"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
+	horizoncmd "github.com/stellar/stellar-horizon/cmd"
+	horizon "github.com/stellar/stellar-horizon/internal"
+	"github.com/stellar/stellar-horizon/internal/ingest"
 )
 
 const (

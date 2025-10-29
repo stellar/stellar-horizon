@@ -7,9 +7,9 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/stellar/go/services/horizon/internal/ingest"
-	"github.com/stellar/go/services/horizon/internal/test"
-	tdb "github.com/stellar/go/services/horizon/internal/test/db"
+	"github.com/stellar/stellar-horizon/internal/ingest"
+	"github.com/stellar/stellar-horizon/internal/test"
+	tdb "github.com/stellar/stellar-horizon/internal/test/db"
 )
 
 type HTTPT struct {

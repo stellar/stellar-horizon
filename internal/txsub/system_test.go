@@ -6,7 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/stellar/go/services/horizon/internal/ledger"
+	"github.com/stellar/stellar-horizon/internal/ledger"
 	"testing"
 	"time"
 
@@ -18,9 +18,9 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/stellar/go/services/horizon/internal/db2/history"
-	"github.com/stellar/go/services/horizon/internal/test"
 	"github.com/stellar/go/xdr"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
+	"github.com/stellar/stellar-horizon/internal/test"
 )
 
 type SystemTestSuite struct {

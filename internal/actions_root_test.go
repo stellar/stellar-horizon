@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/services/horizon/internal/test"
+	"github.com/stellar/stellar-horizon/internal/test"
 	"github.com/stretchr/testify/assert"
 )
 

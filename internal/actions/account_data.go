@@ -4,8 +4,8 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/stellar/go/services/horizon/internal/context"
-	"github.com/stellar/go/services/horizon/internal/db2/history"
+	"github.com/stellar/stellar-horizon/internal/context"
+	"github.com/stellar/stellar-horizon/internal/db2/history"
 )
 
 // AccountDataQuery query struct for account data end-point
