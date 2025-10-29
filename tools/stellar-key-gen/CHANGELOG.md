@@ -1,3 +1,0 @@
-# Changelog
-
-Not yet released.
