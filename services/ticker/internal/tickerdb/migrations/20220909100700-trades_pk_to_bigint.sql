@@ -1,9 +1,0 @@
-
--- +migrate Up
-ALTER TABLE trades ALTER COLUMN id TYPE BIGINT;
-ALTER SEQUENCE trades_id_seq AS BIGINT CYCLE;
-
-
--- +migrate Down
-ALTER TABLE trades ALTER COLUMN id TYPE INT;
-ALTER SEQUENCE trades_id_seq AS INT NO CYCLE;

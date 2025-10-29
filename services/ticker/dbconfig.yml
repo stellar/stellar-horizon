@@ -1,5 +1,0 @@
-development:
-    dialect: postgres
-    datasource: dbname=stellarticker01 sslmode=disable
-    dir: internal/tickerdb/migrations
-    table: migrations

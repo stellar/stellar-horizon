@@ -2,10 +2,10 @@
 <a href="https://stellar.org"><img alt="Stellar" src="https://github.com/stellar/.github/raw/master/stellar-logo.png" width="558" /></a>
 <br/>
 <strong>Creating equitable access to the global financial system</strong>
-<h1>Stellar Go Monorepo</h1>
+<h1>Stellar Horizon API</h1>
 </div>
 <p align="center">
- 
+
 <a href="https://github.com/stellar/go/actions/workflows/go.yml?query=branch%3Amaster+event%3Apush">![master GitHub workflow](https://github.com/stellar/go/actions/workflows/go.yml/badge.svg)</a>
 <a href="https://godoc.org/github.com/stellar/go"><img alt="GoDoc" src="https://godoc.org/github.com/stellar/go?status.svg" /></a>
 <a href="https://goreportcard.com/report/github.com/stellar/go"><img alt="Go Report Card" src="https://goreportcard.com/badge/github.com/stellar/go" /></a>
@@ -15,16 +15,18 @@ This repo is the home for all of the public Go code produced by the [Stellar Dev
 
 This repo contains various tools and services that you can use and deploy, as well as the SDK you can use to develop applications that integrate with the Stellar network.
 
-## Package Index
+## Horizon
 
-* [Horizon Server](services/horizon): Full-featured API server for Stellar network
-* [Go Horizon SDK - horizonclient](clients/horizonclient): Client for Horizon server (queries and transaction submission)
-* [Go Horizon SDK - txnbuild](txnbuild): Construct Stellar transactions and operations
-* [Ticker](services/ticker): An API server that provides statistics about assets and markets on the Stellar network
-* [Keystore](services/keystore): An API server that is used to store and manage encrypted keys for Stellar client applications
-* Servers for Anchors & Financial Institutions
-  * [Compliance Server](services/compliance): Allows financial institutions to exchange KYC information
-  * [Federation Server](services/federation): Allows organizations to provide addresses for users (`jane*examplebank.com`)
+Horizon is the client facing API server for the [Stellar ecosystem](https://developers.stellar.org/docs/start/introduction/).  It acts as the interface between [Stellar Core](https://developers.stellar.org/docs/run-core-node/) and applications that want to access the Stellar network. It allows you to submit transactions to the network, check the status of accounts, subscribe to event streams and more.
+
+Check out the following resources to get started:
+- [Horizon Development Guide](internal/docs/GUIDE_FOR_DEVELOPERS.md): Instructions for building and developing Horizon. Covers setup, building, testing, and contributing. Also contains some helpful notes and context for Horizon developers.
+- [Quickstart Guide](https://github.com/stellar/quickstart): An external tool provided from a separate repository. It builds a docker image which can be used for running the stellar stack including Horizon locally for evaluation and testing situations. A great way to observe a reference runtime deployment, to see how everything fits together.
+- [Horizon Testing Guide](internal/docs/TESTING_NOTES.md): Details on how to test Horizon, including unit tests, integration tests, and end-to-end tests.
+- [Horizon SDK and API Guide](internal/docs/SDK_API_GUIDE.md): Documentation on the Horizon SDKs, APIs, resources, and examples. Useful for developers building on top of Horizon.
+
+### Run a production server
+If you're an administrator planning to run a production instance of Horizon as part of the public Stellar network, you should check out the instructions on our public developer docs - [Run an API Server](https://developers.stellar.org/docs/run-api-server/). It covers installation, monitoring, error scenarios and more.
 
 ## Dependencies
 
@@ -34,53 +36,13 @@ It depends on a [number of external dependencies](./go.mod), and uses Go [Module
 
 You can choose to checkout this repository into a [GOPATH](https://github.com/golang/go/wiki/GOPATH) or into any directory.
 
-## Directory Layout
-
-In addition to the other top-level packages, there are a few special directories that contain specific types of packages:
-
-* **clients** contains packages that provide client packages to the various Stellar services.
-* **exp** contains experimental packages.  Use at your own risk.
-* **handlers** contains packages that provide pluggable implementors of `http.Handler` that make it easier to incorporate portions of the Stellar protocol into your own http server. 
-* **support** contains packages that are not intended for consumption outside of Stellar's other packages.  Packages that provide common infrastructure for use in our services and tools should go here, such as `db` or `log`. 
-* **support/scripts** contains single-file go programs and bash scripts used to support the development of this repo. 
-* **services** contains packages that compile to applications that are long-running processes (such as API servers).
-* **tools** contains packages that compile to command line applications.
-* **protos** contains the protobuf definitions for data-models that we want to generate for use with external stakeholders. Refer to [protos/README.md](./protos/README.md) for more information about code structure in `protos` directory
-
-Each of these directories have their own README file that explain further the nature of their contents.
-
-### Other packages
-
-In addition to the packages described above, this repository contains various packages related to working with the Stellar network from a go program.  It's recommended that you use [godoc](https://godoc.org/github.com/stellar/go#pkg-subdirectories) to browse the documentation for each.
-
-
-## Package source layout
-
-While much of the code in individual packages is organized based upon different developers' personal preferences, many of the packages follow a simple convention for organizing the declarations inside of a package that aim to aid in your ability to find code.
-
-In each package, there may be one or more of a set of common files:
-
-- *errors.go*: This file should contains declarations (both types and vars) for errors that are used by the package.
-- *example_test.go*: This file should contains example tests, as described at https://blog.golang.org/examples.
-- *main.go/internal.go* (**deprecated**): Older packages may have a `main.go` (public symbols) or `internal.go` (private symbols).  These files contain, respectively, the exported and unexported vars, consts, types and funcs for the package. New packages do not follow this pattern, and instead follow the standard Go convention to co-locate structs and their methods in the same files. 
-- *main.go* (**new convention**): If present, this file contains a `main` function as part of an executable `main` package.
-
-In addition to the above files, a package often has files that contains code that is specific to one declared type.  This file uses the snake case form of the type name (for example `loggly_hook.go` would correspond to the type `LogglyHook`).  This file should contain method declarations, interface implementation assertions and any other declarations that are tied solely to that type.
-
-Each non-test file can have a test counterpart like normal, whose name ends with `_test.go`.  The common files described above also have their own test counterparts... for example `internal_test.go` should contains tests that test unexported behavior and more commonly test helpers that are unexported.
-
-Generally, file contents are sorted by exported/unexported, then declaration type  (ordered as consts, vars, types, then funcs), then finally alphabetically.
-
-### Test helpers
-
-Often, we provide test packages that aid in the creation of tests that interact with our other packages.  For example, the `support/db` package has the `support/db/dbtest` package underneath it that contains elements that make it easier to test code that accesses a SQL database.  We've found that this pattern of having a separate test package maximizes flexibility and simplifies package dependencies.
-
 ### Contributing
 
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for more details.
+As an open source project, development of Horizon is public, and you can help! We welcome new issue reports, documentation and bug fixes, and contributions that further the project roadmap. The [Development Guide](internal/docs/GUIDE_FOR_DEVELOPERS.md) will show you how to build Horizon, see what's going on behind the scenes, and set up an effective develop-test-push cycle so that you can get your work incorporated quickly.
+
 
 ### Developing
 
-See [GUIDE_FOR_DEVELOPERS.md](/services/horizon/internal/docs/GUIDE_FOR_DEVELOPERS.md) for helpful instructions for getting started developing code in this repository.
+See [GUIDE_FOR_DEVELOPERS.md](/internal/docs/GUIDE_FOR_DEVELOPERS.md) for helpful instructions for getting started developing code in this repository.
 
 [Stellar Development Foundation]: https://stellar.org
