@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-22.04]
-        go: ["1.22", "1.23"]
+        go: ["1.24", "1.25"]
         pg: [14, 16]
         protocol-version: [24]
     runs-on: ${{ matrix.os }}
@@ -97,7 +97,7 @@ jobs:
       - name: Calculate the source hash
         id: calculate_source_hash
         run: |
-          combined_hash=$(echo "horizon-hash-${{ hashFiles('./horizon') }}-${{ hashFiles('./clients/horizonclient/**') }}-${{ hashFiles('./protocols/horizon/**') }}-${{ hashFiles('./txnbuild/**') }}-${{ hashFiles('./ingest/**') }}-${{ hashFiles('./xdr/**') }}-${{ hashFiles('./services/**') }}-${{ env.PROTOCOL_24_CORE_DOCKER_IMG }}-${{ env.PROTOCOL_24_RPC_DOCKER_IMG }}-${{ env.PROTOCOL_24_CORE_DEBIAN_PKG_VERSION }}-${{ env.PREFIX }}" | sha256sum | cut -d ' ' -f 1)
+          combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-${{ env.PROTOCOL_24_CORE_DOCKER_IMG }}-${{ env.PROTOCOL_24_RPC_DOCKER_IMG }}-${{ env.PROTOCOL_24_CORE_DEBIAN_PKG_VERSION }}-${{ env.PREFIX }}" | sha256sum | cut -d ' ' -f 1)
           echo "COMBINED_SOURCE_HASH=$combined_hash" >> "$GITHUB_ENV"
 
       - name: Restore Horizon binary and integration tests source hash to cache
@@ -109,7 +109,7 @@ jobs:
           key: ${{ env.COMBINED_SOURCE_HASH }}
 
       - if: ${{ steps.horizon_binary_tests_hash.outputs.cache-hit != 'true' }}
-        run: go test -race -timeout 75m -v ./services/horizon/internal/integration/...
+        run: go test -race -timeout 75m -v ./internal/integration/...
 
       - name: Save Horizon binary and integration tests source hash to cache
         if: ${{ success() && steps.horizon_binary_tests_hash.outputs.cache-hit != 'true' }}
