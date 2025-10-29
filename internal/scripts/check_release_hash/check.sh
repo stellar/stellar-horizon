@@ -31,7 +31,7 @@ git config --global core.excludesFile '~/.gitignore'
 git pull origin --tags
 git checkout $TAG
 # -keep: artifact directories are not removed after packaging
-CIRCLE_TAG=$TAG go run -v ./support/scripts/build_release_artifacts -keep
+CIRCLE_TAG=$TAG go run -v ./internal/scripts/build_release_artifacts -keep
 
 echo "RESULTS"
 echo "======="
@@ -53,7 +53,7 @@ do
     released=""
     dist=""
     msg=""
-    
+
     if [ -f "./released/$TAG-$S.tar.gz" ]; then
         released=($(shasum -a 256 ./released/$TAG-$S/horizon))
     else

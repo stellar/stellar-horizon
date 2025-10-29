@@ -50,7 +50,7 @@ jobs:
         go-version: ${{ matrix.go }}
     - run: go build ./...
     - name: Build binaries
-      run: go run ./support/scripts/build_release_artifacts/main.go
+      run: go run ./internal/scripts/build_release_artifacts/main.go
 
   test:
     strategy:

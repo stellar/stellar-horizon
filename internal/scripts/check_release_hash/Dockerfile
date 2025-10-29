@@ -13,7 +13,8 @@ RUN echo "deb https://apt.stellar.org focal testing" >/etc/apt/sources.list.d/SD
 
 RUN git clone https://github.com/stellar/go.git /go/src/github.com/stellar/go
 # Fetch dependencies and prebuild binaries. Not necessary but will make check faster.
-RUN go run -v ./support/scripts/build_release_artifacts
+RUN go run -v ./internal/scripts/build_release_artifacts
+
 
 COPY check.sh .
 RUN chmod +x check.sh
