@@ -178,7 +178,7 @@ export CAPTIVE_CORE_STORAGE_PATH="$CONTAINER_WORKING_DIR"
 export HISTORY_ARCHIVE_CACHING="FALSE"
 
 BASE_BRANCH=${BASE_BRANCH:-master}
-cd stellar-go
+cd horizon
 if [ ! -z "$BRANCH" ]; then
 	if [[ "$BRANCH" == pull/* ]]; then
 		# BRANCH is a PR ref like pull/1234/head
