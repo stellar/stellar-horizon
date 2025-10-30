@@ -1,9 +1,9 @@
 #! /usr/bin/env bash
 set -e
 
-# the container runtime can provide externally mounted volume at /data. 
-# in batch job environment, the volume is the same for all batch jobs. 
-# so we partition sub-directories under so if container is batch job worker 
+# the container runtime can provide externally mounted volume at /data.
+# in batch job environment, the volume is the same for all batch jobs.
+# so we partition sub-directories under so if container is batch job worker
 # at an index N, the concurrent jobs will safely use the same volume at same time
 CONTAINER_WORKING_DIR="/data/job_${AWS_BATCH_JOB_ARRAY_INDEX:-0}"
 echo "Job working directory path on data volume: $CONTAINER_WORKING_DIR"
@@ -104,14 +104,14 @@ if [ ! -z "$GCP_CREDS" ]; then
 	chmod 600 /tmp/gcp.json
 	export GOOGLE_APPLICATION_CREDENTIALS="/tmp/gcp.json"
 	echo "Configured GCP credentials"
-fi	
+fi
 
 if [ ! -z "$DATASTORE_CONFIG_PLAIN" ]; then
     echo "$DATASTORE_CONFIG_PLAIN" > /tmp/datastore-config.toml
 	export DATASTORE_CONFIG="/tmp/datastore-config.toml"
 	echo "Configured Datastore credentials"
 	cat /tmp/datastore-config.toml
-fi	
+fi
 
 # configure postgres
 if [ -z "${PGDATA}" ]; then
@@ -170,15 +170,15 @@ export NETWORK_PASSPHRASE="Public Global Stellar Network ; September 2015"
 export HISTORY_ARCHIVE_URLS="https://s3-eu-west-1.amazonaws.com/history.stellar.org/prd/core-live/core_live_001"
 export DATABASE_URL_NEW="postgres://postgres:postgres@localhost:5432/horizon_new?sslmode=disable"
 export DATABASE_URL_OLD="postgres://postgres:postgres@localhost:5432/horizon_old?sslmode=disable"
-# set the ccore settings by default, 
+# set the ccore settings by default,
 # if DATASTORE_CONFIG is set, horizon commands will ignore the captive core settings.
 export CAPTIVE_CORE_CONFIG_APPEND_PATH="/captive-core-pubnet.cfg"
 export STELLAR_CORE_BINARY_PATH="/usr/bin/stellar-core"
 export CAPTIVE_CORE_STORAGE_PATH="$CONTAINER_WORKING_DIR"
 export HISTORY_ARCHIVE_CACHING="FALSE"
 
-BASE_BRANCH=${BASE_BRANCH:-master}
-cd stellar-go
+BASE_BRANCH=${BASE_BRANCH:-main}
+cd horizon
 if [ ! -z "$BRANCH" ]; then
 	if [[ "$BRANCH" == pull/* ]]; then
 		# BRANCH is a PR ref like pull/1234/head
@@ -190,11 +190,11 @@ if [ ! -z "$BRANCH" ]; then
 	fi
 fi
 git log -1 --pretty=oneline
-/usr/local/go/bin/go build -v -o "$CONTAINER_WORKING_DIR/horizon_new" ./services/horizon/. 
+/usr/local/go/bin/go build -v -o "$CONTAINER_WORKING_DIR/horizon_new" .
 git clean -xfd
 git checkout "$BASE_BRANCH"
 git log -1 --pretty=oneline
-/usr/local/go/bin/go build -v -o "$CONTAINER_WORKING_DIR/horizon_old" ./services/horizon/.
+/usr/local/go/bin/go build -v -o "$CONTAINER_WORKING_DIR/horizon_old" .
 
 cd "$CONTAINER_WORKING_DIR"
 rm -rf "$CONTAINER_WORKING_DIR/compare"
@@ -204,7 +204,7 @@ run_new_horizon() {
     mkdir -p "$CONTAINER_WORKING_DIR"/new_runtime
     cd "$CONTAINER_WORKING_DIR"/new_runtime
     echo "Starting dump_horizon_db new_history with LEDGERBACKEND=$LEDGERBACKEND and DATASTORE_CONFIG=$DATASTORE_CONFIG"
-    "$CONTAINER_WORKING_DIR/horizon_new" --db-url "$DATABASE_URL_NEW" db migrate up 
+    "$CONTAINER_WORKING_DIR/horizon_new" --db-url "$DATABASE_URL_NEW" db migrate up
     alter_tables_unlogged "new"
     "$CONTAINER_WORKING_DIR/horizon_new" --db-url "$DATABASE_URL_NEW" ingest verify-range --from $FROM --to $TO --verify-state
     dump_horizon_db "new" "$CONTAINER_WORKING_DIR/compare/new_history"

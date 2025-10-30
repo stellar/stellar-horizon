@@ -1,15 +1,15 @@
 FROM golang:1.23-bookworm AS builder
 
 ARG VERSION="devel"
-WORKDIR /go/src/github.com/stellar/go
+WORKDIR /go/src/github.com/stellar/stellar-horizon
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . ./
 ENV GOFLAGS="-ldflags=-X=github.com/stellar/go/support/app.version=${VERSION}-(built-from-source)"
-RUN go install github.com/stellar/go/services/horizon
+RUN go install github.com/stellar/stellar-horizon
 
 FROM ubuntu:22.04
-ARG STELLAR_CORE_VERSION 
+ARG STELLAR_CORE_VERSION
 ENV STELLAR_CORE_VERSION=${STELLAR_CORE_VERSION:-*}
 ENV STELLAR_CORE_BINARY_PATH /usr/bin/stellar-core
 
@@ -25,4 +25,3 @@ RUN apt-get clean
 COPY --from=builder /go/bin/horizon ./
 
 ENTRYPOINT ["./horizon"]
-    

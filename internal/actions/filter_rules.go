@@ -11,7 +11,7 @@ import (
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 )
 
-// these admin HTTP endpoints are documented in services/horizon/internal/httpx/static/admin_oapi.yml
+// these admin HTTP endpoints are documented in internal/httpx/static/admin_oapi.yml
 type FilterConfigHandler struct{}
 
 func (handler FilterConfigHandler) GetAssetConfig(w http.ResponseWriter, r *http.Request) {

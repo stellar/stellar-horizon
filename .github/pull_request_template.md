@@ -4,7 +4,7 @@ change is, and why it is being made, with enough context for anyone to understan
 
 <details>
   <summary>PR Checklist</summary>
-  
+
 ### PR Structure
 
 * [ ] This PR has reasonably narrow scope (if not, break it down into smaller PRs).
@@ -19,11 +19,11 @@ change is, and why it is being made, with enough context for anyone to understan
 * [ ] This PR adds tests for the most critical parts of the new functionality or fixes.
 * [ ] I've updated any docs ([developer docs](https://developers.stellar.org/api/), `.md`
   files, etc... affected by this change). Take a look in the `docs` folder for a given service,
-  like [this one](https://github.com/stellar/go/tree/master/services/horizon/internal/docs).
+  like [this one](https://github.com/stellar/stellar-horizon/tree/main/internal/docs).
 
 ### Release planning
 
-* [ ] I've reviewed the changes in this PR and if I consider them worthwhile for being mentioned on release notes then I have updated the relevant `CHANGELOG.md` within the  component folder structure. For example, if I changed horizon, then I updated ([services/horizon/CHANGELOG.md](services/horizon/CHANGELOG.md). I add a new line item describing the change and reference to this PR. If I don't update a CHANGELOG, I acknowledge this PR's change may not be mentioned in future release notes.  
+* [ ] I've reviewed the changes in this PR and if I consider them worthwhile for being mentioned on release notes then I have updated the relevant `CHANGELOG.md` within the  component folder structure. For example, if I changed horizon, then I updated ([CHANGELOG.md](CHANGELOG.md). I add a new line item describing the change and reference to this PR. If I don't update a CHANGELOG, I acknowledge this PR's change may not be mentioned in future release notes.
 * [ ] I've decided if this PR requires a new major/minor version according to
   [semver](https://semver.org/), or if it's mainly a patch change. The PR is targeted at the next
   release branch if it's not a patch change.

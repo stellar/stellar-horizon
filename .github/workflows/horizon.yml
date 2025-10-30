@@ -2,7 +2,7 @@ name: Horizon
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
 
 jobs:
@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-22.04]
-        go: ["1.22", "1.23"]
+        go: ["1.24", "1.25"]
         pg: [14, 16]
         protocol-version: [24]
     runs-on: ${{ matrix.os }}
@@ -91,13 +91,13 @@ jobs:
 
       - name: Build Horizon reproducible build
         run: |
-          go build -v -trimpath -buildvcs=false ./services/horizon
+          go build -v -trimpath -buildvcs=false .
           touch empty
 
       - name: Calculate the source hash
         id: calculate_source_hash
         run: |
-          combined_hash=$(echo "horizon-hash-${{ hashFiles('./horizon') }}-${{ hashFiles('./clients/horizonclient/**') }}-${{ hashFiles('./protocols/horizon/**') }}-${{ hashFiles('./txnbuild/**') }}-${{ hashFiles('./ingest/**') }}-${{ hashFiles('./xdr/**') }}-${{ hashFiles('./services/**') }}-${{ env.PROTOCOL_24_CORE_DOCKER_IMG }}-${{ env.PROTOCOL_24_RPC_DOCKER_IMG }}-${{ env.PROTOCOL_24_CORE_DEBIAN_PKG_VERSION }}-${{ env.PREFIX }}" | sha256sum | cut -d ' ' -f 1)
+          combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-${{ env.PROTOCOL_24_CORE_DOCKER_IMG }}-${{ env.PROTOCOL_24_RPC_DOCKER_IMG }}-${{ env.PROTOCOL_24_CORE_DEBIAN_PKG_VERSION }}-${{ env.PREFIX }}" | sha256sum | cut -d ' ' -f 1)
           echo "COMBINED_SOURCE_HASH=$combined_hash" >> "$GITHUB_ENV"
 
       - name: Restore Horizon binary and integration tests source hash to cache
@@ -109,7 +109,7 @@ jobs:
           key: ${{ env.COMBINED_SOURCE_HASH }}
 
       - if: ${{ steps.horizon_binary_tests_hash.outputs.cache-hit != 'true' }}
-        run: go test -race -timeout 75m -v ./services/horizon/internal/integration/...
+        run: go test -race -timeout 75m -v ./internal/integration/...
 
       - name: Save Horizon binary and integration tests source hash to cache
         if: ${{ success() && steps.horizon_binary_tests_hash.outputs.cache-hit != 'true' }}
@@ -132,18 +132,18 @@ jobs:
 
       - name: Build and test the Verify Range Docker image
         run: |
-          docker build --build-arg="GO_VERSION=$GO_VERSION" --build-arg="STELLAR_CORE_VERSION=$STELLAR_CORE_VERSION" -f services/horizon/docker/verify-range/Dockerfile -t stellar/horizon-verify-range services/horizon/docker/verify-range/
+          docker build --build-arg="GO_VERSION=$GO_VERSION" --build-arg="STELLAR_CORE_VERSION=$STELLAR_CORE_VERSION" -f docker/verify-range/Dockerfile -t stellar/horizon-verify-range docker/verify-range/
           # Any range should do for basic testing, this range was chosen pretty early in history so that it only takes a few mins to run
           docker run -e BRANCH=$(git rev-parse HEAD) -e FROM=10000063 -e TO=10000127 stellar/horizon-verify-range
 
       # Push image
-      - if: github.ref == 'refs/heads/master'
+      - if: github.ref == 'refs/heads/main'
         name: Login to DockerHub
         uses: docker/login-action@bb984efc561711aaa26e433c32c3521176eae55b
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - if: github.ref == 'refs/heads/master'
+      - if: github.ref == 'refs/heads/main'
         name: Push to DockerHub
         run: docker push stellar/horizon-verify-range:latest

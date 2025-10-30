@@ -65,7 +65,7 @@ type sorobanTransaction struct {
 // HORIZON_INTEGRATION_TESTS_CAPTIVE_CORE_BIN=/usr/local/bin/stellar-core \
 // HORIZON_INTEGRATION_TESTS_DOCKER_IMG=stellar/unsafe-stellar-core:23.0.0-2634.d5cbc0793.focal \
 // HORIZON_INTEGRATION_TESTS_STELLAR_RPC_DOCKER_IMG=stellar/stellar-rpc:23.0.1-132 \
-// go test -v ./services/horizon/internal/integration -run TestGenerateLedgers -count=1 -timeout=30m
+// go test -v ./internal/integration -run TestGenerateLedgers -count=1 -timeout=30m
 func TestGenerateLedgers(t *testing.T) {
 	envMaxSupportedProtocol := integration.GetCoreMaxSupportedProtocol()
 	// if HORIZON_INTEGRATION_TESTS_CORE_MAX_SUPPORTED_PROTOCOL not set for a specific protocol

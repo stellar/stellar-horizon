@@ -28,7 +28,7 @@ jobs:
         run: ./gomod.sh
 
       - name: Build binaries
-        run: go run ./support/scripts/build_release_artifacts/main.go
+        run: go run ./internal/scripts/build_release_artifacts/main.go
 
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@483c1e56f95e88835747b1c7c60581215016cbf2

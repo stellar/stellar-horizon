@@ -7,4 +7,4 @@ GOTOP="$( cd "$DIR/../../../../../../../.." && pwd )"
 
 go generate github.com/stellar/stellar-horizon/internal/db2/schema
 go generate github.com/stellar/stellar-horizon/internal/test
-go install github.com/stellar/go/services/horizon
+go install github.com/stellar/stellar-horizon

@@ -10,21 +10,21 @@ This document describes how to build Horizon from source, so that you can test a
 - [stellar-core](#building-stellar-core)
 
 ## The Go Monorepo
-All the code for Horizon resides in our Go monorepo.
+All the code for Horizon resides in this repository:
 ```bash
-git clone https://github.com/stellar/go.git
+git clone https://github.com/stellar/stellar-horizon.git
 ```
 If you want to contribute to the project, consider forking the repository and cloning the fork instead.
 
 ## Getting Started with Running Horizon
-The [start.sh](/services/horizon/docker/start.sh) script builds horizon from current source, and then runs docker-compose to start the docker containers with runtime configs for horizon, postgres, and optionally core if the optional `standalone` network parameter was included. 
+The [start.sh](docker/start.sh) script builds horizon from current source, and then runs docker-compose to start the docker containers with runtime configs for horizon, postgres, and optionally core if the optional `standalone` network parameter was included.
 The script takes one optional parameter which configures the Stellar network used by the docker containers. If no parameter is supplied, the containers will run on the Stellar test network. Read more about the public and private networks in the [public documentation](https://developers.stellar.org/docs/fundamentals-and-concepts/testnet-and-pubnet#testnet)
 
-`./services/horizon/docker/start.sh pubnet` will run the containers on the Stellar public network.
+`./docker/start.sh pubnet` will run the containers on the Stellar public network.
 
-`./services/horizon/docker/start.sh standalone` will run the containers on a private standalone Stellar network.
+`./docker/start.sh standalone` will run the containers on a private standalone Stellar network.
 
-`./services/horizon/docker/start.sh testnet` will run the containers on the Stellar test network.
+`./docker/start.sh testnet` will run the containers on the Stellar test network.
 
 The following ports will be exposed:
 - Horizon: **8000**
@@ -32,9 +32,9 @@ The following ports will be exposed:
 - Stellar-Core (If `standalone` specified): **11626**
 - Stellar-Core-Postgres (If `standalone` specified): **5641**
 
-Note that when you switch between different networks you will need to clear the Stellar Core and Stellar Horizon databases. You can wipe out the databases by running `docker-compose down --remove-orphans -v`. 
+Note that when you switch between different networks you will need to clear the Stellar Core and Stellar Horizon databases. You can wipe out the databases by running `docker-compose down --remove-orphans -v`.
 
-This script is helpful to spin up the services quickly and play around with them. However, for code development it's important to build and install everything locally 
+This script is helpful to spin up the services quickly and play around with them. However, for code development it's important to build and install everything locally
 
 ## Developing Horizon Locally
 We will now configure a development environment to run Horizon service locally without Docker.
@@ -46,13 +46,13 @@ Horizon requires an instance of stellar-core binary on the same host. This is re
 
 Horizon uses a Postgres database to record information ingested from Stellar Core. The unit and integration tests also expect a Postgres DB to be running at ``localhost:5432`` with trust auth method enabled by default for the ``postgres`` user.  You can run the following command to spin up a Horizon database as a docker container:
 ```bash
-docker-compose -f ./services/horizon/docker/docker-compose.yml up -d horizon-postgres
+docker-compose -f ./docker/docker-compose.yml up -d horizon-postgres
 ```
 The docker container will accept database connections on port 5432. Note that while Horizon will run locally, it's PostgresQL db will run in docker.
 
 To shut down all docker containers and free up resources, run the following command:
 ```bash
-docker-compose -f ./services/horizon/docker/docker-compose.yml down --remove-orphans -v
+docker-compose -f ./docker/docker-compose.yml down --remove-orphans -v
 ```
 
 ### Running Horizon in an IDE
@@ -65,7 +65,7 @@ Add a debug configuration in your IDE to attach a debugger to the local Horizon 
      "type": "go",
      "request": "launch",
      "mode": "debug",
-     "program": "${workspaceRoot}/services/horizon/main.go",
+     "program": "${workspaceRoot}/main.go",
      "env": {
          "DATABASE_URL": "postgres://postgres@localhost:5432/horizon?sslmode=disable",
          "APPLY_MIGRATIONS": "true",
@@ -79,29 +79,27 @@ If all is well, you should see ingest logs written to standard out. You can read
 
 ### Building Horizon Binary
 
-1. Change to the horizon services directory - `cd go/services/horizon/`.
-2. Compile the Horizon binary: `go build -o stellar-horizon && go install`. You should see the resulting `stellar-horizon` executable in `go/services/horizon`.
-3. Add the executable to your PATH in your `~/.bashrc` or equivalent, for easy access: `export PATH=$PATH:{absolute-path-to-horizon-folder}`
+1. Compile the Horizon binary: `go build -o stellar-horizon && go install`. You should see the resulting `stellar-horizon` executable in the root folder.
+2. Add the executable to your PATH in your `~/.bashrc` or equivalent, for easy access: `export PATH=$PATH:{absolute-path-to-horizon-folder}`
 
 Open a new terminal. Confirm everything worked by running `stellar-horizon --help` successfully. You should see an informative message listing the command line options supported by Horizon.
 
 ### Run tests
 
-Once you have [installed stellar-core](#building-stellar-core) on your machine and have the 
+Once you have [installed stellar-core](#building-stellar-core) on your machine and have the
 [Horizon database](#database-setup) up and running, you should be able to run Horizon's unit tests:
 
 ```bash
-cd go/services/horizon/
 go test ./...
 ```
 
 To run the integration tests, you need to set some environment variables:
 
 ```bash
-export HORIZON_INTEGRATION_TESTS_ENABLED=true 
+export HORIZON_INTEGRATION_TESTS_ENABLED=true
 export HORIZON_INTEGRATION_TESTS_CORE_MAX_SUPPORTED_PROTOCOL=21
 export HORIZON_INTEGRATION_TESTS_DOCKER_IMG=stellar/stellar-core:21
-go test -race -timeout 25m -v ./services/horizon/internal/integration/...
+go test -race -timeout 25m -v ./internal/integration/...
 ```
 
 #### Running tests in IDE
@@ -113,7 +111,7 @@ You can debug integration and unit tests in your IDE. For example, here is a VS 
    "type": "go",
    "request": "launch",
    "mode": "test",
-   "program": "${workspaceRoot}/services/horizon/internal/integration",
+   "program": "${workspaceRoot}/internal/integration",
    "env": {
        "HORIZON_INTEGRATION_TESTS_ENABLED": "true",
        "HORIZON_INTEGRATION_TESTS_CORE_MAX_SUPPORTED_PROTOCOL": "21",
@@ -142,7 +140,7 @@ This section contains additional information related to the development of Horiz
 
 ## Configuring a Standalone Stellar-Core
 
-By default, the [docker-compose.yml](/services/horizon/docker/docker-compose.yml) will configure Horizon with captive core ingestion to use the test network.
+By default, the [docker-compose.yml](/docker/docker-compose.yml) will configure Horizon with captive core ingestion to use the test network.
 
 To run the containers on a private stand-alone network, run `./start.sh standalone`.
 When you run Stellar Core on a stand-alone network, a root account will be created by default. It will have a balance of 100 billion Lumens and the following key pair:
@@ -154,15 +152,15 @@ When running Horizon on a private stand-alone network, Horizon will not start in
 
 ### Accelerated network for testing
 
-You can increase the speed of tests by adding `ARTIFICIALLY_ACCELERATE_TIME_FOR_TESTING=true` in the [captive-core-standalone.cfg](/services/horizon/docker/captive-core-standalone.cfg).
+You can increase the speed of tests by adding `ARTIFICIALLY_ACCELERATE_TIME_FOR_TESTING=true` in the [captive-core-standalone.cfg](/docker/captive-core-standalone.cfg).
 
 And finally setting the checkpoint frequency for horizon:
 ```bash
 export CHECKPOINT_FREQUENCY=8
 ```
 
-This modification causes the standalone network to close ledgers every 1 second and create a checkpoint once every 8 ledgers, 
-deviating from the default timing of ledger closing after 5 seconds and creating a checkpoint once every 64 ledgers. Please note that 
+This modification causes the standalone network to close ledgers every 1 second and create a checkpoint once every 8 ledgers,
+deviating from the default timing of ledger closing after 5 seconds and creating a checkpoint once every 64 ledgers. Please note that
 this customization is only applicable when running a standalone network, as it requires changes to the captive-core configuration.
 
 ## Using a specific version of Stellar Core
@@ -170,7 +168,7 @@ this customization is only applicable when running a standalone network, as it r
 By default, the Docker Compose file is configured to use version 21 of Protocol and Stellar Core. You can specify optional environment variables from the command shell for stating version overrides for either the docker-compose or start.sh invocations.
 ```bash
 export PROTOCOL_VERSION="21"
-export CORE_IMAGE="stellar/stellar-core:21" 
+export CORE_IMAGE="stellar/stellar-core:21"
 export STELLAR_CORE_VERSION="21.3.1-2007.4ede19620.focal"
 ```
 
@@ -230,7 +228,7 @@ log.Ctx(ctx).Info("This statement will use the sub logger")
 ```
 
 ### **Adding migrations**
-1. Add your migration to `go/services/horizon/internal/db2/schema/migrations/` using the same name nomenclature as other migrations.
+1. Add your migration to `internal/db2/schema/migrations/` using the same name nomenclature as other migrations.
 2. After creating you migration, run `./gogenerate.sh` from the root folder to regenerate the code.
 
 ### **Code Formatting**
