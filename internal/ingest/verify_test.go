@@ -21,6 +21,7 @@ import (
 	"github.com/stellar/go/support/db"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/xdr"
+
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/ingest/processors"
 	"github.com/stellar/stellar-horizon/internal/test"
@@ -455,8 +456,7 @@ func (s *StateVerifierTestSuite) TestActualExpectedEntryNotEqualWrite() {
 	s.Assert().NoError(err)
 
 	errorMsg := fmt.Sprintf(
-		"Entry does not match the fetched entry. Expected (history archive): %s (pretransform = %s), actual (horizon): %s",
-		expectedEntryBase64,
+		"Entry does not match the fetched entry. Expected (history archive): %s actual (horizon): %s",
 		expectedEntryBase64,
 		actualEntryBase64,
 	)

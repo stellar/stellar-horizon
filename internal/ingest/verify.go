@@ -30,9 +30,6 @@ const verifyBatchSize = 50000
 // StateVerifier verifies if ledger entries provided by Add method are the same
 // as in the checkpoint ledger entries provided by CheckpointChangeReader.
 // The algorithm works in the following way:
-//  0. Develop `transformFunction`. It should remove all fields and objects not
-//     stored in your app. For example, if you only store accounts, all other
-//     ledger entry types should be ignored (return ignore = true).
 //  1. In a loop, get entries from history archive by calling GetEntries()
 //     and Write() your version of entries found in the batch (in any order).
 //  2. When GetEntries() return no more entries, call Verify with a number of
@@ -142,12 +139,6 @@ func (v *StateVerifier) Write(entry xdr.LedgerEntry) error {
 	}
 	delete(v.currentEntries, keyString)
 
-	preTransformExpectedEntry := expectedEntry
-	preTransformExpectedEntryMarshaled, err := v.encodingBuffer.MarshalBinary(&preTransformExpectedEntry)
-	if err != nil {
-		return errors.Wrap(err, "Error marshaling preTransformExpectedEntry")
-	}
-
 	expectedEntryMarshaled, err := v.encodingBuffer.MarshalBinary(&expectedEntry)
 	if err != nil {
 		return errors.Wrap(err, "Error marshaling expectedEntry")
@@ -155,9 +146,8 @@ func (v *StateVerifier) Write(entry xdr.LedgerEntry) error {
 
 	if !bytes.Equal(actualEntryMarshaled, expectedEntryMarshaled) {
 		return ingestsdk.NewStateError(errors.Errorf(
-			"Entry does not match the fetched entry. Expected (history archive): %s (pretransform = %s), actual (horizon): %s",
+			"Entry does not match the fetched entry. Expected (history archive): %s actual (horizon): %s",
 			base64.StdEncoding.EncodeToString(expectedEntryMarshaled),
-			base64.StdEncoding.EncodeToString(preTransformExpectedEntryMarshaled),
 			base64.StdEncoding.EncodeToString(actualEntryMarshaled),
 		))
 	}
