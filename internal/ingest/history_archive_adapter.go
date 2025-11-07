@@ -5,13 +5,15 @@ import (
 
 	"github.com/stellar/go/historyarchive"
 	"github.com/stellar/go/ingest"
+	"github.com/stellar/go/ingest/sac"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/xdr"
 )
 
 // historyArchiveAdapter is an adapter for the historyarchive package to read from history archives
 type historyArchiveAdapter struct {
-	archive historyarchive.ArchiveInterface
+	archive           historyarchive.ArchiveInterface
+	networkPassphrase string
 }
 
 type verifiableChangeReader interface {
@@ -26,8 +28,8 @@ type historyArchiveAdapterInterface interface {
 }
 
 // newHistoryArchiveAdapter is a constructor to make a historyArchiveAdapter
-func newHistoryArchiveAdapter(archive historyarchive.ArchiveInterface) historyArchiveAdapterInterface {
-	return &historyArchiveAdapter{archive: archive}
+func newHistoryArchiveAdapter(archive historyarchive.ArchiveInterface, networkPassphrase string) historyArchiveAdapterInterface {
+	return &historyArchiveAdapter{archive: archive, networkPassphrase: networkPassphrase}
 }
 
 // GetLatestLedgerSequence returns the latest ledger sequence or an error
@@ -50,7 +52,37 @@ func (haa *historyArchiveAdapter) GetState(ctx context.Context, sequence uint32)
 		return nil, errors.Errorf("history checkpoint does not exist for ledger %d", sequence)
 	}
 
-	sr, e := ingest.NewCheckpointChangeReader(ctx, haa.archive, sequence)
+	ledgerEntryFilter := func(ledgerEntry xdr.LedgerEntry) bool {
+		if ledgerEntry.Data.Type == xdr.LedgerEntryTypeConfigSetting ||
+			ledgerEntry.Data.Type == xdr.LedgerEntryTypeContractCode {
+			return false
+		}
+		if ledgerEntry.Data.Type == xdr.LedgerEntryTypeContractData {
+			_, assetFound := sac.AssetFromContractData(ledgerEntry, haa.networkPassphrase)
+			_, _, balanceFound := sac.ContractBalanceFromContractData(ledgerEntry, haa.networkPassphrase)
+			return assetFound || balanceFound
+		}
+		return true
+	}
+
+	ledgerKeyFilter := func(ledgerKey xdr.LedgerKey) bool {
+		if ledgerKey.Type == xdr.LedgerEntryTypeConfigSetting ||
+			ledgerKey.Type == xdr.LedgerEntryTypeContractCode {
+			return false
+		}
+		if ledgerKey.Type == xdr.LedgerEntryTypeContractData {
+			return sac.ValidContractBalanceLedgerKey(ledgerKey) ||
+				sac.ValidAssetEntryLedgerKey(ledgerKey)
+		}
+		return true
+	}
+
+	sr, e := ingest.NewCheckpointChangeReader(
+		ctx,
+		haa.archive,
+		sequence,
+		ingest.WithFilter(ledgerEntryFilter, ledgerKeyFilter),
+	)
 	if e != nil {
 		return nil, errors.Wrap(e, "could not make memory state reader")
 	}

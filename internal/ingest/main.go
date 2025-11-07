@@ -26,6 +26,7 @@ import (
 	logpkg "github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/storage"
 	"github.com/stellar/go/xdr"
+
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/ingest/filters"
 )
@@ -348,7 +349,7 @@ func NewSystem(config Config) (System, error) {
 	}
 
 	historyQ := &history.Q{config.HistorySession.Clone()}
-	historyAdapter := newHistoryArchiveAdapter(archive)
+	historyAdapter := newHistoryArchiveAdapter(archive, config.NetworkPassphrase)
 	filters := filters.NewFilters()
 	loadtestSnapshot := &loadTestSnapshot{HistoryQ: historyQ}
 

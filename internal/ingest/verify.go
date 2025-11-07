@@ -18,6 +18,7 @@ import (
 	"github.com/stellar/go/support/errors"
 	logpkg "github.com/stellar/go/support/log"
 	"github.com/stellar/go/xdr"
+
 	"github.com/stellar/stellar-horizon/internal/db2"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/ingest/processors"
@@ -25,14 +26,6 @@ import (
 
 const assetStatsBatchSize = 500
 const verifyBatchSize = 50000
-
-// TransformLedgerEntryFunction is a function that transforms ledger entry
-// into a form that should be compared to checkpoint state. It can be also used
-// to decide if the given entry should be ignored during verification.
-// Sometimes the application needs only specific type entries or specific fields
-// for a given entry type. Use this function to create a common form of an entry
-// that will be used for equality check.
-type TransformLedgerEntryFunction func(xdr.LedgerEntry) (ignore bool, newEntry xdr.LedgerEntry)
 
 // StateVerifier verifies if ledger entries provided by Add method are the same
 // as in the checkpoint ledger entries provided by CheckpointChangeReader.
@@ -51,10 +44,6 @@ type TransformLedgerEntryFunction func(xdr.LedgerEntry) (ignore bool, newEntry x
 // Check Horizon for an example how to use this tool.
 type StateVerifier struct {
 	stateReader ingestsdk.ChangeReader
-	// transformFunction transforms (or ignores) ledger entries streamed from
-	// checkpoint buckets to match the form added by `Write`. Read
-	// TransformLedgerEntryFunction godoc for more information.
-	transformFunction TransformLedgerEntryFunction
 
 	readEntries int
 	readingDone bool
@@ -71,11 +60,10 @@ type StateVerifier struct {
 // method instead of just updating this value!
 const StateVerifierExpectedIngestionVersion = 20
 
-func NewStateVerifier(stateReader ingestsdk.ChangeReader, tf TransformLedgerEntryFunction) *StateVerifier {
+func NewStateVerifier(stateReader ingestsdk.ChangeReader) *StateVerifier {
 	return &StateVerifier{
-		stateReader:       stateReader,
-		transformFunction: tf,
-		encodingBuffer:    xdr.NewEncodingBuffer(),
+		stateReader:    stateReader,
+		encodingBuffer: xdr.NewEncodingBuffer(),
 	}
 }
 
@@ -101,13 +89,6 @@ func (v *StateVerifier) GetLedgerEntries(count int) ([]xdr.LedgerEntry, error) {
 		}
 
 		entry := *entryChange.Post
-
-		if v.transformFunction != nil {
-			ignore, _ := v.transformFunction(entry)
-			if ignore {
-				continue
-			}
-		}
 
 		ledgerKey, err := entry.LedgerKey()
 		if err != nil {
@@ -165,19 +146,6 @@ func (v *StateVerifier) Write(entry xdr.LedgerEntry) error {
 	preTransformExpectedEntryMarshaled, err := v.encodingBuffer.MarshalBinary(&preTransformExpectedEntry)
 	if err != nil {
 		return errors.Wrap(err, "Error marshaling preTransformExpectedEntry")
-	}
-
-	if v.transformFunction != nil {
-		var ignore bool
-		ignore, expectedEntry = v.transformFunction(expectedEntry)
-		// Extra check: if entry was ignored in GetEntries, it shouldn't be
-		// ignored here.
-		if ignore {
-			return errors.Errorf(
-				"Entry ignored in GetEntries but not ignored in Write: %s. Possibly transformFunction is buggy.",
-				base64.StdEncoding.EncodeToString(preTransformExpectedEntryMarshaled),
-			)
-		}
 	}
 
 	expectedEntryMarshaled, err := v.encodingBuffer.MarshalBinary(&expectedEntry)
@@ -393,21 +361,12 @@ func (s *system) verifyState(verifyAgainstLatestCheckpoint bool, checkpointSeque
 		return ingestsdk.NewStateError(err)
 	}
 
-	verifier := NewStateVerifier(stateReader, func(entry xdr.LedgerEntry) (bool, xdr.LedgerEntry) {
-		entryType := entry.Data.Type
-		// Won't be persisting protocol 20 ContractData ledger entries (except for Stellar Asset Contract
-		// ledger entries) to the history db, therefore must not allow it
-		// to be counted in history state-verifier accumulators.
-		if entryType == xdr.LedgerEntryTypeConfigSetting || entryType == xdr.LedgerEntryTypeContractCode {
-			return true, entry
-		}
-
-		return false, entry
-	})
+	verifier := NewStateVerifier(stateReader)
 
 	assetStats := processors.NewAssetStatSet()
 	createdExpirationEntries := map[xdr.Hash]uint32{}
 	var contractDataEntries []xdr.LedgerEntry
+	totalIgnoredEntries := 0
 	total := int64(0)
 	for {
 		var entries []xdr.LedgerEntry
@@ -474,7 +433,11 @@ func (s *system) verifyState(verifyAgainstLatestCheckpoint bool, checkpointSeque
 				createdExpirationEntries[ttl.KeyHash] = uint32(ttl.LiveUntilLedgerSeq)
 				totalByType["expiration"]++
 			default:
-				return errors.New("GetLedgerEntries return unexpected type")
+				localLog.WithField("type", entry.Data.Type.String()).Info("Ignoring entry")
+				if err = verifier.Write(entry); err != nil {
+					return err
+				}
+				totalIgnoredEntries++
 			}
 		}
 
@@ -564,7 +527,8 @@ func (s *system) verifyState(verifyAgainstLatestCheckpoint bool, checkpointSeque
 
 	err = verifier.Verify(
 		countAccounts + countData + countOffers + countTrustLines + countClaimableBalances +
-			countLiquidityPools + int(totalByType["contract_data"]) + int(totalByType["ttl"]),
+			countLiquidityPools + int(totalByType["contract_data"]) + totalIgnoredEntries +
+			int(totalByType["ttl"]),
 	)
 	if err != nil {
 		return errors.Wrap(err, "verifier.Verify failed")
