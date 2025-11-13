@@ -45,6 +45,7 @@ import (
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
+
 	horizoncmd "github.com/stellar/stellar-horizon/cmd"
 	horizon "github.com/stellar/stellar-horizon/internal"
 	"github.com/stellar/stellar-horizon/internal/ingest"
@@ -1634,9 +1635,9 @@ func findDockerComposePath() string {
 	//
 
 	if gopath := os.Getenv("GOPATH"); gopath != "" {
-		monorepo := filepath.Join(gopath, "src", "github.com", "stellar", "go")
-		if _, err = os.Stat(monorepo); !os.IsNotExist(err) {
-			current = monorepo
+		horizonRepo := filepath.Join(gopath, "src", "github.com", "stellar", "stellar-horizon")
+		if _, err = os.Stat(horizonRepo); !os.IsNotExist(err) {
+			current = horizonRepo
 		}
 	}
 
