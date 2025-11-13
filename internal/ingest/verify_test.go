@@ -21,6 +21,7 @@ import (
 	"github.com/stellar/go/support/db"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/xdr"
+
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/ingest/processors"
 	"github.com/stellar/stellar-horizon/internal/test"
@@ -338,7 +339,7 @@ type StateVerifierTestSuite struct {
 
 func (s *StateVerifierTestSuite) SetupTest() {
 	s.mockStateReader = &ingestsdk.MockChangeReader{}
-	s.verifier = NewStateVerifier(s.mockStateReader, nil)
+	s.verifier = NewStateVerifier(s.mockStateReader)
 }
 
 func (s *StateVerifierTestSuite) TearDownTest() {
@@ -383,59 +384,6 @@ func (s *StateVerifierTestSuite) TestCurrentEntriesNotEmpty() {
 	s.Assert().Error(err)
 	assertStateError(s.T(), err, true)
 	s.Assert().EqualError(err, "Entries (1) not found locally, example: "+entryBase64)
-}
-
-func (s *StateVerifierTestSuite) TestTransformFunction() {
-	accountEntry := makeAccountLedgerEntry()
-	s.mockStateReader.
-		On("Read").
-		Return(ingestsdk.Change{
-			Type: xdr.LedgerEntryTypeAccount,
-			Post: &accountEntry,
-		}, nil).Once()
-
-	offerEntry := makeOfferLedgerEntry()
-	s.mockStateReader.
-		On("Read").
-		Return(ingestsdk.Change{
-			Type: xdr.LedgerEntryTypeOffer,
-			Post: &offerEntry,
-		}, nil).Once()
-
-	s.mockStateReader.On("Read").Return(ingestsdk.Change{}, io.EOF).Once()
-
-	s.verifier.transformFunction =
-		func(entry xdr.LedgerEntry) (ignore bool, newEntry xdr.LedgerEntry) {
-			// Leave Account ID only for accounts, ignore the rest
-			switch entry.Data.Type {
-			case xdr.LedgerEntryTypeAccount:
-				accountEntry := entry.Data.Account
-
-				return false, xdr.LedgerEntry{
-					Data: xdr.LedgerEntryData{
-						Type: xdr.LedgerEntryTypeAccount,
-						Account: &xdr.AccountEntry{
-							AccountId: accountEntry.AccountId,
-						},
-					},
-				}
-			default:
-				return true, xdr.LedgerEntry{}
-			}
-		}
-
-	_, err := s.verifier.GetLedgerEntries(10)
-	s.Assert().NoError(err)
-
-	// Check currentEntries
-	key, err := accountEntry.LedgerKey()
-	s.Assert().NoError(err)
-	ledgerKey, err := key.MarshalBinary()
-	s.Assert().NoError(err)
-
-	// Account entry transformed and offer entry ignored
-	s.Assert().Len(s.verifier.currentEntries, 1)
-	s.Assert().Equal(accountEntry, s.verifier.currentEntries[string(ledgerKey)])
 }
 
 func (s *StateVerifierTestSuite) TestOnlyRequestedNumberOfKeysReturned() {
@@ -485,40 +433,6 @@ func (s *StateVerifierTestSuite) TestWriteEntryNotExist() {
 	s.Assert().EqualError(err, errorMsg)
 }
 
-func (s *StateVerifierTestSuite) TestTransformFunctionBuggyIgnore() {
-	accountEntry := makeAccountLedgerEntry()
-	s.mockStateReader.
-		On("Read").
-		Return(ingestsdk.Change{
-			Type: xdr.LedgerEntryTypeAccount,
-			Post: &accountEntry,
-		}, nil).Once()
-
-	s.verifier.transformFunction =
-		func(entry xdr.LedgerEntry) (ignore bool, newEntry xdr.LedgerEntry) {
-			return false, xdr.LedgerEntry{}
-		}
-
-	entries, err := s.verifier.GetLedgerEntries(1)
-	s.Assert().NoError(err)
-	s.Assert().Len(entries, 1)
-
-	// Check the behavior of transformFunction to code path to test.
-	s.verifier.transformFunction =
-		func(entry xdr.LedgerEntry) (ignore bool, newEntry xdr.LedgerEntry) {
-			return true, xdr.LedgerEntry{}
-		}
-
-	entryBase64, err := xdr.MarshalBase64(accountEntry)
-	s.Assert().NoError(err)
-	errorMsg := fmt.Sprintf(
-		"Entry ignored in GetEntries but not ignored in Write: %s. Possibly transformFunction is buggy.",
-		entryBase64,
-	)
-	err = s.verifier.Write(accountEntry)
-	s.Assert().EqualError(err, errorMsg)
-}
-
 func (s *StateVerifierTestSuite) TestActualExpectedEntryNotEqualWrite() {
 	expectedEntry := makeAccountLedgerEntry()
 	s.mockStateReader.
@@ -542,8 +456,7 @@ func (s *StateVerifierTestSuite) TestActualExpectedEntryNotEqualWrite() {
 	s.Assert().NoError(err)
 
 	errorMsg := fmt.Sprintf(
-		"Entry does not match the fetched entry. Expected (history archive): %s (pretransform = %s), actual (horizon): %s",
-		expectedEntryBase64,
+		"Entry does not match the fetched entry. Expected (history archive): %s actual (horizon): %s",
 		expectedEntryBase64,
 		actualEntryBase64,
 	)
@@ -677,8 +590,16 @@ func TestStateVerifier(t *testing.T) {
 	mockChangeReader := &ingestsdk.MockChangeReader{}
 
 	for _, change := range ingestsdk.GetChangesFromLedgerEntryChanges(generateRandomLedgerEntries(tt)) {
-		mockChangeReader.On("Read").Return(change, nil).Once()
 		tt.Assert.NoError(changeProcessor.ProcessChange(tt.Ctx, change))
+		entry := *change.Post
+		// apply the same filters used in the historyArchiveAdapter
+		if ledgerEntryFilter("", entry) {
+			ledgerKey, err := entry.LedgerKey()
+			tt.Assert.NoError(err)
+			// ledgerEntryFilter returning true implies ledgerKeyFilter returns true
+			tt.Assert.True(ledgerKeyFilter(ledgerKey))
+			mockChangeReader.On("Read").Return(change, nil).Once()
+		}
 	}
 	tt.Assert.NoError(changeProcessor.Commit(tt.Ctx))
 
@@ -746,10 +667,12 @@ func TestStateVerifierHashError(t *testing.T) {
 
 func generateRandomLedgerEntries(tt *test.T) []xdr.LedgerEntryChange {
 	gen := randxdr.NewGenerator()
+	set := map[string]bool{}
 
 	var changes []xdr.LedgerEntryChange
 	for i := 0; i < 100; i++ {
-		changes = append(changes,
+		var nextChanges []xdr.LedgerEntryChange
+		nextChanges = append(nextChanges,
 			genLiquidityPool(tt, gen),
 			genClaimableBalance(tt, gen),
 			genOffer(tt, gen),
@@ -760,7 +683,19 @@ func generateRandomLedgerEntries(tt *test.T) []xdr.LedgerEntryChange {
 			genConfigSetting(tt, gen),
 			genTTL(tt, gen),
 		)
-		changes = append(changes, genAssetContractMetadata(tt, gen)...)
+		nextChanges = append(nextChanges, genAssetContractMetadata(tt, gen)...)
+		for _, change := range nextChanges {
+			ledgerKey, err := change.LedgerKey()
+			tt.Require.NoError(err)
+			b64Key, err := ledgerKey.MarshalBinaryBase64()
+			tt.Require.NoError(err)
+			// ensure ledger entry changes are for unique ledger keys
+			if set[b64Key] {
+				continue
+			}
+			set[b64Key] = true
+			changes = append(changes, change)
+		}
 	}
 
 	coverage := map[xdr.LedgerEntryType]int{}
