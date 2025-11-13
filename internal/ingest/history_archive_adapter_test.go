@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/stellar/go/historyarchive"
+	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/xdr"
 )
@@ -44,7 +45,7 @@ func TestGetState_Read(t *testing.T) {
 		return
 	}
 
-	haa := newHistoryArchiveAdapter(archive)
+	haa := newHistoryArchiveAdapter(archive, network.TestNetworkPassphrase)
 
 	sr, e := haa.GetState(context.Background(), 21686847)
 	if !assert.NoError(t, e) {

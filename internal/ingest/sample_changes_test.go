@@ -12,6 +12,7 @@ import (
 
 	"github.com/stellar/go/historyarchive"
 	"github.com/stellar/go/ingest"
+	"github.com/stellar/go/network"
 	logpkg "github.com/stellar/go/support/log"
 	"github.com/stellar/go/xdr"
 	"github.com/stellar/stellar-horizon/internal/ingest/processors"
@@ -47,7 +48,7 @@ func newSampleChangeReader(output string, size int) (*sampleChangeReader, error)
 		return nil, err
 	}
 
-	historyAdapter := newHistoryArchiveAdapter(archive)
+	historyAdapter := newHistoryArchiveAdapter(archive, network.PublicNetworkPassphrase)
 	checkpointLedger, err := historyAdapter.GetLatestLedgerSequence()
 	if err != nil {
 		return nil, err
