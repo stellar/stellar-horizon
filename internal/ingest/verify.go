@@ -356,7 +356,6 @@ func (s *system) verifyState(verifyAgainstLatestCheckpoint bool, checkpointSeque
 	assetStats := processors.NewAssetStatSet()
 	createdExpirationEntries := map[xdr.Hash]uint32{}
 	var contractDataEntries []xdr.LedgerEntry
-	totalIgnoredEntries := 0
 	total := int64(0)
 	for {
 		var entries []xdr.LedgerEntry
@@ -423,11 +422,7 @@ func (s *system) verifyState(verifyAgainstLatestCheckpoint bool, checkpointSeque
 				createdExpirationEntries[ttl.KeyHash] = uint32(ttl.LiveUntilLedgerSeq)
 				totalByType["expiration"]++
 			default:
-				localLog.WithField("type", entry.Data.Type.String()).Info("Ignoring entry")
-				if err = verifier.Write(entry); err != nil {
-					return err
-				}
-				totalIgnoredEntries++
+				return errors.New("GetLedgerEntries return unexpected type")
 			}
 		}
 
@@ -517,8 +512,7 @@ func (s *system) verifyState(verifyAgainstLatestCheckpoint bool, checkpointSeque
 
 	err = verifier.Verify(
 		countAccounts + countData + countOffers + countTrustLines + countClaimableBalances +
-			countLiquidityPools + int(totalByType["contract_data"]) + totalIgnoredEntries +
-			int(totalByType["ttl"]),
+			countLiquidityPools + int(totalByType["contract_data"]) + int(totalByType["ttl"]),
 	)
 	if err != nil {
 		return errors.Wrap(err, "verifier.Verify failed")

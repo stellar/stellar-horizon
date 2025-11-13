@@ -42,6 +42,31 @@ func (haa *historyArchiveAdapter) GetLatestLedgerSequence() (uint32, error) {
 	return has.CurrentLedger, nil
 }
 
+func ledgerEntryFilter(networkPassphrase string, ledgerEntry xdr.LedgerEntry) bool {
+	if ledgerEntry.Data.Type == xdr.LedgerEntryTypeConfigSetting ||
+		ledgerEntry.Data.Type == xdr.LedgerEntryTypeContractCode {
+		return false
+	}
+	if ledgerEntry.Data.Type == xdr.LedgerEntryTypeContractData {
+		_, assetFound := sac.AssetFromContractData(ledgerEntry, networkPassphrase)
+		_, _, balanceFound := sac.ContractBalanceFromContractData(ledgerEntry, networkPassphrase)
+		return assetFound || balanceFound
+	}
+	return true
+}
+
+func ledgerKeyFilter(ledgerKey xdr.LedgerKey) bool {
+	if ledgerKey.Type == xdr.LedgerEntryTypeConfigSetting ||
+		ledgerKey.Type == xdr.LedgerEntryTypeContractCode {
+		return false
+	}
+	if ledgerKey.Type == xdr.LedgerEntryTypeContractData {
+		return sac.ValidContractBalanceLedgerKey(ledgerKey) ||
+			sac.ValidAssetEntryLedgerKey(ledgerKey)
+	}
+	return true
+}
+
 // GetState returns a reader with the state of the ledger at the provided sequence number.
 func (haa *historyArchiveAdapter) GetState(ctx context.Context, sequence uint32) (verifiableChangeReader, error) {
 	exists, err := haa.archive.CategoryCheckpointExists("history", sequence)
@@ -52,36 +77,16 @@ func (haa *historyArchiveAdapter) GetState(ctx context.Context, sequence uint32)
 		return nil, errors.Errorf("history checkpoint does not exist for ledger %d", sequence)
 	}
 
-	ledgerEntryFilter := func(ledgerEntry xdr.LedgerEntry) bool {
-		if ledgerEntry.Data.Type == xdr.LedgerEntryTypeConfigSetting ||
-			ledgerEntry.Data.Type == xdr.LedgerEntryTypeContractCode {
-			return false
-		}
-		if ledgerEntry.Data.Type == xdr.LedgerEntryTypeContractData {
-			_, assetFound := sac.AssetFromContractData(ledgerEntry, haa.networkPassphrase)
-			_, _, balanceFound := sac.ContractBalanceFromContractData(ledgerEntry, haa.networkPassphrase)
-			return assetFound || balanceFound
-		}
-		return true
-	}
-
-	ledgerKeyFilter := func(ledgerKey xdr.LedgerKey) bool {
-		if ledgerKey.Type == xdr.LedgerEntryTypeConfigSetting ||
-			ledgerKey.Type == xdr.LedgerEntryTypeContractCode {
-			return false
-		}
-		if ledgerKey.Type == xdr.LedgerEntryTypeContractData {
-			return sac.ValidContractBalanceLedgerKey(ledgerKey) ||
-				sac.ValidAssetEntryLedgerKey(ledgerKey)
-		}
-		return true
-	}
-
 	sr, e := ingest.NewCheckpointChangeReader(
 		ctx,
 		haa.archive,
 		sequence,
-		ingest.WithFilter(ledgerEntryFilter, ledgerKeyFilter),
+		ingest.WithFilter(
+			func(entry xdr.LedgerEntry) bool {
+				return ledgerEntryFilter(haa.networkPassphrase, entry)
+			},
+			ledgerKeyFilter,
+		),
 	)
 	if e != nil {
 		return nil, errors.Wrap(e, "could not make memory state reader")

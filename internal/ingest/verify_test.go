@@ -590,8 +590,16 @@ func TestStateVerifier(t *testing.T) {
 	mockChangeReader := &ingestsdk.MockChangeReader{}
 
 	for _, change := range ingestsdk.GetChangesFromLedgerEntryChanges(generateRandomLedgerEntries(tt)) {
-		mockChangeReader.On("Read").Return(change, nil).Once()
 		tt.Assert.NoError(changeProcessor.ProcessChange(tt.Ctx, change))
+		entry := *change.Post
+		// apply the same filters used in the historyArchiveAdapter
+		if ledgerEntryFilter("", entry) {
+			ledgerKey, err := entry.LedgerKey()
+			tt.Assert.NoError(err)
+			// ledgerEntryFilter returning true implies ledgerKeyFilter returns true
+			tt.Assert.True(ledgerKeyFilter(ledgerKey))
+			mockChangeReader.On("Read").Return(change, nil).Once()
+		}
 	}
 	tt.Assert.NoError(changeProcessor.Commit(tt.Ctx))
 
