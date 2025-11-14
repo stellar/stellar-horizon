@@ -225,7 +225,7 @@ type Metrics struct {
 
 type System interface {
 	Run()
-	RegisterMetrics(*prometheus.Registry)
+	SetMetricsRegistry(*prometheus.Registry)
 	Metrics() Metrics
 	StressTest(numTransactions, changesPerTransaction int) error
 	VerifyRange(fromLedger, toLedger uint32, verifyState bool) error
@@ -273,6 +273,9 @@ type system struct {
 
 	currentStateMutex sync.Mutex
 	currentState      State
+
+	metricsRegistry *prometheus.Registry
+	metricsOnce     sync.Once
 }
 
 func NewSystem(config Config) (System, error) {
@@ -542,25 +545,35 @@ func (s *system) Metrics() Metrics {
 	return s.metrics
 }
 
-// RegisterMetrics registers the prometheus metrics
-func (s *system) RegisterMetrics(registry *prometheus.Registry) {
-	registry.MustRegister(s.metrics.MaxSupportedProtocolVersion)
-	registry.MustRegister(s.metrics.LocalLatestLedger)
-	registry.MustRegister(s.metrics.LedgerIngestionDuration)
-	registry.MustRegister(s.metrics.LedgerIngestionTradeAggregationDuration)
-	registry.MustRegister(s.metrics.StateVerifyDuration)
-	registry.MustRegister(s.metrics.StateInvalidGauge)
-	registry.MustRegister(s.metrics.LedgerStatsCounter)
-	registry.MustRegister(s.metrics.ProcessorsRunDuration)
-	registry.MustRegister(s.metrics.ProcessorsRunDurationSummary)
-	registry.MustRegister(s.metrics.LoadersRunDurationSummary)
-	registry.MustRegister(s.metrics.LoadersStatsSummary)
-	registry.MustRegister(s.metrics.StateVerifyLedgerEntriesCount)
-	registry.MustRegister(s.metrics.HistoryArchiveStatsCounter)
-	registry.MustRegister(s.metrics.IngestionErrorCounter)
-	s.ledgerBackend = ledgerbackend.WithMetrics(s.ledgerBackend, registry, "horizon")
-	s.reaper.RegisterMetrics(registry)
-	s.lookupTableReaper.RegisterMetrics(registry)
+// SetMetricsRegistry sets the metrics registry which will be used
+// to register all the ingestion metrics
+func (s *system) SetMetricsRegistry(registry *prometheus.Registry) {
+	s.metricsRegistry = registry
+}
+
+func (s *system) registerMetricsOnce() {
+	if s.metricsRegistry == nil {
+		return
+	}
+	s.metricsOnce.Do(func() {
+		s.metricsRegistry.MustRegister(s.metrics.MaxSupportedProtocolVersion)
+		s.metricsRegistry.MustRegister(s.metrics.LocalLatestLedger)
+		s.metricsRegistry.MustRegister(s.metrics.LedgerIngestionDuration)
+		s.metricsRegistry.MustRegister(s.metrics.LedgerIngestionTradeAggregationDuration)
+		s.metricsRegistry.MustRegister(s.metrics.StateVerifyDuration)
+		s.metricsRegistry.MustRegister(s.metrics.StateInvalidGauge)
+		s.metricsRegistry.MustRegister(s.metrics.LedgerStatsCounter)
+		s.metricsRegistry.MustRegister(s.metrics.ProcessorsRunDuration)
+		s.metricsRegistry.MustRegister(s.metrics.ProcessorsRunDurationSummary)
+		s.metricsRegistry.MustRegister(s.metrics.LoadersRunDurationSummary)
+		s.metricsRegistry.MustRegister(s.metrics.LoadersStatsSummary)
+		s.metricsRegistry.MustRegister(s.metrics.StateVerifyLedgerEntriesCount)
+		s.metricsRegistry.MustRegister(s.metrics.HistoryArchiveStatsCounter)
+		s.metricsRegistry.MustRegister(s.metrics.IngestionErrorCounter)
+		s.ledgerBackend = ledgerbackend.WithMetrics(s.ledgerBackend, s.metricsRegistry, "horizon")
+		s.reaper.RegisterMetrics(s.metricsRegistry)
+		s.lookupTableReaper.RegisterMetrics(s.metricsRegistry)
+	})
 }
 
 // Run starts ingestion system. Ingestion system supports distributed ingestion
@@ -739,6 +752,7 @@ func (s *system) runStateMachine(cur stateMachineNode, options runOptions) error
 	}()
 
 	log.WithFields(logpkg.F{"current_state": cur}).Info("Ingestion system initial state")
+	s.registerMetricsOnce()
 
 	for {
 		// Every node in the state machine is responsible for
