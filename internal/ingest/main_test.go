@@ -20,6 +20,7 @@ import (
 	logpkg "github.com/stellar/go/support/log"
 	strtime "github.com/stellar/go/support/time"
 	"github.com/stellar/go/xdr"
+
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/ingest/processors"
 )
@@ -709,7 +710,7 @@ func (m *mockSystem) Metrics() Metrics {
 	return args.Get(0).(Metrics)
 }
 
-func (m *mockSystem) RegisterMetrics(registry *prometheus.Registry) {
+func (m *mockSystem) SetMetricsRegistry(registry *prometheus.Registry) {
 	m.Called(registry)
 }
 

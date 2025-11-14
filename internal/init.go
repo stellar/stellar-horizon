@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/go/exp/orderbook"
 	"github.com/stellar/go/support/db"
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/ingest"
 	"github.com/stellar/stellar-horizon/internal/paths"
@@ -213,7 +214,7 @@ func initIngestMetrics(app *App) {
 	}
 
 	app.ingestingGauge.Inc()
-	app.ingester.RegisterMetrics(app.prometheusRegistry)
+	app.ingester.SetMetricsRegistry(app.prometheusRegistry)
 }
 
 func initTxSubMetrics(app *App) {
