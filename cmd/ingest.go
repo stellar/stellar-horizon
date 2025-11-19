@@ -19,6 +19,7 @@ import (
 	support "github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/db"
 	"github.com/stellar/go/support/log"
+
 	horizon "github.com/stellar/stellar-horizon/internal"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/httpx"
@@ -484,7 +485,7 @@ func runWithMetrics(metricsPort uint, system ingest.System, f func() error) erro
 			NoColor: true,
 		}))
 		registry := prometheus.NewRegistry()
-		system.RegisterMetrics(registry)
+		system.SetMetricsRegistry(registry)
 		httpx.AddMetricRoutes(mux, registry)
 		metricsServer := &http.Server{
 			Addr:        fmt.Sprintf(":%d", metricsPort),
