@@ -18,8 +18,7 @@ import (
 )
 
 func Test_createCaptiveCoreDefaultConfig(t *testing.T) {
-
-	var errorMsgDefaultConfig = "invalid config: %s parameter not allowed with the network parameter"
+	errorMsgDefaultConfig := "invalid config: %s parameter not allowed with the network parameter"
 	tests := []struct {
 		name               string
 		config             Config
@@ -29,7 +28,8 @@ func Test_createCaptiveCoreDefaultConfig(t *testing.T) {
 	}{
 		{
 			name: "testnet default config",
-			config: Config{Network: StellarTestnet,
+			config: Config{
+				Network:               StellarTestnet,
 				CaptiveCoreBinaryPath: "/path/to/captive-core/binary",
 			},
 			networkPassphrase:  network.TestNetworkPassphrase,
@@ -37,15 +37,26 @@ func Test_createCaptiveCoreDefaultConfig(t *testing.T) {
 		},
 		{
 			name: "pubnet default config",
-			config: Config{Network: StellarPubnet,
+			config: Config{
+				Network:               StellarPubnet,
 				CaptiveCoreBinaryPath: "/path/to/captive-core/binary",
 			},
 			networkPassphrase:  network.PublicNetworkPassphrase,
 			historyArchiveURLs: network.PublicNetworkhistoryArchiveURLs,
 		},
 		{
+			name: "futurenet default config",
+			config: Config{
+				Network:               StellarFuturenet,
+				CaptiveCoreBinaryPath: "/path/to/captive-core/binary",
+			},
+			networkPassphrase:  network.FutureNetworkPassphrase,
+			historyArchiveURLs: network.FutureNetworkhistoryArchiveURLs,
+		},
+		{
 			name: "testnet validation; history archive urls supplied",
-			config: Config{Network: StellarTestnet,
+			config: Config{
+				Network:               StellarTestnet,
 				HistoryArchiveURLs:    []string{"network history archive urls supplied"},
 				CaptiveCoreBinaryPath: "/path/to/captive-core/binary",
 			},
@@ -53,7 +64,17 @@ func Test_createCaptiveCoreDefaultConfig(t *testing.T) {
 		},
 		{
 			name: "pubnet validation; history archive urls supplied",
-			config: Config{Network: StellarPubnet,
+			config: Config{
+				Network:               StellarPubnet,
+				HistoryArchiveURLs:    []string{"network history archive urls supplied"},
+				CaptiveCoreBinaryPath: "/path/to/captive-core/binary",
+			},
+			errStr: fmt.Sprintf(errorMsgDefaultConfig, HistoryArchiveURLsFlagName),
+		},
+		{
+			name: "futurenet validation; history archive urls supplied",
+			config: Config{
+				Network:               StellarFuturenet,
 				HistoryArchiveURLs:    []string{"network history archive urls supplied"},
 				CaptiveCoreBinaryPath: "/path/to/captive-core/binary",
 			},
@@ -61,7 +82,8 @@ func Test_createCaptiveCoreDefaultConfig(t *testing.T) {
 		},
 		{
 			name: "testnet validation; network passphrase supplied",
-			config: Config{Network: StellarTestnet,
+			config: Config{
+				Network:               StellarTestnet,
 				NetworkPassphrase:     "network passphrase supplied",
 				HistoryArchiveURLs:    []string{},
 				CaptiveCoreBinaryPath: "/path/to/captive-core/binary",
@@ -70,7 +92,8 @@ func Test_createCaptiveCoreDefaultConfig(t *testing.T) {
 		},
 		{
 			name: "pubnet validation; network passphrase supplied",
-			config: Config{Network: StellarPubnet,
+			config: Config{
+				Network:               StellarPubnet,
 				NetworkPassphrase:     "pubnet network passphrase supplied",
 				HistoryArchiveURLs:    []string{},
 				CaptiveCoreBinaryPath: "/path/to/captive-core/binary",
@@ -78,8 +101,19 @@ func Test_createCaptiveCoreDefaultConfig(t *testing.T) {
 			errStr: fmt.Sprintf(errorMsgDefaultConfig, NetworkPassphraseFlagName),
 		},
 		{
+			name: "futurenet validation; network passphrase supplied",
+			config: Config{
+				Network:               StellarFuturenet,
+				NetworkPassphrase:     "futurenet network passphrase supplied",
+				HistoryArchiveURLs:    []string{},
+				CaptiveCoreBinaryPath: "/path/to/captive-core/binary",
+			},
+			errStr: fmt.Sprintf(errorMsgDefaultConfig, NetworkPassphraseFlagName),
+		},
+		{
 			name: "unknown network specified",
-			config: Config{Network: "unknown",
+			config: Config{
+				Network:               "unknown",
 				NetworkPassphrase:     "",
 				HistoryArchiveURLs:    []string{},
 				CaptiveCoreBinaryPath: "/path/to/captive-core/binary",
@@ -105,7 +139,8 @@ func Test_createCaptiveCoreDefaultConfig(t *testing.T) {
 
 		{
 			name: "unknown network specified",
-			config: Config{Network: "unknown",
+			config: Config{
+				Network:               "unknown",
 				NetworkPassphrase:     "",
 				HistoryArchiveURLs:    []string{},
 				CaptiveCoreBinaryPath: "/path/to/captive-core/binary",
@@ -151,6 +186,16 @@ func TestSetCaptiveCoreConfig(t *testing.T) {
 				Network:               StellarPubnet,
 				NetworkPassphrase:     network.PublicNetworkPassphrase,
 				HistoryArchiveURLs:    network.PublicNetworkhistoryArchiveURLs,
+				CaptiveCoreBinaryPath: "/path/to/captive-core/binary",
+			},
+		},
+		{
+			name:                     "futurenet default config",
+			requireCaptiveCoreConfig: true,
+			config: Config{
+				Network:               StellarFuturenet,
+				NetworkPassphrase:     network.FutureNetworkPassphrase,
+				HistoryArchiveURLs:    network.FutureNetworkhistoryArchiveURLs,
 				CaptiveCoreBinaryPath: "/path/to/captive-core/binary",
 			},
 		},
