@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/stellar/go/network"
+	"github.com/stellar/go-stellar-sdk/network"
 
 	"github.com/stellar/stellar-horizon/internal/test"
 

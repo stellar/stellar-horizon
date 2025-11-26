@@ -3,7 +3,7 @@ package sse
 import (
 	"net/http"
 
-	"github.com/stellar/go/support/errors"
+	"github.com/stellar/go-stellar-sdk/support/errors"
 	"github.com/stellar/stellar-horizon/internal/ledger"
 	"github.com/stellar/throttled"
 )
@@ -40,7 +40,7 @@ func (handler StreamHandler) ServeStream(
 	currentLedgerSequence := ledgerSource.CurrentLedger()
 	for {
 		// Rate limit the request if it's a call to stream since it queries the DB every second. See
-		// https://github.com/stellar/go/issues/715 for more details.
+		// https://github.com/stellar/go-stellar-sdk/issues/715 for more details.
 		rateLimiter := handler.RateLimiter
 		if rateLimiter != nil {
 			limited, _, err := rateLimiter.RateLimiter.RateLimit(rateLimiter.VaryBy.Key(r), 1)

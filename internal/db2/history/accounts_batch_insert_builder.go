@@ -3,7 +3,7 @@ package history
 import (
 	"context"
 
-	"github.com/stellar/go/support/db"
+	"github.com/stellar/go-stellar-sdk/support/db"
 )
 
 // AccountsBatchInsertBuilder is used to insert accounts into the accounts table

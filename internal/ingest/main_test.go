@@ -14,12 +14,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/stellar/go/ingest/ledgerbackend"
-	"github.com/stellar/go/support/db"
-	"github.com/stellar/go/support/errors"
-	logpkg "github.com/stellar/go/support/log"
-	strtime "github.com/stellar/go/support/time"
-	"github.com/stellar/go/xdr"
+	"github.com/stellar/go-stellar-sdk/ingest/ledgerbackend"
+	"github.com/stellar/go-stellar-sdk/support/db"
+	"github.com/stellar/go-stellar-sdk/support/errors"
+	logpkg "github.com/stellar/go-stellar-sdk/support/log"
+	strtime "github.com/stellar/go-stellar-sdk/support/time"
+	"github.com/stellar/go-stellar-sdk/xdr"
 
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/ingest/processors"

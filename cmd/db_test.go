@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/stellar/go/support/db/dbtest"
+	"github.com/stellar/go-stellar-sdk/support/db/dbtest"
 	horizon "github.com/stellar/stellar-horizon/internal"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/ingest"

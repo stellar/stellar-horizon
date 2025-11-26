@@ -3,8 +3,9 @@ package contractevents
 import (
 	"errors"
 	"fmt"
-	"github.com/stellar/go/ingest"
-	"github.com/stellar/go/xdr"
+
+	"github.com/stellar/go-stellar-sdk/ingest"
+	"github.com/stellar/go-stellar-sdk/xdr"
 )
 
 // EventType represents the type of Stellar asset Contract event

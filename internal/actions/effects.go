@@ -4,9 +4,9 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/stellar/go/support/errors"
-	"github.com/stellar/go/support/render/hal"
-	"github.com/stellar/go/support/render/problem"
+	"github.com/stellar/go-stellar-sdk/support/errors"
+	"github.com/stellar/go-stellar-sdk/support/render/hal"
+	"github.com/stellar/go-stellar-sdk/support/render/problem"
 	horizonContext "github.com/stellar/stellar-horizon/internal/context"
 	"github.com/stellar/stellar-horizon/internal/db2"
 	"github.com/stellar/stellar-horizon/internal/db2/history"

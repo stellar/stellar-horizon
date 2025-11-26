@@ -8,9 +8,9 @@ import (
 	"github.com/getsentry/raven-go"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/stellar/go/exp/orderbook"
-	"github.com/stellar/go/support/db"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/exp/orderbook"
+	"github.com/stellar/go-stellar-sdk/support/db"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/ingest"

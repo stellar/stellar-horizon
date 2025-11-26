@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/url"
 
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/support/render/hal"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/support/render/hal"
 	horizonContext "github.com/stellar/stellar-horizon/internal/context"
 	"github.com/stellar/stellar-horizon/internal/ingest"
 	"github.com/stellar/stellar-horizon/internal/ledger"

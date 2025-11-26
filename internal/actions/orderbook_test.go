@@ -11,7 +11,7 @@ import (
 	"github.com/stellar/stellar-horizon/internal/test"
 	"github.com/stretchr/testify/assert"
 
-	protocol "github.com/stellar/go/protocols/horizon"
+	protocol "github.com/stellar/go-stellar-sdk/protocols/horizon"
 )
 
 type intObject int

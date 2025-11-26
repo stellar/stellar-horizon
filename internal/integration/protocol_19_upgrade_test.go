@@ -4,9 +4,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 	"github.com/stellar/stellar-horizon/internal/test/integration"
 	"github.com/stretchr/testify/assert"
 )

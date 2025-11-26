@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/stellar/go/toid"
+	"github.com/stellar/go-stellar-sdk/toid"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 )
 

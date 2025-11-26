@@ -20,11 +20,11 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 
-	"github.com/stellar/go/support/collections/set"
-	"github.com/stellar/go/support/db"
-	"github.com/stellar/go/support/errors"
-	strtime "github.com/stellar/go/support/time"
-	"github.com/stellar/go/xdr"
+	"github.com/stellar/go-stellar-sdk/support/collections/set"
+	"github.com/stellar/go-stellar-sdk/support/db"
+	"github.com/stellar/go-stellar-sdk/support/errors"
+	strtime "github.com/stellar/go-stellar-sdk/support/time"
+	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-horizon/internal/db2"
 )
 
@@ -385,7 +385,7 @@ type ContractStat struct {
 
 func (c ContractStat) Value() (driver.Value, error) {
 	// Convert the byte array into a string as a workaround to bypass buggy encoding in the pq driver
-	// (More info about this bug here https://github.com/stellar/go/issues/5086#issuecomment-1773215436).
+	// (More info about this bug here https://github.com/stellar/go-stellar-sdk/issues/5086#issuecomment-1773215436).
 	// By doing so, the data will be written as a string rather than hex encoded bytes.
 	val, err := json.Marshal(c)
 	return string(val), err
@@ -468,7 +468,7 @@ type ExpAssetStatAccounts struct {
 
 func (e ExpAssetStatAccounts) Value() (driver.Value, error) {
 	// Convert the byte array into a string as a workaround to bypass buggy encoding in the pq driver
-	// (More info about this bug here https://github.com/stellar/go/issues/5086#issuecomment-1773215436).
+	// (More info about this bug here https://github.com/stellar/go-stellar-sdk/issues/5086#issuecomment-1773215436).
 	// By doing so, the data will be written as a string rather than hex encoded bytes.
 	val, err := json.Marshal(e)
 	return string(val), err
@@ -530,7 +530,7 @@ func (e ExpAssetStatBalances) IsZero() bool {
 
 func (e ExpAssetStatBalances) Value() (driver.Value, error) {
 	// Convert the byte array into a string as a workaround to bypass buggy encoding in the pq driver
-	// (More info about this bug here https://github.com/stellar/go/issues/5086#issuecomment-1773215436).
+	// (More info about this bug here https://github.com/stellar/go-stellar-sdk/issues/5086#issuecomment-1773215436).
 	// By doing so, the data will be written as a string rather than hex encoded bytes.
 	val, err := json.Marshal(e)
 	return string(val), err

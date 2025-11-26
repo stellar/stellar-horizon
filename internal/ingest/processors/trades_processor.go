@@ -8,12 +8,12 @@ import (
 
 	"github.com/guregu/null"
 
-	"github.com/stellar/go/exp/orderbook"
-	"github.com/stellar/go/ingest"
-	"github.com/stellar/go/support/db"
-	"github.com/stellar/go/support/errors"
-	"github.com/stellar/go/toid"
-	"github.com/stellar/go/xdr"
+	"github.com/stellar/go-stellar-sdk/exp/orderbook"
+	"github.com/stellar/go-stellar-sdk/ingest"
+	"github.com/stellar/go-stellar-sdk/support/db"
+	"github.com/stellar/go-stellar-sdk/support/errors"
+	"github.com/stellar/go-stellar-sdk/toid"
+	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 )
 
@@ -261,7 +261,7 @@ func (p *TradeProcessor) roundingSlippage(
 			true,
 		)
 		if !ok {
-			// Temporary workaround for https://github.com/stellar/go/issues/4203
+			// Temporary workaround for https://github.com/stellar/go-stellar-sdk/issues/4203
 			// Given strict receives that would underflow here, set maximum
 			// slippage so they get excluded.
 			roundingSlippageBips = xdr.Int64(math.MaxInt64)
@@ -277,7 +277,7 @@ func (p *TradeProcessor) roundingSlippage(
 			true,
 		)
 		if !ok {
-			// Temporary workaround for https://github.com/stellar/go/issues/4203
+			// Temporary workaround for https://github.com/stellar/go-stellar-sdk/issues/4203
 			// Given strict sends that would overflow here, set maximum slippage
 			// so they get excluded.
 			roundingSlippageBips = xdr.Int64(math.MaxInt64)

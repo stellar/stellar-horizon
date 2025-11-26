@@ -9,10 +9,10 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/stellar/go/support/db"
-	"github.com/stellar/go/support/errors"
-	logpkg "github.com/stellar/go/support/log"
-	"github.com/stellar/go/toid"
+	"github.com/stellar/go-stellar-sdk/support/db"
+	"github.com/stellar/go-stellar-sdk/support/errors"
+	logpkg "github.com/stellar/go-stellar-sdk/support/log"
+	"github.com/stellar/go-stellar-sdk/toid"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 )
 

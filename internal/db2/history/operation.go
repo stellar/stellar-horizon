@@ -9,9 +9,9 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 
-	"github.com/stellar/go/support/errors"
-	"github.com/stellar/go/toid"
-	"github.com/stellar/go/xdr"
+	"github.com/stellar/go-stellar-sdk/support/errors"
+	"github.com/stellar/go-stellar-sdk/toid"
+	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-horizon/internal/db2"
 )
 
@@ -51,7 +51,7 @@ func preprocessDetails(details string) ([]byte, error) {
 		if strings.HasSuffix(k, "_muxed_id") {
 			if vNumber, ok := v.(json.Number); ok {
 				// transform it into a string so that _muxed_id unmarshaling works with `,string` tags
-				// see https://github.com/stellar/go/pull/3716#issuecomment-867057436
+				// see https://github.com/stellar/go-stellar-sdk/pull/3716#issuecomment-867057436
 				dest[k] = vNumber.String()
 			}
 		}

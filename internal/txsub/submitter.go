@@ -7,10 +7,10 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/stellar/go/clients/stellarcore"
-	proto "github.com/stellar/go/protocols/stellarcore"
-	"github.com/stellar/go/support/errors"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/clients/stellarcore"
+	proto "github.com/stellar/go-stellar-sdk/protocols/stellarcore"
+	"github.com/stellar/go-stellar-sdk/support/errors"
+	"github.com/stellar/go-stellar-sdk/support/log"
 )
 
 // NewDefaultSubmitter returns a new, simple Submitter implementation

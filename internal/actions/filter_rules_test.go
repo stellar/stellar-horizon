@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	hProtocol "github.com/stellar/go/protocols/horizon"
+	hProtocol "github.com/stellar/go-stellar-sdk/protocols/horizon"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/test"
 )

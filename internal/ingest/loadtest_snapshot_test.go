@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/go/toid"
+	"github.com/stellar/go-stellar-sdk/toid"
 )
 
 func TestLoadTestSaveSnapshot(t *testing.T) {

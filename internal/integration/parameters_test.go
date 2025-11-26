@@ -16,7 +16,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/stellar/go/network"
+	"github.com/stellar/go-stellar-sdk/network"
 	"github.com/stellar/stellar-horizon/internal/paths"
 	"github.com/stellar/stellar-horizon/internal/simplepath"
 
@@ -111,7 +111,7 @@ func TestInvalidNetworkParameters(t *testing.T) {
 			test := integration.NewTest(t, *testConfig)
 			err := test.StartHorizon(true)
 			// Adding sleep as a workaround for the race condition in the ingestion system.
-			// https://github.com/stellar/go/issues/5005
+			// https://github.com/stellar/go-stellar-sdk/issues/5005
 			time.Sleep(2 * time.Second)
 			assert.Equal(t, testCase.errMsg, err.Error())
 		})
@@ -154,7 +154,7 @@ func TestNetworkParameter(t *testing.T) {
 			test := integration.NewTest(t, *testConfig)
 			err := test.StartHorizon(true)
 			// Adding sleep as a workaround for the race condition in the ingestion system.
-			// https://github.com/stellar/go/issues/5005
+			// https://github.com/stellar/go-stellar-sdk/issues/5005
 			time.Sleep(2 * time.Second)
 			assert.NoError(t, err)
 			assert.Equal(t, test.GetHorizonIngestConfig().HistoryArchiveURLs, tt.historyArchiveURLs)
@@ -195,7 +195,7 @@ func TestNetworkEnvironmentVariable(t *testing.T) {
 			test := integration.NewTest(t, *testConfig)
 			err := test.StartHorizon(true)
 			// Adding sleep as a workaround for the race condition in the ingestion system.
-			// https://github.com/stellar/go/issues/5005
+			// https://github.com/stellar/go-stellar-sdk/issues/5005
 			time.Sleep(2 * time.Second)
 			assert.NoError(t, err)
 		})

@@ -9,8 +9,8 @@ import (
 
 	"github.com/lib/pq"
 
-	"github.com/stellar/go/support/collections/set"
-	"github.com/stellar/go/support/db"
+	"github.com/stellar/go-stellar-sdk/support/collections/set"
+	"github.com/stellar/go-stellar-sdk/support/db"
 )
 
 var errSealed = fmt.Errorf("cannot register more entries to Loader after calling Exec()")
@@ -120,7 +120,7 @@ func (l *loader[K, T]) Exec(ctx context.Context, session db.SessionInterface) er
 		keys = append(keys, key)
 	}
 	// sort entries before inserting rows to prevent deadlocks on acquiring a ShareLock
-	// https://github.com/stellar/go/issues/2370
+	// https://github.com/stellar/go-stellar-sdk/issues/2370
 	sort.Slice(keys, func(i, j int) bool {
 		return l.less(keys[i], keys[j])
 	})

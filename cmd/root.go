@@ -6,7 +6,7 @@ import (
 	"slices"
 
 	"github.com/spf13/cobra"
-	"github.com/stellar/go/support/config"
+	"github.com/stellar/go-stellar-sdk/support/config"
 	horizon "github.com/stellar/stellar-horizon/internal"
 )
 

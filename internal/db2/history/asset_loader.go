@@ -3,8 +3,8 @@ package history
 import (
 	"strings"
 
-	"github.com/stellar/go/support/collections/set"
-	"github.com/stellar/go/xdr"
+	"github.com/stellar/go-stellar-sdk/support/collections/set"
+	"github.com/stellar/go-stellar-sdk/xdr"
 )
 
 type AssetKey struct {

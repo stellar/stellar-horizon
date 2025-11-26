@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/mock"
 
-	"github.com/stellar/go/ingest"
-	"github.com/stellar/go/support/db"
+	"github.com/stellar/go-stellar-sdk/ingest"
+	"github.com/stellar/go-stellar-sdk/support/db"
 )
 
 type MockTransactionsBatchInsertBuilder struct {

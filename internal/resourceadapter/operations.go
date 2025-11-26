@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/protocols/horizon/operations"
-	"github.com/stellar/go/support/render/hal"
-	"github.com/stellar/go/xdr"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon/operations"
+	"github.com/stellar/go-stellar-sdk/support/render/hal"
+	"github.com/stellar/go-stellar-sdk/xdr"
 	horizonContext "github.com/stellar/stellar-horizon/internal/context"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 )
