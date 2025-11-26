@@ -16,9 +16,9 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/gorilla/schema"
 
-	"github.com/stellar/go/support/render/problem"
-	"github.com/stellar/go/toid"
-	"github.com/stellar/go/xdr"
+	"github.com/stellar/go-stellar-sdk/support/render/problem"
+	"github.com/stellar/go-stellar-sdk/toid"
+	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-horizon/internal/assets"
 	horizonContext "github.com/stellar/stellar-horizon/internal/context"
 	"github.com/stellar/stellar-horizon/internal/db2"

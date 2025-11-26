@@ -3,19 +3,20 @@
 package processors
 
 import (
-	"github.com/stretchr/testify/require"
 	"math/big"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/protocols/horizon/base"
-	"github.com/stellar/go/strkey"
+	"github.com/stellar/go-stellar-sdk/keypair"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon/base"
+	"github.com/stellar/go-stellar-sdk/strkey"
 
-	"github.com/stellar/go/ingest"
-	"github.com/stellar/go/xdr"
+	"github.com/stellar/go-stellar-sdk/ingest"
+	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/ingest/contractevents"
 	. "github.com/stellar/stellar-horizon/internal/test/transactions"
@@ -1509,7 +1510,7 @@ func getSponsoredSandwichWrappers() []*transactionOperationWrapper {
 
 	sponsorMuxed := sponsor
 	// Do not provide the source explicitly so that the transaction source is used
-	// It tests https://github.com/stellar/go/issues/2982 .
+	// It tests https://github.com/stellar/go-stellar-sdk/issues/2982 .
 	// tx.Envelope.Operations()[0].SourceAccount = &sponsorMuxed
 	tx.Envelope.Operations()[0].SourceAccount = nil
 	tx.Envelope.V1.Tx.SourceAccount = sponsorMuxed

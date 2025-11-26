@@ -3,7 +3,7 @@ package history
 import (
 	"context"
 
-	"github.com/stellar/go/support/db"
+	"github.com/stellar/go-stellar-sdk/support/db"
 )
 
 // OperationParticipantBatchInsertBuilder is used to insert a transaction's operations into the

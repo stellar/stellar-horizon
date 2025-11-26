@@ -10,14 +10,14 @@ import (
 
 	"github.com/stretchr/testify/mock"
 
-	"github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/stellar/go/network"
-	proto "github.com/stellar/go/protocols/stellarcore"
-	"github.com/stellar/go/support/errors"
-	"github.com/stellar/go/support/render/problem"
+	"github.com/stellar/go-stellar-sdk/network"
+	proto "github.com/stellar/go-stellar-sdk/protocols/stellarcore"
+	"github.com/stellar/go-stellar-sdk/support/errors"
+	"github.com/stellar/go-stellar-sdk/support/render/problem"
 	"github.com/stellar/stellar-horizon/internal/corestate"
 )
 

@@ -4,11 +4,11 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/stellar/go/protocols/horizon"
-	proto "github.com/stellar/go/protocols/stellarcore"
-	"github.com/stellar/go/support/errors"
-	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/support/render/problem"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	proto "github.com/stellar/go-stellar-sdk/protocols/stellarcore"
+	"github.com/stellar/go-stellar-sdk/support/errors"
+	"github.com/stellar/go-stellar-sdk/support/log"
+	"github.com/stellar/go-stellar-sdk/support/render/problem"
 	hProblem "github.com/stellar/stellar-horizon/internal/render/problem"
 )
 

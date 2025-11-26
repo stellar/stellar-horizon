@@ -4,14 +4,15 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"github.com/guregu/null"
 	"strconv"
 
-	"github.com/stellar/go/xdr"
+	"github.com/guregu/null"
+
+	"github.com/stellar/go-stellar-sdk/xdr"
 	horizonContext "github.com/stellar/stellar-horizon/internal/context"
 
-	protocol "github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/support/render/hal"
+	protocol "github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/support/render/hal"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 )
 

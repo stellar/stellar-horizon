@@ -6,9 +6,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/stellar/stellar-horizon/internal/ledger"
 	"testing"
 	"time"
+
+	"github.com/stellar/stellar-horizon/internal/ledger"
 
 	"github.com/guregu/null"
 	"github.com/prometheus/client_golang/prometheus"
@@ -18,7 +19,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/stellar/go/xdr"
+	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/test"
 )

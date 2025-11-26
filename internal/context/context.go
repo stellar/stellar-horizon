@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/stellar/go/support/db"
+	"github.com/stellar/go-stellar-sdk/support/db"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 )
 

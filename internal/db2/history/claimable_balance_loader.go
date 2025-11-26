@@ -3,7 +3,7 @@ package history
 import (
 	"cmp"
 
-	"github.com/stellar/go/support/collections/set"
+	"github.com/stellar/go-stellar-sdk/support/collections/set"
 )
 
 // FutureClaimableBalanceID represents a future history claimable balance.

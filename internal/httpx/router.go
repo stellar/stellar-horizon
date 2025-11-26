@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/stellar/go/clients/stellarcore"
+	"github.com/stellar/go-stellar-sdk/clients/stellarcore"
 
 	"github.com/go-chi/chi"
 	chimiddleware "github.com/go-chi/chi/middleware"
@@ -17,9 +17,9 @@ import (
 	"github.com/rs/cors"
 	"github.com/stellar/throttled"
 
-	"github.com/stellar/go/support/db"
-	supporthttp "github.com/stellar/go/support/http"
-	"github.com/stellar/go/support/render/problem"
+	"github.com/stellar/go-stellar-sdk/support/db"
+	supporthttp "github.com/stellar/go-stellar-sdk/support/http"
+	"github.com/stellar/go-stellar-sdk/support/render/problem"
 	"github.com/stellar/stellar-horizon/internal/actions"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/ledger"

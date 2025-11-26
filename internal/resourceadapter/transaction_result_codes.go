@@ -3,7 +3,7 @@ package resourceadapter
 import (
 	"context"
 
-	protocol "github.com/stellar/go/protocols/horizon"
+	protocol "github.com/stellar/go-stellar-sdk/protocols/horizon"
 	"github.com/stellar/stellar-horizon/internal/txsub"
 )
 

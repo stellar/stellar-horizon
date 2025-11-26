@@ -7,7 +7,7 @@ import (
 
 	"github.com/stellar/throttled"
 
-	"github.com/stellar/go/support/render/problem"
+	"github.com/stellar/go-stellar-sdk/support/render/problem"
 	"github.com/stellar/stellar-horizon/internal/ledger"
 	hProblem "github.com/stellar/stellar-horizon/internal/render/problem"
 )

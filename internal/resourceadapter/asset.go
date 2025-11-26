@@ -3,8 +3,8 @@ package resourceadapter
 import (
 	"context"
 
-	protocol "github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/xdr"
+	protocol "github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/xdr"
 )
 
 func PopulateAsset(ctx context.Context, dest *protocol.Asset, asset xdr.Asset) error {

@@ -4,7 +4,7 @@ import (
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stellar/go/protocols/stellarcore"
+	"github.com/stellar/go-stellar-sdk/protocols/stellarcore"
 )
 
 type State struct {

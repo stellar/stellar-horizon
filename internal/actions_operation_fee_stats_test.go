@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	hProtocol "github.com/stellar/go/protocols/horizon"
+	hProtocol "github.com/stellar/go-stellar-sdk/protocols/horizon"
 )
 
 func TestOperationFeeTestsActions_Show(t *testing.T) {

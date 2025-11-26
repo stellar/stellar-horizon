@@ -3,7 +3,7 @@ package history
 import (
 	"cmp"
 
-	"github.com/stellar/go/support/collections/set"
+	"github.com/stellar/go-stellar-sdk/support/collections/set"
 )
 
 // FutureLiquidityPoolID represents a future history liquidity pool.

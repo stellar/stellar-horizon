@@ -2,15 +2,16 @@ package actions
 
 import (
 	"encoding/hex"
-	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"strings"
+
+	"github.com/stellar/stellar-horizon/internal/db2/history"
 
 	"github.com/asaskevich/govalidator"
 	"github.com/gorilla/schema"
 
-	"github.com/stellar/go/amount"
-	"github.com/stellar/go/support/errors"
-	"github.com/stellar/go/xdr"
+	"github.com/stellar/go-stellar-sdk/amount"
+	"github.com/stellar/go-stellar-sdk/support/errors"
+	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-horizon/internal/assets"
 )
 

@@ -13,11 +13,11 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/stellar/go/support/db"
-	"github.com/stellar/go/support/errors"
-	"github.com/stellar/go/support/render/problem"
-	"github.com/stellar/go/toid"
-	"github.com/stellar/go/xdr"
+	"github.com/stellar/go-stellar-sdk/support/db"
+	"github.com/stellar/go-stellar-sdk/support/errors"
+	"github.com/stellar/go-stellar-sdk/support/render/problem"
+	"github.com/stellar/go-stellar-sdk/toid"
+	"github.com/stellar/go-stellar-sdk/xdr"
 	horizonContext "github.com/stellar/stellar-horizon/internal/context"
 	"github.com/stellar/stellar-horizon/internal/db2"
 	"github.com/stellar/stellar-horizon/internal/ledger"
@@ -519,7 +519,7 @@ func TestGetURLParam(t *testing.T) {
 	r := makeTestActionRequest("/accounts/{account_id}/operations?limit=100", nil)
 
 	// simulates a request where the named param is not passed.
-	// Regression for https://github.com/stellar/go/issues/1965
+	// Regression for https://github.com/stellar/go-stellar-sdk/issues/1965
 	rctx := chi.RouteContext(r.Context())
 	rctx.URLParams.Keys = []string{
 		"account_id",

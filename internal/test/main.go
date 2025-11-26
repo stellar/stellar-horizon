@@ -11,7 +11,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/sirupsen/logrus"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/log"
 	tdb "github.com/stellar/stellar-horizon/internal/test/db"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

@@ -8,9 +8,9 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 
-	"github.com/stellar/go/protocols/horizon/effects"
-	"github.com/stellar/go/support/errors"
-	"github.com/stellar/go/toid"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon/effects"
+	"github.com/stellar/go-stellar-sdk/support/errors"
+	"github.com/stellar/go-stellar-sdk/toid"
 	"github.com/stellar/stellar-horizon/internal/db2"
 )
 

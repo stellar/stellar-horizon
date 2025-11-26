@@ -4,8 +4,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stellar/go/protocols/horizon"
-	supportProblem "github.com/stellar/go/support/render/problem"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	supportProblem "github.com/stellar/go-stellar-sdk/support/render/problem"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/ledger"
 	"github.com/stellar/stellar-horizon/internal/test"

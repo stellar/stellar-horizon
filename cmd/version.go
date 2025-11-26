@@ -5,7 +5,7 @@ import (
 	"runtime"
 
 	"github.com/spf13/cobra"
-	apkg "github.com/stellar/go/support/app"
+	apkg "github.com/stellar/go-stellar-sdk/support/app"
 )
 
 var versionCmd = &cobra.Command{

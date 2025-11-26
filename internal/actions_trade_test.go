@@ -12,12 +12,12 @@ import (
 	"time"
 
 	"github.com/guregu/null"
-	"github.com/stellar/go/amount"
-	"github.com/stellar/go/keypair"
+	"github.com/stellar/go-stellar-sdk/amount"
+	"github.com/stellar/go-stellar-sdk/keypair"
 
-	"github.com/stellar/go/protocols/horizon"
-	stellarTime "github.com/stellar/go/support/time"
-	"github.com/stellar/go/xdr"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	stellarTime "github.com/stellar/go-stellar-sdk/support/time"
+	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 )
 
@@ -592,7 +592,7 @@ func TestTradeActions_IndexRegressions(t *testing.T) {
 		ht.Assert.Equal(404, w.Code) //This used to be 200 with length 0
 	})
 
-	t.Run("Regression for nil prices: https://github.com/stellar/go/issues/357", func(t *testing.T) {
+	t.Run("Regression for nil prices: https://github.com/stellar/go-stellar-sdk/issues/357", func(t *testing.T) {
 		ht := StartHTTPTestWithoutScenario(t)
 		dbQ := &history.Q{ht.HorizonSession()}
 		history.TradeScenario(ht.T, dbQ)
@@ -609,7 +609,7 @@ func TestTradeActions_IndexRegressions(t *testing.T) {
 
 // TestTradeActions_AggregationOrdering checks that open/close aggregation
 // fields are correct for multiple trades that occur in the same ledger
-// https://github.com/stellar/go/issues/215
+// https://github.com/stellar/go-stellar-sdk/issues/215
 func TestTradeActions_AggregationOrdering(t *testing.T) {
 	ht := StartHTTPTestWithoutScenario(t)
 	defer ht.Finish()

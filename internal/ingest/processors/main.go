@@ -6,11 +6,11 @@ import (
 
 	"github.com/guregu/null"
 
-	"github.com/stellar/go/ingest"
-	"github.com/stellar/go/support/db"
-	"github.com/stellar/go/support/errors"
-	logpkg "github.com/stellar/go/support/log"
-	"github.com/stellar/go/xdr"
+	"github.com/stellar/go-stellar-sdk/ingest"
+	"github.com/stellar/go-stellar-sdk/support/db"
+	"github.com/stellar/go-stellar-sdk/support/errors"
+	logpkg "github.com/stellar/go-stellar-sdk/support/log"
+	"github.com/stellar/go-stellar-sdk/xdr"
 )
 
 var log = logpkg.DefaultLogger.WithField("service", "ingest")

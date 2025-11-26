@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/go-errors/errors"
-	"github.com/stellar/go/exp/orderbook"
-	"github.com/stellar/go/xdr"
+	"github.com/stellar/go-stellar-sdk/exp/orderbook"
+	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-horizon/internal/paths"
 )
 

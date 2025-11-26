@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/guregu/null"
-	"github.com/stellar/go/support/errors"
-	"github.com/stellar/go/xdr"
+	"github.com/stellar/go-stellar-sdk/support/errors"
+	"github.com/stellar/go-stellar-sdk/xdr"
 )
 
 // TimeBounds represents the time bounds of a Stellar transaction
