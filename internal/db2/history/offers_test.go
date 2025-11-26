@@ -3,12 +3,13 @@ package history
 import (
 	"context"
 	"database/sql"
-	"github.com/stretchr/testify/assert"
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/guregu/null"
-	"github.com/stellar/go/xdr"
+	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-horizon/internal/db2"
 	"github.com/stellar/stellar-horizon/internal/test"
 )

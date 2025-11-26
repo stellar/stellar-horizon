@@ -7,8 +7,8 @@ import (
 
 	"github.com/guregu/null"
 
-	"github.com/stellar/go/protocols/horizon/effects"
-	"github.com/stellar/go/toid"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon/effects"
+	"github.com/stellar/go-stellar-sdk/toid"
 	"github.com/stellar/stellar-horizon/internal/db2"
 	"github.com/stellar/stellar-horizon/internal/test"
 )

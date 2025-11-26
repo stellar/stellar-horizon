@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
-	"github.com/stellar/go/support/config"
-	"github.com/stellar/go/support/db/dbtest"
+	"github.com/stellar/go-stellar-sdk/support/config"
+	"github.com/stellar/go-stellar-sdk/support/db/dbtest"
 	horizon "github.com/stellar/stellar-horizon/internal"
 	"github.com/stellar/stellar-horizon/internal/ingest"
 	"github.com/stretchr/testify/require"

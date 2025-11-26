@@ -3,7 +3,7 @@ package history
 import (
 	"context"
 
-	"github.com/stellar/go/support/db"
+	"github.com/stellar/go-stellar-sdk/support/db"
 )
 
 // ClaimableBalanceClaimantBatchInsertBuilder is used to insert claimants into the

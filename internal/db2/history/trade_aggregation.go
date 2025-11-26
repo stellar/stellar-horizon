@@ -7,9 +7,9 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 
-	"github.com/stellar/go/support/errors"
-	strtime "github.com/stellar/go/support/time"
-	"github.com/stellar/go/toid"
+	"github.com/stellar/go-stellar-sdk/support/errors"
+	strtime "github.com/stellar/go-stellar-sdk/support/time"
+	"github.com/stellar/go-stellar-sdk/toid"
 	"github.com/stellar/stellar-horizon/internal/db2"
 )
 

@@ -5,8 +5,8 @@ import (
 
 	"github.com/guregu/null"
 
-	"github.com/stellar/go/support/db"
-	"github.com/stellar/go/xdr"
+	"github.com/stellar/go-stellar-sdk/support/db"
+	"github.com/stellar/go-stellar-sdk/xdr"
 )
 
 // OperationBatchInsertBuilder is used to insert a transaction's operations into the

@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"slices"
 
-	protocol "github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/support/render/problem"
+	protocol "github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/support/render/problem"
 	"github.com/stellar/stellar-horizon/internal/context"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/resourceadapter"

@@ -3,7 +3,7 @@ package history
 import (
 	"context"
 
-	"github.com/stellar/go/support/db"
+	"github.com/stellar/go-stellar-sdk/support/db"
 )
 
 // TrustLinesBatchInsertBuilder is used to insert trustlines into the trust_lines table

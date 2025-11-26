@@ -5,9 +5,9 @@ import (
 	"sort"
 
 	sq "github.com/Masterminds/squirrel"
-	"github.com/stellar/go/support/db"
-	"github.com/stellar/go/support/errors"
-	"github.com/stellar/go/xdr"
+	"github.com/stellar/go-stellar-sdk/support/db"
+	"github.com/stellar/go-stellar-sdk/support/errors"
+	"github.com/stellar/go-stellar-sdk/xdr"
 )
 
 // GetAssetID fetches the id for an Asset
@@ -44,7 +44,7 @@ func (q *Q) CreateAssets(ctx context.Context, assets []xdr.Asset, batchSize int)
 	}
 
 	// sort assets before inserting rows into history_assets to prevent deadlocks on acquiring a ShareLock
-	// https://github.com/stellar/go/issues/2370
+	// https://github.com/stellar/go-stellar-sdk/issues/2370
 	sort.Slice(assets, func(i, j int) bool {
 		return assets[i].String() < assets[j].String()
 	})

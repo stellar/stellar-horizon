@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/stellar/go/amount"
-	"github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/amount"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
 	"github.com/stellar/stellar-horizon/internal/paths"
 )
 

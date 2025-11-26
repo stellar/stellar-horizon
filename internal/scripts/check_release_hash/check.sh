@@ -8,10 +8,10 @@ apt-get install -y stellar-horizon=$PACKAGE_VERSION
 mkdir released
 cd released
 
-wget https://github.com/stellar/go/releases/download/$TAG/$TAG-darwin-amd64.tar.gz
-wget https://github.com/stellar/go/releases/download/$TAG/$TAG-linux-amd64.tar.gz
-wget https://github.com/stellar/go/releases/download/$TAG/$TAG-linux-arm.tar.gz
-wget https://github.com/stellar/go/releases/download/$TAG/$TAG-windows-amd64.zip
+wget https://github.com/stellar/go-stellar-sdk/releases/download/$TAG/$TAG-darwin-amd64.tar.gz
+wget https://github.com/stellar/go-stellar-sdk/releases/download/$TAG/$TAG-linux-amd64.tar.gz
+wget https://github.com/stellar/go-stellar-sdk/releases/download/$TAG/$TAG-linux-arm.tar.gz
+wget https://github.com/stellar/go-stellar-sdk/releases/download/$TAG/$TAG-windows-amd64.zip
 
 tar -xvf $TAG-darwin-amd64.tar.gz
 tar -xvf $TAG-linux-amd64.tar.gz

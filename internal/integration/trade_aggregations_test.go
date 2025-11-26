@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	strtime "github.com/stellar/go/support/time"
-	"github.com/stellar/go/xdr"
+	strtime "github.com/stellar/go-stellar-sdk/support/time"
+	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-horizon/internal/db2"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/test/integration"

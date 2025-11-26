@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/log"
 )
 
 // NewDefaultSubmissionList returns a list that manages open submissions purely

@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stellar/go/protocols/stellarcore"
-	"github.com/stellar/go/support/clock"
-	"github.com/stellar/go/support/clock/clocktest"
-	"github.com/stellar/go/support/db"
+	"github.com/stellar/go-stellar-sdk/protocols/stellarcore"
+	"github.com/stellar/go-stellar-sdk/support/clock"
+	"github.com/stellar/go-stellar-sdk/support/clock/clocktest"
+	"github.com/stellar/go-stellar-sdk/support/db"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"

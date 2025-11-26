@@ -2,18 +2,19 @@ package integration
 
 import (
 	"fmt"
-	assetProto "github.com/stellar/go/asset"
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/processors/token_transfer"
-	"github.com/stellar/go/txnbuild"
-	"github.com/stellar/go/xdr"
+	"testing"
+	"time"
+
+	assetProto "github.com/stellar/go-stellar-sdk/asset"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/keypair"
+	"github.com/stellar/go-stellar-sdk/processors/token_transfer"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
+	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-horizon/internal/test/integration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
-	"testing"
-	"time"
 )
 
 var (

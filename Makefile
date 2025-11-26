@@ -10,7 +10,7 @@ binary-build:
 	$(SUDO) docker run --platform $(DOCKER_PLATFORM) --rm $(DOCKER_OPTS) -v $(shell pwd)/../../:/go/src/github.com/stellar/stellar-horizon \
 		--pull always \
 		--env CGO_ENABLED=0 \
-		--env GOFLAGS="-ldflags=-X=github.com/stellar/go/support/app.version=$(VERSION_STRING)" \
+		--env GOFLAGS="-ldflags=-X=github.com/stellar/go-stellar-sdk/support/app.version=$(VERSION_STRING)" \
 		golang:1.23-bullseye \
 		/bin/bash -c '\
 			git config --global --add safe.directory /go/src/github.com/stellar/stellar-horizon && \

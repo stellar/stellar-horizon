@@ -3,10 +3,11 @@ package contractevents
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/stellar/go/strkey"
-	"github.com/stellar/go/xdr"
 	"math"
 	"math/big"
+
+	"github.com/stellar/go-stellar-sdk/strkey"
+	"github.com/stellar/go-stellar-sdk/xdr"
 )
 
 // GenerateEvent is a utility function to be used by testing frameworks in order
