@@ -881,7 +881,7 @@ func setCaptiveCoreConfiguration(config *Config, options ApplyOptions) error {
 	case StellarTestnet:
 		defaultCaptiveCoreConfig = ledgerbackend.TestnetDefaultConfig
 	case StellarFuturenet:
-		defaultCaptiveCoreConfig = captiveCoreFuturenet // ledgerbackend.FuturenetDefaultConfig TEMPORARY; USE THAT AFTER
+		defaultCaptiveCoreConfig = ledgerbackend.FuturenetDefaultConfig
 	}
 
 	config.CaptiveCoreTomlParams.CoreBinaryPath = config.CaptiveCoreBinaryPath
@@ -1046,8 +1046,3 @@ func setNetworkConfiguration(config *Config) error {
 	}
 	return nil
 }
-
-// TEMPORARY: REMOVE AFTER MERGING BRANCH WITH THIS CONFIG FILE TO GO MONOREPO
-//
-//go:embed captive-core-futurenet.cfg
-var captiveCoreFuturenet []byte
