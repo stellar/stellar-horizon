@@ -1,5 +1,5 @@
 # install Core from apt "stable"and horizon from apt "stable" pool
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 ARG VERSION
 ARG STELLAR_CORE_VERSION

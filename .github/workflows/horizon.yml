@@ -10,7 +10,7 @@ jobs:
     name: Integration tests
     strategy:
       matrix:
-        os: [ubuntu-22.04]
+        os: [ubuntu-24.04]
         go: ["1.24", "1.25"]
         pg: [14, 16]
         protocol-version: [24]
@@ -120,7 +120,7 @@ jobs:
 
   verify-range:
     name: Test (and push) verify-range image
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
       GO_VERSION: 1.23.4
       STELLAR_CORE_VERSION: 24.0.0-2802.0d7b4345d.jammy
