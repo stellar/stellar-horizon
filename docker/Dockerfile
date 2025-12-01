@@ -1,5 +1,5 @@
 # install Core from apt "stable" or "unstable" pool, and horizon from apt "testing" pool
-FROM ubuntu:focal
+FROM ubuntu:22.04
 
 ARG VERSION
 ARG STELLAR_CORE_VERSION
