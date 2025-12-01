@@ -9,7 +9,7 @@ jobs:
   complete:
     if: always()
     needs: [check, build, test]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
     - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
       run: exit 1
@@ -17,7 +17,7 @@ jobs:
   check:
     strategy:
       matrix:
-        os: [ubuntu-22.04]
+        os: [ubuntu-24.04]
         go: ["1.24"]
     runs-on: ${{ matrix.os }}
     steps:
@@ -37,7 +37,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-22.04]
+        os: [ubuntu-24.04]
         go: ["1.24"]
     runs-on: ${{ matrix.os }}
     steps:
@@ -55,7 +55,7 @@ jobs:
   test:
     strategy:
       matrix:
-        os: [ubuntu-22.04]
+        os: [ubuntu-24.04]
         go: ["1.24"]
         pg: [12, 16]
     runs-on: ${{ matrix.os }}
