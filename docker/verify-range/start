@@ -12,7 +12,7 @@ cleanup() {
     # need to purge these files at end as the db and the downloaed datastore
     # files can be significatn GB's in size and in a cloud batch environment
     # we don't want to keep them around after the job is done, i.e. pay for that space still.
-    sudo -u postgres --preserve-env=PGDATA /usr/lib/postgresql/14/bin/pg_ctl stop -D "$PGDATA"
+    sudo -u postgres --preserve-env=PGDATA /usr/lib/postgresql/16/bin/pg_ctl stop -D "$PGDATA"
     if [ -d "$CONTAINER_WORKING_DIR" ]; then
         sudo rm -rf "$CONTAINER_WORKING_DIR"
         echo "Purged working data files from $CONTAINER_WORKING_DIR"
@@ -124,8 +124,8 @@ mkdir -p "$PGDATA"
 sudo chown -R postgres "$PGDATA"
 sudo chmod -R 775 "$PGDATA"
 
-sudo -u postgres --preserve-env=PGDATA /usr/lib/postgresql/14/bin/initdb
-sudo -u postgres --preserve-env=PGDATA /usr/lib/postgresql/14/bin/pg_ctl start
+sudo -u postgres --preserve-env=PGDATA /usr/lib/postgresql/16/bin/initdb
+sudo -u postgres --preserve-env=PGDATA /usr/lib/postgresql/16/bin/pg_ctl start
 
 sudo -u postgres createdb horizon_new
 sudo -u postgres createdb horizon_old
