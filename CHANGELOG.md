@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this
 file. This project adheres to [Semantic Versioning](http://semver.org/).
 
+## Unreleased
+### Added
+- Added `futurenet` support to Horizon's `network` configuration parameter ([#133](https://github.com/stellar/stellar-horizon/pull/133)).
+
 ## 24.0.0
 
 **This release adds support for Protocol 24**
