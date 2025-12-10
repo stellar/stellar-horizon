@@ -20,8 +20,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	rpc "github.com/stellar/stellar-rpc/client"
 
+	"github.com/stellar/go-stellar-sdk/clients/rpcclient"
 	"github.com/stellar/go-stellar-sdk/historyarchive"
 	"github.com/stellar/go-stellar-sdk/ingest/ledgerbackend"
 	"github.com/stellar/go-stellar-sdk/support/log"
@@ -1031,8 +1031,8 @@ func (i *Test) WaitUntilLedgerEntryIsEvicted(ledgerKey xdr.LedgerKey, waitTime t
 }
 
 func (i *Test) getLatestLedgerSequenceRPC() uint32 {
-	client := rpc.NewClient("http://localhost:"+strconv.Itoa(StellarRPCPort), nil)
-	response, err := client.GetLatestLedger(context.Background())
+	rpcClient := rpcclient.NewClient("http://localhost:"+strconv.Itoa(StellarRPCPort), nil)
+	response, err := rpcClient.GetLatestLedger(context.Background())
 	require.NoError(i.t, err)
 	return response.Sequence
 }
