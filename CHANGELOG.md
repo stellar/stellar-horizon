@@ -3,9 +3,17 @@
 All notable changes to this project will be documented in this
 file. This project adheres to [Semantic Versioning](http://semver.org/).
 
-## Unreleased
+## 25.0.0
+
+**This release adds support for Protocol 25**
+
 ### Added
 - Added `futurenet` support to Horizon's `network` configuration parameter ([#133](https://github.com/stellar/stellar-horizon/pull/133)).
+- Add flag to skip protocol version check in Horizon which allows horizon to run against protocol versions which are still not released ([#5834](https://github.com/stellar/go-stellar-sdk/pull/5834)).
+
+### Fixed
+- Reduce memory consumption of state verification ([#128](https://github.com/stellar/stellar-horizon/pull/128)).
+- Fixed missing metrics reporting during ingestion load tests ([#130](https://github.com/stellar/stellar-horizon/pull/130)).
 
 ## 24.0.0
 
