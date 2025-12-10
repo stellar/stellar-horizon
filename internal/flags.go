@@ -67,6 +67,8 @@ const (
 	StellarPubnet = "pubnet"
 	// StellarTestnet is a constant representing the Stellar test network
 	StellarTestnet = "testnet"
+	// StellarFuturenet is a constant representing the Stellar future network
+	StellarFuturenet = "futurenet"
 
 	defaultMaxConcurrentRequests = uint(1000)
 	defaultMaxHTTPRequestSize    = uint(200 * 1024)
@@ -158,7 +160,7 @@ func Flags() (*Config, support.ConfigOptions) {
 
 	// flags defines the complete flag configuration for horizon.
 	// Add a new entry here to connect a new field in the horizon.Config struct
-	var flags = support.ConfigOptions{
+	flags := support.ConfigOptions{
 		&support.ConfigOption{
 			Name:           DatabaseURLFlagName,
 			EnvVar:         "DATABASE_URL",
@@ -340,7 +342,7 @@ func Flags() (*Config, support.ConfigOptions) {
 			CustomSetValue: func(co *support.ConfigOption) error {
 				stringOfUrls := viper.GetString(co.Name)
 				urlStrings := strings.Split(stringOfUrls, ",")
-				//urlStrings contains a single empty value when stringOfUrls is empty
+				// urlStrings contains a single empty value when stringOfUrls is empty
 				if len(urlStrings) == 1 && urlStrings[0] == "" {
 					*(co.ConfigKey.(*[]string)) = []string{}
 				} else {
@@ -789,16 +791,16 @@ func Flags() (*Config, support.ConfigOptions) {
 			Required:  false,
 			CustomSetValue: func(co *support.ConfigOption) error {
 				val := viper.GetString(co.Name)
-				if val != "" && val != StellarPubnet && val != StellarTestnet {
-					return fmt.Errorf("invalid network %s. Use '%s' or '%s'",
-						val, StellarPubnet, StellarTestnet)
+				if val != "" && val != StellarPubnet && val != StellarTestnet && val != StellarFuturenet {
+					return fmt.Errorf("invalid network %s. Use '%s', '%s', or '%s'",
+						val, StellarPubnet, StellarTestnet, StellarFuturenet)
 				}
 				*co.ConfigKey.(*string) = val
 				return nil
 			},
-			Usage: fmt.Sprintf("stellar public network, either '%s' or '%s'."+
+			Usage: fmt.Sprintf("stellar public network, either '%s', '%s', or '%s'."+
 				" It automatically configures network settings, including %s, %s, and %s.",
-				StellarPubnet, StellarTestnet, NetworkPassphraseFlagName,
+				StellarPubnet, StellarTestnet, StellarFuturenet, NetworkPassphraseFlagName,
 				HistoryArchiveURLsFlagName, CaptiveCoreConfigPathName),
 			UsedInCommands: IngestionCommands,
 		},
@@ -877,8 +879,9 @@ func setCaptiveCoreConfiguration(config *Config, options ApplyOptions) error {
 	case StellarPubnet:
 		defaultCaptiveCoreConfig = ledgerbackend.PubnetDefaultConfig
 	case StellarTestnet:
-
 		defaultCaptiveCoreConfig = ledgerbackend.TestnetDefaultConfig
+	case StellarFuturenet:
+		defaultCaptiveCoreConfig = ledgerbackend.FuturenetDefaultConfig
 	}
 
 	config.CaptiveCoreTomlParams.CoreBinaryPath = config.CaptiveCoreBinaryPath
@@ -976,7 +979,7 @@ func ApplyFlags(config *Config, flags support.ConfigOptions, options ApplyOption
 
 	// Configure log file
 	if config.LogFile != "" {
-		logFile, err := os.OpenFile(config.LogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		logFile, err := os.OpenFile(config.LogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 		if err == nil {
 			log.DefaultLogger.SetOutput(logFile)
 		} else {
@@ -1026,6 +1029,9 @@ func setNetworkConfiguration(config *Config) error {
 		case StellarTestnet:
 			config.NetworkPassphrase = network.TestNetworkPassphrase
 			config.HistoryArchiveURLs = network.TestNetworkhistoryArchiveURLs
+		case StellarFuturenet:
+			config.NetworkPassphrase = network.FutureNetworkPassphrase
+			config.HistoryArchiveURLs = network.FutureNetworkhistoryArchiveURLs
 		default:
 			return fmt.Errorf("no default configuration found for network %s", config.Network)
 		}

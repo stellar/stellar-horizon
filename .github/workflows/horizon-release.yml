@@ -7,7 +7,7 @@ on:
 jobs:
 
   publish-artifacts:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     name: Upload artifacts to GitHub release
     steps:
       - name: Run deprecation tests

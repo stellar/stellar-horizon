@@ -8,8 +8,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 # ca-certificates are required to make tls connections
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl wget gnupg apt-utils git zip unzip apt-transport-https ca-certificates
 RUN wget -qO - https://apt.stellar.org/SDF.asc | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=true apt-key add -
-RUN echo "deb https://apt.stellar.org focal stable" >/etc/apt/sources.list.d/SDF.list
-RUN echo "deb https://apt.stellar.org focal testing" >/etc/apt/sources.list.d/SDF-testing.list
+RUN echo "deb https://apt.stellar.org noble stable" >/etc/apt/sources.list.d/SDF.list
+RUN echo "deb https://apt.stellar.org noble testing" >/etc/apt/sources.list.d/SDF-testing.list
 
 RUN git clone https://github.com/stellar/go.git /go/src/github.com/stellar/go
 # Fetch dependencies and prebuild binaries. Not necessary but will make check faster.
