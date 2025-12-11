@@ -8,14 +8,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/stellar/go-stellar-sdk/support/errors"
 	"github.com/stellar/go-stellar-sdk/support/log"
 )
-
-var extractBinName = regexp.MustCompile(`^(?P<bin>[a-z0-9-]+)-(?P<tag>.+)$`)
 
 var builds = []buildConfig{
 	{"darwin", "amd64"},
@@ -102,29 +99,16 @@ func build(pkg, dest, version, buildOS, buildArch string) {
 }
 
 func buildByTag(tag string) {
-	bin, version := extractFromTag(tag)
-	if bin == "" {
-		log.Infof("non-conformant tag name %q: skipping artifact packaging", tag)
-		os.Exit(0)
-	}
-
-	pkg := packageName(bin)
 	repo := repoName()
 
-	// Don't build anything if no package can be found
-	if pkg == "" {
-		log.Infof("could not find `%s` in expected binary locations: skipping artifact packaging", bin)
-		os.Exit(0)
-	}
-
 	for _, cfg := range getBuildConfigs() {
-		dest := prepareDest(pkg, bin, version, cfg.OS, cfg.Arch)
+		dest := prepareDest(".", "horizon", tag, cfg.OS, cfg.Arch)
 
 		// rebuild the binary with the version variable set
 		build(
-			fmt.Sprintf("%s/%s", repo, pkg),
-			filepath.Join(dest, bin),
-			version,
+			fmt.Sprintf("%s/.", repo),
+			filepath.Join(dest, "horizon"),
+			tag,
 			cfg.OS,
 			cfg.Arch,
 		)
@@ -151,22 +135,6 @@ func buildSnapshots() {
 
 		packageArchive(dest, cfg.OS)
 	}
-}
-
-// extractFromTag extracts the name of the binary that should be packaged in the
-// course of execution this script as well as the version it should be packaged
-// as, based on the name of the tag.
-// Tags must be of the form `NAME-vSEMVER`, such as `horizon-v1.0.0` to be
-// matched by this function.
-//
-// In the event the match fails, an empty string will be returned.
-func extractFromTag(tag string) (string, string) {
-	match := extractBinName.FindStringSubmatch(tag)
-	if match == nil {
-		return "", ""
-	}
-
-	return match[1], match[2]
 }
 
 func getBuildConfigs() (result []buildConfig) {
@@ -204,42 +172,6 @@ func packageArchive(dest, buildOS string) {
 	if !*keepDir {
 		run("rm", "-rf", dest)
 	}
-}
-
-// package searches the `tools` and `services` packages of this repo to find
-// the source directory.  This is used within the script to find the README and
-// other files that should be packaged with the binary.
-func packageName(binName string) string {
-	targets := []string{
-		filepath.Join("services", binName),
-		filepath.Join("tools", binName),
-	}
-
-	var result string
-
-	// Note: we do not short circuit this search when we find a valid result so
-	// that we can panic when multiple results are found.  The children of
-	// /services and /tools should not have name overlap.
-	for _, t := range targets {
-		_, err := os.Stat(t)
-
-		if os.IsNotExist(err) {
-			continue
-		}
-
-		if err != nil {
-			panic(errors.Wrap(err, "stat failed"))
-		}
-
-		if result != "" {
-			msg := fmt.Sprintf("sourceDir() found multiple results!: binName: %s", binName)
-			panic(msg)
-		}
-
-		result = t
-	}
-
-	return result
 }
 
 func prepareDest(pkg, bin, version, os, arch string) string {
