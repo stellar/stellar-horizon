@@ -7,6 +7,7 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"os"
 	"path"
 	"runtime"
 	"sync"
@@ -230,7 +231,7 @@ type System interface {
 	StressTest(numTransactions, changesPerTransaction int) error
 	VerifyRange(fromLedger, toLedger uint32, verifyState bool) error
 	BuildState(sequence uint32, skipChecks bool) error
-	LoadTest(ledgersFilePath string, merge bool, closeDuration time.Duration) error
+	LoadTest(ledgersFilePath, fixturesFilePath string, merge bool, closeDuration time.Duration) error
 	ReingestRange(ledgerRanges []history.LedgerRange, force bool, rebuildTradeAgg bool) error
 	Shutdown()
 	GetCurrentState() State
@@ -649,11 +650,75 @@ func (s *system) BuildState(sequence uint32, skipChecks bool) error {
 }
 
 // LoadTest initializes and runs an ingestion load test.
-// It takes paths for ledgers and ledger entries files, as well as a specified ledger close duration.
-func (s *system) LoadTest(ledgersFilePath string, merge bool, closeDuration time.Duration) error {
+// It takes paths for ledgers and optional fixtures files, as well as a specified ledger close duration.
+// If fixturesFilePath is provided, fixtures will be ingested before running the FSM.
+func (s *system) LoadTest(ledgersFilePath, fixturesFilePath string, merge bool, closeDuration time.Duration) error {
 	if !s.config.DisableStateVerification {
 		return fmt.Errorf("state verification cannot be enabled during ingestion load tests")
 	}
+
+	// 1. Save snapshot FIRST (blocks other nodes via checkPendingLoadTest)
+	if err := s.loadTestSnapshot.save(s.ctx); err != nil {
+		return errors.Wrap(err, "failed to save loadtest snapshot")
+	}
+
+	// 2. Validate DB state (now guaranteed stable - other nodes blocked)
+	state, lastLedger, err := checkDBState(s.ctx, s.historyQ, CurrentVersion)
+	if err != nil {
+		restoreErr := RestoreSnapshot(s.ctx, s.historyQ)
+		return stderrors.Join(err, errors.Wrap(restoreErr, "failed to restore snapshot"))
+	}
+	if state != dbStateValid {
+		restoreErr := RestoreSnapshot(s.ctx, s.historyQ)
+		return stderrors.Join(
+			fmt.Errorf("DB must be in valid state for load test (current: %v)", state),
+			errors.Wrap(restoreErr, "failed to restore snapshot"),
+		)
+	}
+
+	// 3. Ingest fixtures if provided (within transaction)
+	if fixturesFilePath != "" {
+		firstSyntheticLedgerSeq, err := readFirstLedgerSequence(ledgersFilePath)
+		if err != nil {
+			restoreErr := RestoreSnapshot(s.ctx, s.historyQ)
+			return stderrors.Join(
+				errors.Wrap(err, "error reading first ledger sequence"),
+				errors.Wrap(restoreErr, "failed to restore snapshot"),
+			)
+		}
+
+		ledgerDiff := int64(lastLedger+1) - int64(firstSyntheticLedgerSeq)
+
+		if err := s.historyQ.Begin(s.ctx); err != nil {
+			restoreErr := RestoreSnapshot(s.ctx, s.historyQ)
+			return stderrors.Join(
+				errors.Wrap(err, "error starting transaction"),
+				errors.Wrap(restoreErr, "failed to restore snapshot"),
+			)
+		}
+
+		stats, err := s.runner.RunFixturesIngestion(s.ctx, fixturesFilePath, ledgerDiff)
+		if err != nil {
+			s.historyQ.Rollback()
+			restoreErr := RestoreSnapshot(s.ctx, s.historyQ)
+			return stderrors.Join(
+				errors.Wrap(err, "error ingesting fixtures"),
+				errors.Wrap(restoreErr, "failed to restore snapshot"),
+			)
+		}
+
+		if err := s.historyQ.Commit(); err != nil {
+			restoreErr := RestoreSnapshot(s.ctx, s.historyQ)
+			return stderrors.Join(
+				errors.Wrap(err, "error committing fixtures"),
+				errors.Wrap(restoreErr, "failed to restore snapshot"),
+			)
+		}
+
+		log.WithFields(stats.Map()).Info("Fixtures ingestion complete")
+	}
+
+	// 4. Set up loadtest backend and run FSM
 	config := loadtest.LedgerBackendConfig{
 		NetworkPassphrase:   s.config.NetworkPassphrase,
 		LedgersFilePath:     ledgersFilePath,
@@ -664,10 +729,6 @@ func (s *system) LoadTest(ledgersFilePath string, merge bool, closeDuration time
 	}
 	s.ledgerBackend = loadtest.NewLedgerBackend(config)
 
-	if saveErr := s.loadTestSnapshot.save(s.ctx); saveErr != nil {
-		return errors.Wrap(saveErr, "failed to save loadtest snapshot")
-	}
-
 	runErr := s.runStateMachine(startState{}, runOptions{
 		isTerminalError: func(err error) bool {
 			return stderrors.Is(err, loadtest.ErrLoadTestDone)
@@ -676,14 +737,32 @@ func (s *system) LoadTest(ledgersFilePath string, merge bool, closeDuration time
 	if stderrors.Is(runErr, loadtest.ErrLoadTestDone) {
 		runErr = nil
 	}
+
 	restoreErr := RestoreSnapshot(s.ctx, s.historyQ)
-	return stderrors.Join(
-		runErr,
-		errors.Wrap(
-			restoreErr,
-			"failed to restore loadtest snapshot",
-		),
-	)
+	return stderrors.Join(runErr, errors.Wrap(restoreErr, "failed to restore snapshot"))
+}
+
+// readFirstLedgerSequence reads the first ledger from a zstd-compressed XDR file
+// and returns its sequence number.
+func readFirstLedgerSequence(ledgersFilePath string) (uint32, error) {
+	file, err := os.Open(ledgersFilePath)
+	if err != nil {
+		return 0, errors.Wrap(err, "error opening ledgers file")
+	}
+	defer file.Close()
+
+	stream, err := xdr.NewZstdStream(file)
+	if err != nil {
+		return 0, errors.Wrap(err, "error creating zstd stream")
+	}
+	defer stream.Close()
+
+	var ledger xdr.LedgerCloseMeta
+	if err := stream.ReadOne(&ledger); err != nil {
+		return 0, errors.Wrap(err, "error reading first ledger")
+	}
+
+	return ledger.LedgerSequence(), nil
 }
 
 func validateRanges(ledgerRanges []history.LedgerRange) error {

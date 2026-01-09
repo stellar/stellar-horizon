@@ -3,9 +3,11 @@ package integration
 import (
 	"context"
 	"database/sql"
+	"encoding"
 	"encoding/hex"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -18,11 +20,14 @@ import (
 	"github.com/stellar/go-stellar-sdk/support/db"
 	"github.com/stellar/go-stellar-sdk/txnbuild"
 	"github.com/stellar/go-stellar-sdk/xdr"
+
 	horizoncmd "github.com/stellar/stellar-horizon/cmd"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	horizoningest "github.com/stellar/stellar-horizon/internal/ingest"
 	"github.com/stellar/stellar-horizon/internal/test/integration"
 )
+
+const loadTestNetworkPassphrase = "load test network"
 
 func TestLoadTestLedgerBackend(t *testing.T) {
 	if integration.GetCoreMaxSupportedProtocol() < 23 {
@@ -455,6 +460,76 @@ func TestIngestLoadTestCmd(t *testing.T) {
 	}
 }
 
+func TestIngestLoadTestCmdWithFixtures(t *testing.T) {
+	if integration.GetCoreMaxSupportedProtocol() < 25 {
+		t.Skip("This test run does not support less than Protocol 25")
+	}
+	itest := integration.NewTest(t, integration.Config{
+		NetworkPassphrase: loadTestNetworkPassphrase,
+	})
+
+	ledgersFilePath := filepath.Join("testdata", fmt.Sprintf("load-test-ledgers-v%d.xdr.zstd", itest.Config().ProtocolVersion))
+	fixturesFilePath := filepath.Join("testdata", fmt.Sprintf("load-test-fixtures-v%d.xdr.zstd", itest.Config().ProtocolVersion))
+
+	var generatedLedgers []xdr.LedgerCloseMeta
+	readFile(t, ledgersFilePath,
+		func() *xdr.LedgerCloseMeta { return &xdr.LedgerCloseMeta{} },
+		func(ledger *xdr.LedgerCloseMeta) {
+			generatedLedgers = append(generatedLedgers, *ledger)
+		},
+	)
+
+	session := &db.Session{DB: itest.GetTestDB().Open()}
+	t.Cleanup(func() { session.Close() })
+	q := &history.Q{session}
+
+	horizoncmd.RootCmd.SetArgs([]string{
+		"ingest", "load-test",
+		"--db-url=" + itest.GetTestDB().DSN,
+		"--stellar-core-binary-path=" + itest.CoreBinaryPath(),
+		"--captive-core-config-path=" + itest.WriteCaptiveCoreConfig(),
+		"--captive-core-storage-path=" + t.TempDir(),
+		"--captive-core-http-port=0",
+		"--network-passphrase=" + itest.Config().NetworkPassphrase,
+		"--history-archive-urls=" + integration.HistoryArchiveUrl,
+		"--ledgers-path=" + ledgersFilePath,
+		"--fixtures-path=" + fixturesFilePath,
+		"--close-duration=0.1",
+		"--skip-txmeta=false",
+	})
+
+	var restoreLedger uint32
+	var err error
+	originalRestore := horizoningest.RestoreSnapshot
+	t.Cleanup(func() { horizoningest.RestoreSnapshot = originalRestore })
+	horizoningest.RestoreSnapshot = func(ctx context.Context, historyQ history.IngestionQ) error {
+		_, restoreLedger, err = q.GetLoadTestRestoreState(ctx)
+		require.NoError(t, err)
+
+		expectedCurrentLedger := restoreLedger + uint32(len(generatedLedgers))
+		var curLedger, curHistoryLedger uint32
+		curLedger, err = q.GetLastLedgerIngestNonBlocking(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, expectedCurrentLedger, curLedger)
+		curHistoryLedger, err = q.GetLatestHistoryLedger(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, curLedger, curHistoryLedger)
+
+		// Verify each synthetic ledger was ingested correctly
+		sequence := int(restoreLedger) + 1
+		for _, ledger := range generatedLedgers {
+			checkLedgerIngested(itest, q, ledger, sequence)
+			sequence++
+		}
+
+		return originalRestore(ctx, historyQ)
+	}
+	require.NoError(t, horizoncmd.RootCmd.Execute())
+
+	_, _, err = q.GetLoadTestRestoreState(context.Background())
+	require.ErrorIs(t, err, sql.ErrNoRows)
+}
+
 func TestIngestLoadTestRestoreCmd(t *testing.T) {
 	if integration.GetCoreMaxSupportedProtocol() < 23 {
 		t.Skip("This test run does not support less than Protocol 23")
@@ -583,4 +658,99 @@ func checkLedgerSequenceInChanges(t *testing.T, changes []ingest.Change, curLedg
 			}
 		}
 	}
+}
+
+// readFile is a generic XDR file reader with zstd decompression.
+func readFile[T xdr.DecoderFrom](t *testing.T, path string, constructor func() T, consume func(T)) {
+	file, err := os.Open(path)
+	require.NoError(t, err)
+	stream, err := xdr.NewZstdStream(file)
+	require.NoError(t, err)
+	for {
+		entry := constructor()
+		if err = stream.ReadOne(entry); err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		consume(entry)
+	}
+	require.NoError(t, stream.Close())
+}
+
+// extractChanges extracts ledger entry changes from ledgers.
+func extractChanges(t *testing.T, networkPassphrase string, ledgers []xdr.LedgerCloseMeta) []ingest.Change {
+	var changes []ingest.Change
+	for _, ledger := range ledgers {
+		reader, err := ingest.NewLedgerChangeReaderFromLedgerCloseMeta(networkPassphrase, ledger)
+		require.NoError(t, err)
+		for {
+			var change ingest.Change
+			change, err = reader.Read()
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+			changes = append(changes, change)
+		}
+	}
+	return changes
+}
+
+// groupChangesByLedgerKey groups changes by their ledger key.
+func groupChangesByLedgerKey(t *testing.T, changes []ingest.Change) map[string][]ingest.Change {
+	byLedgerKey := map[string][]ingest.Change{}
+	for _, change := range changes {
+		key, err := change.LedgerKey()
+		require.NoError(t, err)
+		keyB64, err := key.MarshalBinaryBase64()
+		require.NoError(t, err)
+		byLedgerKey[keyB64] = append(byLedgerKey[keyB64], change)
+	}
+	return byLedgerKey
+}
+
+// requireChangesAreEqual verifies that two sets of changes are equal.
+func requireChangesAreEqual(t *testing.T, a, b []ingest.Change) {
+	aByLedgerKey := groupChangesByLedgerKey(t, a)
+	bByLedgerKey := groupChangesByLedgerKey(t, b)
+
+	require.Equal(t, len(aByLedgerKey), len(bByLedgerKey))
+	for key, aChanges := range aByLedgerKey {
+		bChanges := bByLedgerKey[key]
+		require.Equal(t, len(aChanges), len(bChanges))
+		for i, aChange := range aChanges {
+			bChange := bChanges[i]
+			require.Equal(t, aChange.Reason, bChange.Reason)
+			require.Equal(t, aChange.Type, bChange.Type)
+			if aChange.Pre == nil {
+				require.Nil(t, bChange.Pre)
+			} else {
+				require.NoError(t, loadtest.UpdateLedgerSeqInLedgerEntries(aChange.Pre, func(u uint32) uint32 {
+					return 0
+				}))
+				require.NoError(t, loadtest.UpdateLedgerSeqInLedgerEntries(bChange.Pre, func(u uint32) uint32 {
+					return 0
+				}))
+				requireXDREquals(t, aChange.Pre, bChange.Pre)
+			}
+			if aChange.Post == nil {
+				require.Nil(t, bChange.Post)
+			} else {
+				require.NoError(t, loadtest.UpdateLedgerSeqInLedgerEntries(aChange.Post, func(u uint32) uint32 {
+					return 0
+				}))
+				require.NoError(t, loadtest.UpdateLedgerSeqInLedgerEntries(bChange.Post, func(u uint32) uint32 {
+					return 0
+				}))
+				requireXDREquals(t, aChange.Post, bChange.Post)
+			}
+		}
+	}
+}
+
+// requireXDREquals verifies that two XDR values are equal.
+func requireXDREquals(t *testing.T, a, b encoding.BinaryMarshaler) {
+	ok, err := xdr.Equals(a, b)
+	require.NoError(t, err)
+	require.True(t, ok)
 }
