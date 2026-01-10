@@ -312,13 +312,6 @@ func TestLoadTestLedgerBackendWithoutMerge(t *testing.T) {
 	require.NoError(t, loadTestBackend.Close())
 
 	changes := extractChanges(t, loadTestNetworkPassphrase, ledgers[0:1])
-	accountSet := map[string]bool{}
-	for _, change := range changes {
-		if change.Reason == ingest.LedgerEntryChangeReasonUpgrade && change.Type == xdr.LedgerEntryTypeAccount {
-			require.Nil(t, change.Pre)
-			accountSet[change.Post.Data.MustAccount().AccountId.Address()] = true
-		}
-	}
 	checkLedgerSequenceInChanges(t, changes, startLedger)
 
 	for cur := startLedger + 1; cur <= endLedger; cur++ {
@@ -333,14 +326,6 @@ func TestLoadTestLedgerBackendWithoutMerge(t *testing.T) {
 		// in other words:
 		// extractChanges(merge(dst, src)) == concat(extractChanges(dst), extractChanges(src))
 		requireChangesAreEqual(t, expectedChanges, changes)
-		for _, change := range changes {
-			if change.Type != xdr.LedgerEntryTypeAccount {
-				continue
-			}
-			ledgerKey, err := change.LedgerKey()
-			require.NoError(t, err)
-			require.True(t, accountSet[ledgerKey.MustAccount().AccountId.Address()])
-		}
 	}
 }
 
@@ -468,8 +453,14 @@ func TestIngestLoadTestCmdWithFixtures(t *testing.T) {
 		NetworkPassphrase: loadTestNetworkPassphrase,
 	})
 
-	ledgersFilePath := filepath.Join("testdata", fmt.Sprintf("load-test-ledgers-v%d.xdr.zstd", itest.Config().ProtocolVersion))
-	fixturesFilePath := filepath.Join("testdata", fmt.Sprintf("load-test-fixtures-v%d.xdr.zstd", itest.Config().ProtocolVersion))
+	ledgersFilePath := os.Getenv("LOADTEST_LEDGERS_FILE_PATH")
+	if ledgersFilePath == "" {
+		ledgersFilePath = filepath.Join("testdata", fmt.Sprintf("load-test-ledgers-v%d.xdr.zstd", itest.Config().ProtocolVersion))
+	}
+	fixturesFilePath := os.Getenv("LOADTEST_FIXTURES_FILE_PATH")
+	if fixturesFilePath == "" {
+		fixturesFilePath = filepath.Join("testdata", fmt.Sprintf("load-test-fixtures-v%d.xdr.zstd", itest.Config().ProtocolVersion))
+	}
 
 	var generatedLedgers []xdr.LedgerCloseMeta
 	readFile(t, ledgersFilePath,

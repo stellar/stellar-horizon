@@ -689,7 +689,7 @@ func (s *system) LoadTest(ledgersFilePath, fixturesFilePath string, merge bool, 
 
 		ledgerDiff := int64(lastLedger+1) - int64(firstSyntheticLedgerSeq)
 
-		if err := s.historyQ.Begin(s.ctx); err != nil {
+		if err = s.historyQ.Begin(s.ctx); err != nil {
 			restoreErr := RestoreSnapshot(s.ctx, s.historyQ)
 			return stderrors.Join(
 				errors.Wrap(err, "error starting transaction"),
@@ -707,7 +707,7 @@ func (s *system) LoadTest(ledgersFilePath, fixturesFilePath string, merge bool, 
 			)
 		}
 
-		if err := s.historyQ.Commit(); err != nil {
+		if err = s.historyQ.Commit(); err != nil {
 			restoreErr := RestoreSnapshot(s.ctx, s.historyQ)
 			return stderrors.Join(
 				errors.Wrap(err, "error committing fixtures"),
