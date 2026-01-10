@@ -20,6 +20,7 @@ import (
 	"github.com/stellar/go-stellar-sdk/xdr"
 
 	horizoningest "github.com/stellar/stellar-horizon/internal/ingest"
+	"github.com/stellar/stellar-horizon/internal/test/integration"
 )
 
 // TestGenerateLedgers generates ledgers using stellar-core's apply-load command.
@@ -41,6 +42,9 @@ import (
 func TestGenerateLedgers(t *testing.T) {
 	if os.Getenv("HORIZON_INTEGRATION_TESTS_ENABLED") != "true" {
 		t.Skip("HORIZON_INTEGRATION_TESTS_ENABLED not set")
+	}
+	if integration.GetCoreMaxSupportedProtocol() < 25 {
+		t.Skip("This test run does not support less than Protocol 25")
 	}
 
 	coreBinaryPath := os.Getenv("HORIZON_INTEGRATION_TESTS_CAPTIVE_CORE_BIN")

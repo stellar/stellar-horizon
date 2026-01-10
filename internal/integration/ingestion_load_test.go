@@ -30,8 +30,8 @@ import (
 const loadTestNetworkPassphrase = "load test network"
 
 func TestLoadTestLedgerBackend(t *testing.T) {
-	if integration.GetCoreMaxSupportedProtocol() < 23 {
-		t.Skip("This test run does not support less than Protocol 23")
+	if integration.GetCoreMaxSupportedProtocol() < 25 {
+		t.Skip("This test run does not support less than Protocol 25")
 	}
 
 	itest := integration.NewTest(t, integration.Config{
@@ -330,8 +330,8 @@ func TestLoadTestLedgerBackendWithoutMerge(t *testing.T) {
 }
 
 func TestIngestLoadTestCmd(t *testing.T) {
-	if integration.GetCoreMaxSupportedProtocol() < 23 {
-		t.Skip("This test run does not support less than Protocol 23")
+	if integration.GetCoreMaxSupportedProtocol() < 25 {
+		t.Skip("This test run does not support less than Protocol 25")
 	}
 	itest := integration.NewTest(t, integration.Config{
 		NetworkPassphrase: loadTestNetworkPassphrase,
@@ -522,8 +522,8 @@ func TestIngestLoadTestCmdWithFixtures(t *testing.T) {
 }
 
 func TestIngestLoadTestRestoreCmd(t *testing.T) {
-	if integration.GetCoreMaxSupportedProtocol() < 23 {
-		t.Skip("This test run does not support less than Protocol 23")
+	if integration.GetCoreMaxSupportedProtocol() < 25 {
+		t.Skip("This test run does not support less than Protocol 25")
 	}
 	itest := integration.NewTest(t, integration.Config{
 		NetworkPassphrase: loadTestNetworkPassphrase,
