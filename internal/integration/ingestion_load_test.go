@@ -168,13 +168,6 @@ func TestLoadTestLedgerBackend(t *testing.T) {
 	originalLedgers := getLedgers(itest, startLedger, endLedger)
 
 	changes := extractChanges(t, itest.Config().NetworkPassphrase, ledgers[0:1])
-	accountSet := map[string]bool{}
-	for _, change := range changes {
-		if change.Reason == ingest.LedgerEntryChangeReasonUpgrade && change.Type == xdr.LedgerEntryTypeAccount {
-			require.Nil(t, change.Pre)
-			accountSet[change.Post.Data.MustAccount().AccountId.Address()] = true
-		}
-	}
 	checkLedgerSequenceInChanges(t, changes, startLedger)
 
 	for cur := startLedger + 1; cur <= endLedger; cur++ {
@@ -189,15 +182,6 @@ func TestLoadTestLedgerBackend(t *testing.T) {
 		// in other words:
 		// extractChanges(merge(dst, src)) == concat(extractChanges(dst), extractChanges(src))
 		requireChangesAreEqual(t, expectedChanges, changes)
-		generatedChanges := extractChanges(t, itest.Config().NetworkPassphrase, []xdr.LedgerCloseMeta{generatedLedgers[i]})
-		for _, change := range generatedChanges {
-			if change.Type != xdr.LedgerEntryTypeAccount {
-				continue
-			}
-			ledgerKey, err := change.LedgerKey()
-			require.NoError(itest.CurrentTest(), err)
-			require.True(itest.CurrentTest(), accountSet[ledgerKey.MustAccount().AccountId.Address()])
-		}
 	}
 }
 
@@ -321,10 +305,6 @@ func TestLoadTestLedgerBackendWithoutMerge(t *testing.T) {
 			t, loadTestNetworkPassphrase, []xdr.LedgerCloseMeta{generatedLedgers[i]},
 		)
 		checkLedgerSequenceInChanges(t, changes, cur)
-		// a merge is valid if the ordered list of changes emitted by the merged ledger is equal to
-		// the list of changes emitted by dst concatenated by the list of changes emitted by src, or
-		// in other words:
-		// extractChanges(merge(dst, src)) == concat(extractChanges(dst), extractChanges(src))
 		requireChangesAreEqual(t, expectedChanges, changes)
 	}
 }

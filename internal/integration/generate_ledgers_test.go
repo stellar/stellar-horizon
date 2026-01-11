@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/BurntSushi/toml"
@@ -48,10 +49,18 @@ func TestGenerateLedgers(t *testing.T) {
 	}
 
 	coreBinaryPath := os.Getenv("HORIZON_INTEGRATION_TESTS_CAPTIVE_CORE_BIN")
+	var coreVersion string
 	if coreBinaryPath == "" {
 		var err error
 		coreBinaryPath, err = exec.LookPath("stellar-core")
 		require.NoError(t, err)
+		versionCmd := exec.Command(coreBinaryPath, "version")
+		output, err := versionCmd.CombinedOutput()
+		if err != nil {
+			t.Logf("could not determine stellar-core version:\n%s", string(output))
+		}
+		require.NoError(t, err)
+		coreVersion = strings.TrimSpace(string(output))
 	}
 
 	// Use custom config if provided, otherwise use default
@@ -66,7 +75,7 @@ func TestGenerateLedgers(t *testing.T) {
 	// to only have 1 or the other
 	require.Equal(t, len(outputPath) == 0, len(fixturesPath) == 0)
 
-	t.Logf("Using stellar-core: %s", coreBinaryPath)
+	t.Logf("Using stellar-core: %s %s", coreBinaryPath, coreVersion)
 	t.Logf("Using config: %s", configPath)
 
 	cfg := parseConfig(t, configPath)
@@ -114,6 +123,9 @@ func runApplyLoad(t *testing.T, coreBinaryPath, configPath string, cfg applyLoad
 	applyLoadCmd := exec.Command(coreBinaryPath, "apply-load", "--conf", destConfigPath)
 	applyLoadCmd.Dir = workDir
 	output, err = applyLoadCmd.CombinedOutput()
+	if err != nil {
+		t.Logf("apply-load failed:\n%s", string(output))
+	}
 	require.NoError(t, err)
 	t.Logf("apply-load completed")
 
