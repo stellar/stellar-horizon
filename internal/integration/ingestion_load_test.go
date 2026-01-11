@@ -429,8 +429,12 @@ func TestIngestLoadTestCmdWithFixtures(t *testing.T) {
 	if integration.GetCoreMaxSupportedProtocol() < 25 {
 		t.Skip("This test run does not support less than Protocol 25")
 	}
+	networkPassphrase := os.Getenv("LOADTEST_NETWORK_PASSPHRASE")
+	if networkPassphrase == "" {
+		networkPassphrase = loadTestNetworkPassphrase
+	}
 	itest := integration.NewTest(t, integration.Config{
-		NetworkPassphrase: loadTestNetworkPassphrase,
+		NetworkPassphrase: networkPassphrase,
 	})
 
 	ledgersFilePath := os.Getenv("LOADTEST_LEDGERS_FILE_PATH")
