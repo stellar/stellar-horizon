@@ -125,9 +125,10 @@ func runApplyLoad(t *testing.T, coreBinaryPath, configPath string, cfg applyLoad
 	output, err = applyLoadCmd.CombinedOutput()
 	if err != nil {
 		t.Logf("apply-load failed:\n%s", string(output))
+	} else {
+		t.Logf("apply-load succeeded:\n%s", string(output))
 	}
 	require.NoError(t, err)
-	t.Logf("apply-load completed")
 
 	// Parse pre-benchmark checkpoint from stellar-core output
 	// The config sets LOG_FILE_PATH="" so logs go to stdout
