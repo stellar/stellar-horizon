@@ -32,7 +32,7 @@ import (
 //   - HORIZON_INTEGRATION_TESTS_ENABLED=true
 //
 // Optional env vars:
-//   - HORIZON_INTEGRATION_TESTS_CAPTIVE_CORE_BIN: Path to stellar-core (version >= 24.1.1-2881)
+//   - HORIZON_INTEGRATION_TESTS_CAPTIVE_CORE_BIN: Path to stellar-core 25.x with BUILD_TESTS enabled
 //     (default: looks for "stellar-core" in PATH)
 //   - LOADTEST_CORE_CONFIG_PATH: Path to custom apply-load config file
 //     (default: testdata/apply-load.cfg)
