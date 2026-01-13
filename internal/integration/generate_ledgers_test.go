@@ -116,6 +116,9 @@ func runApplyLoad(t *testing.T, coreBinaryPath, configPath string, cfg applyLoad
 	newHistCmd := exec.Command(coreBinaryPath, "new-hist", cfg.HistoryArchiveName, "--conf", destConfigPath)
 	newHistCmd.Dir = workDir
 	output, err := newHistCmd.CombinedOutput()
+	if err != nil {
+		t.Logf("new-hist failed:\n%s", string(output))
+	}
 	require.NoError(t, err)
 	t.Logf("Initialized history archive: %s", cfg.HistoryArchiveName)
 
