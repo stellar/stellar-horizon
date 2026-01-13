@@ -239,7 +239,7 @@ func openCheckpointReader(t *testing.T, workDir, networkPassphrase string, check
 	)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	checkpointReader, err := ingest.NewCheckpointChangeReader(ctx, archive, checkpointLedger)
 	require.NoError(t, err)
 
