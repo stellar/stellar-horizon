@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/go-stellar-sdk/support/errors"
 	logpkg "github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stellar/go-stellar-sdk/xdr"
+
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/ingest/processors"
 )
@@ -202,9 +203,16 @@ func (state startState) run(s *system) (transition, error) {
 		return start(), errors.Wrap(err, "Error getting last history ledger sequence")
 	}
 
-	if ingestVersion != CurrentVersion || lastIngestedLedger == 0 {
-		// This block is either starting from empty state or ingestion
-		// version upgrade.
+	dbState := evaluateDBState(dbStateInput{
+		LastIngestedLedger: lastIngestedLedger,
+		IngestVersion:      ingestVersion,
+		LastHistoryLedger:  lastHistoryLedger,
+		CurrentVersion:     CurrentVersion,
+	})
+
+	switch dbState {
+	case dbStateEmpty, dbStateNeedsRebuild:
+		// Starting from empty state or ingestion version upgrade.
 		// This will always run on a single instance due to the fact that
 		// `LastLedgerIngest` value is blocked for update and will always
 		// be updated when leading instance finishes processing state.
@@ -240,42 +248,38 @@ func (state startState) run(s *system) (transition, error) {
 				return rebuild(lastCheckpoint), nil
 			}
 		}
-
 		return rebuild(lastCheckpoint), nil
-	}
 
-	switch {
-	case lastHistoryLedger > lastIngestedLedger:
-		// Ingestion was running at some point the past but was turned off.
-		// Now it's on by default but the latest history ledger is greater
-		// than the latest ingest ledger. We reset the exp ledger sequence
-		// so init state will rebuild the state correctly.
-		err = s.historyQ.UpdateLastLedgerIngest(s.ctx, 0)
-		if err != nil {
-			return start(), errors.Wrap(err, updateLastLedgerIngestErrMsg)
+	case dbStateInconsistent:
+		// History and ingest ledgers don't match - need to reconcile
+		if lastHistoryLedger > lastIngestedLedger {
+			// Ingestion was running at some point the past but was turned off.
+			// Now it's on by default but the latest history ledger is greater
+			// than the latest ingest ledger. We reset the exp ledger sequence
+			// so init state will rebuild the state correctly.
+			err = s.historyQ.UpdateLastLedgerIngest(s.ctx, 0)
+			if err != nil {
+				return start(), errors.Wrap(err, updateLastLedgerIngestErrMsg)
+			}
+			err = s.historyQ.Commit()
+			if err != nil {
+				return start(), errors.Wrap(err, commitErrMsg)
+			}
+			return start(), nil
 		}
-		err = s.historyQ.Commit()
-		if err != nil {
-			return start(), errors.Wrap(err, commitErrMsg)
-		}
-		return start(), nil
-	// lastHistoryLedger != 0 check is here to check the case when one node ingested
-	// the state (so latest ingestion is > 0) but no history has been ingested yet.
-	// In such case we execute default case and resume from the last ingested
-	// ledger.
-	case lastHistoryLedger != 0 && lastHistoryLedger < lastIngestedLedger:
-		// Ingestion was running at some point the past but was turned off.
-		// Now it's on by default but the latest history ledger is less
-		// than the latest ingest ledger. We catchup history.
+		// lastHistoryLedger < lastIngestedLedger: catchup history
 		return historyRange(lastHistoryLedger+1, lastIngestedLedger), nil
-	default: // lastHistoryLedger == lastIngestedLedger
+
+	case dbStateValid:
 		// The other node already ingested a state (just now or in the past)
 		// so we need to get offers from a DB, then resume session normally.
 		// State pipeline is NOT processed.
 		log.WithField("last_ledger", lastIngestedLedger).
 			Info("Resuming ingestion system from last processed ledger...")
-
 		return resume(lastIngestedLedger), nil
+
+	default:
+		return start(), fmt.Errorf("unexpected db state: %v", dbState)
 	}
 }
 

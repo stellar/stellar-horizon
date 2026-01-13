@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	cloud.google.com/go/storage v1.42.0 // indirect
 	github.com/2opremio/pretty v0.2.2-0.20230601220618-e1d5758b2a95
-	github.com/BurntSushi/toml v1.3.2 // indirect
+	github.com/BurntSushi/toml v1.3.2
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/adjust/goautoneg v0.0.0-20150426214442-d788f35a0315
