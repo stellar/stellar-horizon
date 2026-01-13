@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"context"
 	"io"
 	"os"
 	"os/exec"
@@ -239,8 +238,7 @@ func openCheckpointReader(t *testing.T, workDir, networkPassphrase string, check
 	)
 	require.NoError(t, err)
 
-	ctx := t.Context()
-	checkpointReader, err := ingest.NewCheckpointChangeReader(ctx, archive, checkpointLedger)
+	checkpointReader, err := ingest.NewCheckpointChangeReader(t.Context(), archive, checkpointLedger)
 	require.NoError(t, err)
 
 	return checkpointReader
@@ -331,8 +329,6 @@ func verifyFixturesCompleteness(t *testing.T, workDir, metadataPath, networkPass
 	require.NoError(t, err)
 	stream := xdr.NewStream(file)
 
-	ledgerCount := 0
-	changeCount := 0
 	for {
 		var ledger xdr.LedgerCloseMeta
 		if err := stream.ReadOne(&ledger); err == io.EOF {
@@ -341,7 +337,6 @@ func verifyFixturesCompleteness(t *testing.T, workDir, metadataPath, networkPass
 			require.NoError(t, err)
 		}
 		require.True(t, ledger.ProtocolVersion() == horizoningest.MaxSupportedProtocolVersion)
-		ledgerCount++
 
 		// Extract changes from this ledger
 		changeReader, err := ingest.NewLedgerChangeReaderFromLedgerCloseMeta(networkPassphrase, ledger)
@@ -353,7 +348,6 @@ func verifyFixturesCompleteness(t *testing.T, workDir, metadataPath, networkPass
 				break
 			}
 			require.NoError(t, err)
-			changeCount++
 
 			// If the change has a Pre state, the entry must already exist in our known set
 			if change.Pre != nil {
