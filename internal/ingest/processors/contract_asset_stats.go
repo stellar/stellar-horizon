@@ -278,10 +278,12 @@ func (s *ContractAssetStatSet) ingestExpiredBalances(ctx context.Context) error 
 		var keyHash xdr.Hash
 		copy(keyHash[:], row.KeyHash)
 
-		if _, ok := s.updatedExpirationEntries[keyHash]; ok {
-			// the expiration of this contract balance was bumped, so we can
-			// skip this contract balance since it is still active
-			continue
+		if update, ok := s.updatedExpirationEntries[keyHash]; ok {
+			if update[1] >= s.currentLedger {
+				// TTL was updated and the entry is still active
+				continue
+			}
+			// TTL decreased to before currentLedger — entry has expired
 		}
 
 		var contractID xdr.ContractId

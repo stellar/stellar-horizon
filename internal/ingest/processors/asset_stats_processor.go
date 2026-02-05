@@ -131,14 +131,6 @@ func (p *AssetStatsProcessor) addExpirationChange(change ingest.Change) error {
 		if pre.LiveUntilLedgerSeq == post.LiveUntilLedgerSeq {
 			return nil
 		}
-		// but we expect that the expiration ledger will never decrease
-		if pre.LiveUntilLedgerSeq > post.LiveUntilLedgerSeq {
-			return errors.Errorf(
-				"unexpected change in expiration ledger Pre: %v Post: %v",
-				pre.LiveUntilLedgerSeq,
-				post.LiveUntilLedgerSeq,
-			)
-		}
 
 		// The previous expiration ledger must always be greater than or equal to the current ledger
 		// because if the previous expiration ledger is less than the current ledger then it implies
