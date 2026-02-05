@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this
 file. This project adheres to [Semantic Versioning](http://semver.org/).
 
+## 25.0.1
+
+### Fixed
+- Relax non-decreasing TTL invariant for asset stats processor ([#152](https://github.com/stellar/stellar-horizon/pull/152)).
+
 ## 25.0.0
 
 **This release adds support for Protocol 25**
