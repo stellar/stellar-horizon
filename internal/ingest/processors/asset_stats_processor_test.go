@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/go-stellar-sdk/ingest"
 	"github.com/stellar/go-stellar-sdk/ingest/sac"
 	"github.com/stellar/go-stellar-sdk/xdr"
+
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 
 	"github.com/stretchr/testify/mock"
@@ -1271,14 +1272,14 @@ func (s *AssetStatsProcessorTestSuiteLedger) TestInsertClaimableBalanceAndTrustl
 	s.Assert().NoError(s.processor.Commit(s.ctx))
 }
 
-func (s *AssetStatsProcessorTestSuiteLedger) TestExpirationLedgerCannotDecrease() {
+func (s *AssetStatsProcessorTestSuiteLedger) TestExpirationLedgerDecreases() {
 	lastModifiedLedgerSeq := xdr.Uint32(1234)
 
 	eurID, err := xdr.MustNewCreditAsset("EUR", trustLineIssuer.Address()).ContractID("")
 	s.Assert().NoError(err)
 
 	keyHash := getKeyHashForBalance(s.T(), eurID, [32]byte{1})
-	s.Assert().EqualError(s.processor.ProcessChange(s.ctx, ingest.Change{
+	s.Assert().NoError(s.processor.ProcessChange(s.ctx, ingest.Change{
 		Type: xdr.LedgerEntryTypeTtl,
 		Pre: &xdr.LedgerEntry{
 			LastModifiedLedgerSeq: lastModifiedLedgerSeq,
@@ -1300,9 +1301,27 @@ func (s *AssetStatsProcessorTestSuiteLedger) TestExpirationLedgerCannotDecrease(
 				},
 			},
 		},
-	}),
-		"unexpected change in expiration ledger Pre: 2235 Post: 2234",
-	)
+	}))
+
+	s.mockQ.On("InsertAssetContracts", s.ctx, []history.AssetContract(nil)).
+		Return(nil).Once()
+	s.mockQ.On("UpdateAssetContractExpirations", s.ctx, []xdr.Hash{keyHash}, []uint32{2234}).
+		Return(nil).Once()
+	s.mockQ.On("DeleteAssetContractsExpiringAt", s.ctx, uint32(1234)).
+		Return(int64(0), nil).Once()
+
+	s.mockQ.On("InsertContractAssetBalances", s.ctx, []history.ContractAssetBalance(nil)).
+		Return(nil).Once()
+	s.mockQ.On("RemoveContractAssetBalances", s.ctx, []xdr.Hash(nil)).
+		Return(nil).Once()
+	s.mockQ.On("UpdateContractAssetBalanceAmounts", s.ctx, []xdr.Hash{}, []string{}).
+		Return(nil).Once()
+	s.mockQ.On("UpdateContractAssetBalanceExpirations", s.ctx, []xdr.Hash{keyHash}, []uint32{2234}).
+		Return(nil).Once()
+	s.mockQ.On("DeleteContractAssetBalancesExpiringAt", s.ctx, uint32(1234)).
+		Return([]history.ContractAssetBalance{}, nil).Once()
+
+	s.Assert().NoError(s.processor.Commit(s.ctx))
 }
 
 func (s *AssetStatsProcessorTestSuiteLedger) TestExpirationLedgerIgnoredIfLessThanCurrentLedger() {
@@ -1355,6 +1374,39 @@ func (s *AssetStatsProcessorTestSuiteLedger) TestExpirationLedgerIgnoredIfLessTh
 		Return([]history.ContractAssetBalance{}, nil).Once()
 
 	s.Assert().NoError(s.processor.Commit(s.ctx))
+}
+
+func (s *AssetStatsProcessorTestSuiteLedger) TestPostTTLLessThanCurrentLedger() {
+	lastModifiedLedgerSeq := xdr.Uint32(1234)
+
+	eurID, err := xdr.MustNewCreditAsset("EUR", trustLineIssuer.Address()).ContractID("")
+	s.Assert().NoError(err)
+
+	keyHash := getKeyHashForBalance(s.T(), eurID, [32]byte{1})
+	err = s.processor.ProcessChange(s.ctx, ingest.Change{
+		Type: xdr.LedgerEntryTypeTtl,
+		Pre: &xdr.LedgerEntry{
+			LastModifiedLedgerSeq: lastModifiedLedgerSeq,
+			Data: xdr.LedgerEntryData{
+				Type: xdr.LedgerEntryTypeTtl,
+				Ttl: &xdr.TtlEntry{
+					KeyHash:            keyHash,
+					LiveUntilLedgerSeq: 1236,
+				},
+			},
+		},
+		Post: &xdr.LedgerEntry{
+			LastModifiedLedgerSeq: lastModifiedLedgerSeq,
+			Data: xdr.LedgerEntryData{
+				Type: xdr.LedgerEntryTypeTtl,
+				Ttl: &xdr.TtlEntry{
+					KeyHash:            keyHash,
+					LiveUntilLedgerSeq: 1234,
+				},
+			},
+		},
+	})
+	s.Assert().EqualError(err, "post TTL 1234 is less than current ledger 1235")
 }
 
 func (s *AssetStatsProcessorTestSuiteLedger) TestUpdateTrustLine() {
