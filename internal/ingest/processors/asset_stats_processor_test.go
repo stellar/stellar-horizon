@@ -1376,6 +1376,39 @@ func (s *AssetStatsProcessorTestSuiteLedger) TestExpirationLedgerIgnoredIfLessTh
 	s.Assert().NoError(s.processor.Commit(s.ctx))
 }
 
+func (s *AssetStatsProcessorTestSuiteLedger) TestPostTTLLessThanCurrentLedger() {
+	lastModifiedLedgerSeq := xdr.Uint32(1234)
+
+	eurID, err := xdr.MustNewCreditAsset("EUR", trustLineIssuer.Address()).ContractID("")
+	s.Assert().NoError(err)
+
+	keyHash := getKeyHashForBalance(s.T(), eurID, [32]byte{1})
+	err = s.processor.ProcessChange(s.ctx, ingest.Change{
+		Type: xdr.LedgerEntryTypeTtl,
+		Pre: &xdr.LedgerEntry{
+			LastModifiedLedgerSeq: lastModifiedLedgerSeq,
+			Data: xdr.LedgerEntryData{
+				Type: xdr.LedgerEntryTypeTtl,
+				Ttl: &xdr.TtlEntry{
+					KeyHash:            keyHash,
+					LiveUntilLedgerSeq: 1236,
+				},
+			},
+		},
+		Post: &xdr.LedgerEntry{
+			LastModifiedLedgerSeq: lastModifiedLedgerSeq,
+			Data: xdr.LedgerEntryData{
+				Type: xdr.LedgerEntryTypeTtl,
+				Ttl: &xdr.TtlEntry{
+					KeyHash:            keyHash,
+					LiveUntilLedgerSeq: 1234,
+				},
+			},
+		},
+	})
+	s.Assert().EqualError(err, "post TTL 1234 is less than current ledger 1235")
+}
+
 func (s *AssetStatsProcessorTestSuiteLedger) TestUpdateTrustLine() {
 	lastModifiedLedgerSeq := xdr.Uint32(1234)
 
