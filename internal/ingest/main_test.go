@@ -684,6 +684,15 @@ func (m *mockProcessorsRunner) RunTransactionProcessorsOnLedgers(ledgers []xdr.L
 	return args.Error(0)
 }
 
+func (m *mockProcessorsRunner) RunFixturesIngestion(
+	ctx context.Context,
+	fixturesFilePath string,
+	ledgerDiff int64,
+) (processors.StatsChangeProcessorResults, error) {
+	args := m.Called(ctx, fixturesFilePath, ledgerDiff)
+	return args.Get(0).(processors.StatsChangeProcessorResults), args.Error(1)
+}
+
 var _ ProcessorRunnerInterface = (*mockProcessorsRunner)(nil)
 
 type mockStellarCoreClient struct {
@@ -729,8 +738,8 @@ func (m *mockSystem) BuildState(sequence uint32, skipChecks bool) error {
 	return args.Error(0)
 }
 
-func (m *mockSystem) LoadTest(ledgersFilePath string, merge bool, closeDuration time.Duration) error {
-	args := m.Called(ledgersFilePath, merge, closeDuration)
+func (m *mockSystem) LoadTest(ledgersFilePath, fixturesFilePath string, merge bool, closeDuration time.Duration) error {
+	args := m.Called(ledgersFilePath, fixturesFilePath, merge, closeDuration)
 	return args.Error(0)
 }
 
