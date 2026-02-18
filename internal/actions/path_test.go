@@ -15,7 +15,7 @@ import (
 var (
 	address              = "GCATOZ7YJV2FANQQLX47TIV6P7VMPJCEEJGQGR6X7TONPKBN3UCLKEIS"
 	dummyIssuer          = "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
-	MaxAssetsParamLength = 2
+	maxAssetsParamLength = 2
 )
 
 func TestAssetsForAddressRequiresTransaction(t *testing.T) {
@@ -31,13 +31,13 @@ func TestAssetsForAddressRequiresTransaction(t *testing.T) {
 		q,
 	)
 
-	_, _, err := assetsForAddressWithLimit(r.WithContext(ctx), address, MaxAssetsParamLength)
+	_, _, err := assetsForAddressWithLimit(r.WithContext(ctx), address, maxAssetsParamLength)
 	assert.EqualError(t, err, "cannot be called outside of a transaction")
 
 	assert.NoError(t, q.Begin(ctx))
 	defer q.Rollback()
 
-	_, _, err = assetsForAddressWithLimit(r.WithContext(ctx), address, MaxAssetsParamLength)
+	_, _, err = assetsForAddressWithLimit(r.WithContext(ctx), address, maxAssetsParamLength)
 	assert.EqualError(t, err, "should only be called in a repeatable read transaction")
 }
 
@@ -72,10 +72,10 @@ func TestAssetLimits(t *testing.T) {
 	defer q.Rollback()
 
 	var err error
-	_, _, err = assetsForAddressWithLimit(r.WithContext(ctx), address, MaxAssetsParamLength)
+	_, _, err = assetsForAddressWithLimit(r.WithContext(ctx), address, maxAssetsParamLength)
 	assert.NoError(t, err)
 
 	// With limit 1: 2 assets > 1, should fail
 	_, _, err = assetsForAddressWithLimit(r.WithContext(ctx), address, 1)
-	assert.EqualError(t, err, "number of assets exceeds maximum length of 1")
+	assert.EqualError(t, err, "list of assets exceeds maximum length of 1")
 }

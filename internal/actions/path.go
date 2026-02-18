@@ -407,7 +407,7 @@ func assetsForAddressWithLimit(r *http.Request, addy string, limit int) ([]xdr.A
 	balances = append(balances, xdr.Int64(account.Balance))
 
 	if len(assets) > limit {
-		return nil, nil, fmt.Errorf("number of assets exceeds maximum length of %d", limit)
+		return nil, nil, fmt.Errorf("list of assets exceeds maximum length of %d", limit)
 	}
 	return assets, balances, nil
 }
