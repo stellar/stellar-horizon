@@ -71,8 +71,6 @@ func TestAssetLimits(t *testing.T) {
 	}))
 	defer q.Rollback()
 
-	// account, err := q.AccountByAddress(ctx, address)
-	// assert.NoError(t, err)
 	var err error
 	_, _, err = assetsForAddressWithLimit(r.WithContext(ctx), address, MaxAssetsParamLength)
 	assert.NoError(t, err)

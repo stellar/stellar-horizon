@@ -139,7 +139,7 @@ func (handler FindPathsHandler) GetResource(w HeaderWriter, r *http.Request) (in
 			r, query.SourceAccount.Address(), handler.MaxAssetsParamLength,
 		)
 		if err != nil {
-			return nil, err
+			return nil, problem.MakeInvalidFieldProblem("source_assets", err)
 		}
 	} else {
 		for range query.SourceAssets {
@@ -309,7 +309,7 @@ func (handler FindFixedPathsHandler) GetResource(w HeaderWriter, r *http.Request
 	if destinationAccount != "" {
 		destinationAssets, _, err = assetsForAddressWithLimit(r, destinationAccount, handler.MaxAssetsParamLength)
 		if err != nil {
-			return nil, err
+			return nil, problem.MakeInvalidFieldProblem("destination_assets", err)
 		}
 	}
 
