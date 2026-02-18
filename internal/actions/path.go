@@ -61,7 +61,6 @@ func (q StrictReceivePathsQuery) DestinationAsset() xdr.Asset {
 		q.DestinationAssetIssuer,
 		q.DestinationAssetCode,
 	)
-
 	if err != nil {
 		panic(err)
 	}
@@ -86,13 +85,11 @@ func (q StrictReceivePathsQuery) Validate() error {
 		q.DestinationAssetIssuer,
 		"destination_",
 	)
-
 	if err != nil {
 		return err
 	}
 
 	_, err = q.Assets()
-
 	if err != nil {
 		return problem.MakeInvalidFieldProblem(
 			"source_assets",
@@ -130,7 +127,7 @@ func (handler FindPathsHandler) GetResource(w HeaderWriter, r *http.Request) (in
 	if len(query.SourceAssets) > handler.MaxAssetsParamLength {
 		return nil, problem.MakeInvalidFieldProblem(
 			"source_assets",
-			fmt.Errorf("list of assets exceeds maximum length of %d", handler.MaxPathLength),
+			fmt.Errorf("list of assets exceeds maximum length of %d", handler.MaxAssetsParamLength),
 		)
 	}
 	query.DestinationAsset = qp.DestinationAsset()
@@ -138,7 +135,9 @@ func (handler FindPathsHandler) GetResource(w HeaderWriter, r *http.Request) (in
 		sourceAccount := xdr.MustAddress(sourceAccount)
 		query.SourceAccount = &sourceAccount
 		query.ValidateSourceBalance = true
-		query.SourceAssets, query.SourceAssetBalances, err = assetsForAddress(r, query.SourceAccount.Address())
+		query.SourceAssets, query.SourceAssetBalances, err = assetsForAddressWithLimit(
+			r, query.SourceAccount.Address(), handler.MaxAssetsParamLength,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -244,13 +243,11 @@ func (q FindFixedPathsQuery) Validate() error {
 		q.SourceAssetIssuer,
 		"source_",
 	)
-
 	if err != nil {
 		return err
 	}
 
 	_, err = q.Assets()
-
 	if err != nil {
 		return problem.MakeInvalidFieldProblem(
 			"destination_assets",
@@ -282,7 +279,6 @@ func (q FindFixedPathsQuery) SourceAsset() xdr.Asset {
 		q.SourceAssetIssuer,
 		q.SourceAssetCode,
 	)
-
 	if err != nil {
 		panic(err)
 	}
@@ -306,12 +302,12 @@ func (handler FindFixedPathsHandler) GetResource(w HeaderWriter, r *http.Request
 	if len(destinationAssets) > handler.MaxAssetsParamLength {
 		return nil, problem.MakeInvalidFieldProblem(
 			"destination_assets",
-			fmt.Errorf("list of assets exceeds maximum length of %d", handler.MaxPathLength),
+			fmt.Errorf("list of assets exceeds maximum length of %d", handler.MaxAssetsParamLength),
 		)
 	}
 
 	if destinationAccount != "" {
-		destinationAssets, _, err = assetsForAddress(r, destinationAccount)
+		destinationAssets, _, err = assetsForAddressWithLimit(r, destinationAccount, handler.MaxAssetsParamLength)
 		if err != nil {
 			return nil, err
 		}
@@ -364,7 +360,7 @@ func (handler FindFixedPathsHandler) GetResource(w HeaderWriter, r *http.Request
 	return renderPaths(ctx, records)
 }
 
-func assetsForAddress(r *http.Request, addy string) ([]xdr.Asset, []xdr.Int64, error) {
+func assetsForAddressWithLimit(r *http.Request, addy string, limit int) ([]xdr.Asset, []xdr.Int64, error) {
 	historyQ, err := horizonContext.HistoryQFromRequest(r)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not obtain historyQ from request")
@@ -410,5 +406,8 @@ func assetsForAddress(r *http.Request, addy string) ([]xdr.Asset, []xdr.Int64, e
 	assets = append(assets, xdr.MustNewNativeAsset())
 	balances = append(balances, xdr.Int64(account.Balance))
 
+	if len(assets) > limit {
+		return nil, nil, fmt.Errorf("number of assets exceeds maximum length of %d", limit)
+	}
 	return assets, balances, nil
 }
