@@ -739,7 +739,14 @@ func (operation *transactionOperationWrapper) Details() (map[string]interface{},
 		details["extend_to"] = op.ExtendTo
 	case xdr.OperationTypeRestoreFootprint:
 	default:
-		return nil, fmt.Errorf("unknown operation type: %s", operation.OperationType())
+		d, err2, ok := detailsForXdrHelloWorld(operation)
+		if !ok {
+			return nil, fmt.Errorf("unknown operation type: %s", operation.OperationType())
+		}
+		if err2 != nil {
+			return nil, err2
+		}
+		details = d
 	}
 
 	sponsor, err := operation.getSponsor()
@@ -1075,7 +1082,14 @@ func (operation *transactionOperationWrapper) Participants() ([]xdr.AccountId, e
 	case xdr.OperationTypeRestoreFootprint:
 		// the only direct participant is the source_account
 	default:
-		return participants, fmt.Errorf("unknown operation type: %s", op.Body.Type)
+		extra, err, ok := participantsForXdrHelloWorld(operation)
+		if !ok {
+			return participants, fmt.Errorf("unknown operation type: %s", op.Body.Type)
+		}
+		if err != nil {
+			return participants, err
+		}
+		participants = append(participants, extra...)
 	}
 
 	sponsor, err := operation.getSponsor()

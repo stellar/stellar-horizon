@@ -57,6 +57,7 @@ type StatsLedgerTransactionProcessorResults struct {
 	OperationsInvokeHostFunction            int64
 	OperationsExtendFootprintTtl            int64
 	OperationsRestoreFootprint              int64
+	OperationsHelloWorld                    int64
 }
 
 func (p *StatsLedgerTransactionProcessor) Flush(ctx context.Context, session db.SessionInterface) error {
@@ -134,7 +135,9 @@ func (p *StatsLedgerTransactionProcessor) ProcessTransaction(lcm xdr.LedgerClose
 		case xdr.OperationTypeRestoreFootprint:
 			p.results.OperationsRestoreFootprint++
 		default:
-			panic(fmt.Sprintf("Unknown operation type: %d", op.Body.Type))
+			if !countOperationTypeForXdrHelloWorld(&p.results, op.Body) {
+				panic(fmt.Sprintf("Unknown operation type: %d", op.Body.Type))
+			}
 		}
 	}
 
