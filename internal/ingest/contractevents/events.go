@@ -59,6 +59,9 @@ func NewStellarAssetContractEvent(tx ingest.LedgerTransaction, event *xdr.Contra
 	case 4:
 		return parseSacEventFromTxMetaV4(event, networkPassphrase)
 	default:
+		if event, err, ok := parseSacEventFromTxMetaForXdrTransactionMetaV5(tx, event, networkPassphrase); ok {
+			return event, err
+		}
 		return nil, fmt.Errorf("%w: %v", ErrUnsupportedTxMetaVersion, tx.UnsafeMeta.V)
 	}
 }

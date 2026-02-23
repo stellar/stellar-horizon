@@ -71,7 +71,9 @@ func (p *TransactionProcessor) ProcessTransaction(lcm xdr.LedgerCloseMeta, trans
 				Operations: []xdr.OperationMeta{},
 			}
 		default:
-			return errors.Errorf("SKIP_TXMETA is enabled, but received an un-supported tx-meta version %v, can't proceed with removal", elidedTransaction.UnsafeMeta.V)
+			if !elideTransactionMetaForXdrTransactionMetaV5(&elidedTransaction.UnsafeMeta) {
+				return errors.Errorf("SKIP_TXMETA is enabled, but received an un-supported tx-meta version %v, can't proceed with removal", elidedTransaction.UnsafeMeta.V)
+			}
 		}
 	}
 
