@@ -69,7 +69,7 @@ func TestCoreLCMIngestion(t *testing.T) {
 		}
 
 		t.Run(entry.Name(), func(t *testing.T) {
-			// t.Parallel()
+			t.Parallel()
 
 			// Each parallel sub-test gets its own isolated database so
 			// there are no conflicts between concurrent DB transactions
