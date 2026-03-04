@@ -35,16 +35,17 @@ func readLedgerCloseMetasFromFile(t *testing.T, path string) []xdr.LedgerCloseMe
 	t.Helper()
 	file, err := os.Open(path)
 	require.NoError(t, err)
-	defer file.Close()
+	defer func() { require.NoError(t, file.Close()) }()
 
 	stream := xdr.NewStream(file)
 	var ledgers []xdr.LedgerCloseMeta
 	for {
 		var lcm xdr.LedgerCloseMeta
-		if err := stream.ReadOne(&lcm); err == io.EOF {
+		readErr := stream.ReadOne(&lcm)
+		if readErr == io.EOF {
 			break
 		}
-		require.NoError(t, err, "failed to decode LedgerCloseMeta from %s", path)
+		require.NoError(t, readErr, "failed to decode LedgerCloseMeta from %s", path)
 		ledgers = append(ledgers, lcm)
 	}
 	return ledgers
@@ -114,7 +115,7 @@ func TestCoreLCMIngestion(t *testing.T) {
 			defer testDB.Close()
 
 			dbConn := testDB.Open()
-			defer dbConn.Close()
+			defer func() { require.NoError(t, dbConn.Close()) }()
 
 			_, err := schema.Migrate(dbConn.DB, schema.MigrateUp, 0)
 			require.NoError(t, err, "failed to run migrations")
@@ -152,7 +153,7 @@ func TestCoreLCMIngestion(t *testing.T) {
 			for i, lcm := range ledgers {
 				require.NoError(t, historyQ.Begin(ctx),
 					"failed to begin transaction for ledger index %d", i)
-				defer func() { _ = historyQ.Rollback() }()
+				defer func() { require.NoError(t, historyQ.Rollback()) }()
 
 				_, err := runner.RunAllProcessorsOnLedger(lcm)
 				require.NoError(t, err,
