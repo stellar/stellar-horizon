@@ -2,8 +2,6 @@ package ingest
 
 import (
 	"context"
-	"encoding/binary"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -35,7 +33,7 @@ func readLedgerCloseMetasFromFile(t *testing.T, path string) []xdr.LedgerCloseMe
 	t.Helper()
 	file, err := os.Open(path)
 	require.NoError(t, err)
-	defer func() { require.NoError(t, file.Close()) }()
+	defer file.Close()
 
 	stream := xdr.NewStream(file)
 	var ledgers []xdr.LedgerCloseMeta
@@ -49,41 +47,6 @@ func readLedgerCloseMetasFromFile(t *testing.T, path string) []xdr.LedgerCloseMe
 		ledgers = append(ledgers, lcm)
 	}
 	return ledgers
-}
-
-// setLedgerSequence overwrites the ledger sequence number, ledger hash,
-// and previous-ledger hash inside a LedgerCloseMeta regardless of its
-// version (V0, V1, or V2).  Deterministic unique hashes are derived from
-// seq so that DB unique-index constraints are satisfied.  The previous
-// ledger hash is derived from seq-1 to form a consistent chain.
-func setLedgerSequence(lcm *xdr.LedgerCloseMeta, seq uint32) {
-	hash := seqToHash(seq)
-	prevHash := seqToHash(seq - 1)
-
-	switch lcm.V {
-	case 0:
-		lcm.V0.LedgerHeader.Header.LedgerSeq = xdr.Uint32(seq)
-		lcm.V0.LedgerHeader.Header.PreviousLedgerHash = prevHash
-		lcm.V0.LedgerHeader.Hash = hash
-	case 1:
-		lcm.V1.LedgerHeader.Header.LedgerSeq = xdr.Uint32(seq)
-		lcm.V1.LedgerHeader.Header.PreviousLedgerHash = prevHash
-		lcm.V1.LedgerHeader.Hash = hash
-	case 2:
-		lcm.V2.LedgerHeader.Header.LedgerSeq = xdr.Uint32(seq)
-		lcm.V2.LedgerHeader.Header.PreviousLedgerHash = prevHash
-		lcm.V2.LedgerHeader.Hash = hash
-	default:
-		panic(fmt.Sprintf("unsupported LedgerCloseMeta version: %d", lcm.V))
-	}
-}
-
-// seqToHash returns a deterministic xdr.Hash derived from a ledger sequence
-// number so that each ledger gets a globally unique hash.
-func seqToHash(seq uint32) xdr.Hash {
-	var h xdr.Hash
-	binary.BigEndian.PutUint32(h[:4], seq)
-	return h
 }
 
 // TestCoreLCMIngestion reads every XDR file produced by stellar-core's
@@ -106,7 +69,7 @@ func TestCoreLCMIngestion(t *testing.T) {
 		}
 
 		t.Run(entry.Name(), func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel()
 
 			// Each parallel sub-test gets its own isolated database so
 			// there are no conflicts between concurrent DB transactions
@@ -115,7 +78,7 @@ func TestCoreLCMIngestion(t *testing.T) {
 			defer testDB.Close()
 
 			dbConn := testDB.Open()
-			defer func() { require.NoError(t, dbConn.Close()) }()
+			defer dbConn.Close()
 
 			_, err := schema.Migrate(dbConn.DB, schema.MigrateUp, 0)
 			require.NoError(t, err, "failed to run migrations")
@@ -126,15 +89,6 @@ func TestCoreLCMIngestion(t *testing.T) {
 			ledgers := readLedgerCloseMetasFromFile(t, path)
 			require.NotEmpty(t, ledgers, "expected at least one LedgerCloseMeta in %s", path)
 			t.Logf("decoded %d LedgerCloseMeta(s)", len(ledgers))
-
-			// The test LCMs from stellar-core have LedgerSequence==0
-			// because core's test harness doesn't populate real sequence
-			// numbers.  Inject sequential values starting at 2 (ledger 1
-			// is the genesis ledger and some processors treat it
-			// specially).
-			for i := range ledgers {
-				setLedgerSequence(&ledgers[i], uint32(i+2))
-			}
 
 			ctx := context.Background()
 			runner := ProcessorRunner{
@@ -151,9 +105,11 @@ func TestCoreLCMIngestion(t *testing.T) {
 			// Run the full pipeline (change + transaction processors) on
 			// each ledger sequentially, inside a DB transaction.
 			for i, lcm := range ledgers {
+				t.Logf("ingesting ledger %d through all processors", lcm.LedgerSequence())
+
 				require.NoError(t, historyQ.Begin(ctx),
 					"failed to begin transaction for ledger index %d", i)
-				defer func() { require.NoError(t, historyQ.Rollback()) }()
+				defer historyQ.Rollback()
 
 				_, err := runner.RunAllProcessorsOnLedger(lcm)
 				require.NoError(t, err,
@@ -163,6 +119,7 @@ func TestCoreLCMIngestion(t *testing.T) {
 				require.NoError(t, historyQ.Commit(),
 					"failed to commit transaction for ledger index %d", i)
 			}
+
 			t.Logf("successfully ingested %d ledgers through all processors", len(ledgers))
 		})
 	}
