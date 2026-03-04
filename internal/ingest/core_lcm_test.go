@@ -35,6 +35,7 @@ func readLedgerCloseMetasFromFile(t *testing.T, path string) []xdr.LedgerCloseMe
 	t.Helper()
 	file, err := os.Open(path)
 	require.NoError(t, err)
+	defer file.Close()
 
 	stream := xdr.NewStream(file)
 	var ledgers []xdr.LedgerCloseMeta
@@ -151,6 +152,7 @@ func TestCoreLCMIngestion(t *testing.T) {
 			for i, lcm := range ledgers {
 				require.NoError(t, historyQ.Begin(ctx),
 					"failed to begin transaction for ledger index %d", i)
+				defer func() { _ = historyQ.Rollback() }()
 
 				_, err := runner.RunAllProcessorsOnLedger(lcm)
 				require.NoError(t, err,
