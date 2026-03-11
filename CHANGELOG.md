@@ -5,6 +5,13 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## 25.1.0
+
+### Updated
+- Updated `go-stellar-sdk` dependency to [v0.2.0](https://github.com/stellar/go-stellar-sdk/releases/tag/v0.2.0).
+
+### Security Fixes
+- Reject non-uint64 types for `to_muxed_id` in SAC events ([#158](https://github.com/stellar/stellar-horizon/pull/158)).
 - Changed assetsForAddress() to assetsForAddressWithLimit() to enforce asset limit in actions package ([#156](https://github.com/stellar/stellar-horizon/pull/156)).
 
 ## 25.0.1
