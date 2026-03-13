@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-24.04]
-        go: ["1.24", "1.25"]
+        go: ["1.25"]
         pg: [14, 16]
         protocol-version: [25]
     runs-on: ${{ matrix.os }}
@@ -116,7 +116,7 @@ jobs:
     name: Test (and push) verify-range image
     runs-on: ubuntu-24.04
     env:
-      GO_VERSION: 1.23.4
+      GO_VERSION: 1.25.0
       STELLAR_CORE_VERSION: 24.1.1-2896.bc46d6004.noble
     steps:
       - uses: actions/checkout@v3
