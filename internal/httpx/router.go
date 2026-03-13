@@ -30,6 +30,9 @@ import (
 	"github.com/stellar/stellar-horizon/internal/txsub"
 )
 
+// Decoded output size limit for XDR unmarshaling of user-supplied input.
+const transactionDecodeMaxMemory = 1024 * 1024 // 1 MB
+
 type RouterConfig struct {
 	DBSession             db.SessionInterface
 	PrimaryDBSession      db.SessionInterface
@@ -346,7 +349,7 @@ func (r *Router) addRoutes(config *RouterConfig, rateLimiter *throttled.HTTPRate
 		DisableTxSub:      config.DisableTxSub,
 		CoreStateGetter:   config.CoreGetter,
 		SkipTxMeta:        config.SkipTxMeta,
-		DecodeOptions:     xdr.DecodeOptions{MaxMemoryBytes: 1024 * 1024}, // Decoded output size limit for XDR unmarshaling of user-supplied input
+		DecodeOptions:     xdr.DecodeOptions{MaxMemoryBytes: transactionDecodeMaxMemory},
 	}})
 
 	// Async Transaction submission API
@@ -358,7 +361,7 @@ func (r *Router) addRoutes(config *RouterConfig, rateLimiter *throttled.HTTPRate
 			HTTP: http.DefaultClient,
 			URL:  config.StellarCoreURL,
 		}, config.PrometheusRegistry, "async_txsub"),
-		DecodeOptions: xdr.DecodeOptions{MaxMemoryBytes: 1024 * 1024}, // Decoded output size limit for XDR unmarshaling of user-supplied input
+		DecodeOptions: xdr.DecodeOptions{MaxMemoryBytes: transactionDecodeMaxMemory},
 	}})
 
 	// Network state related endpoints
