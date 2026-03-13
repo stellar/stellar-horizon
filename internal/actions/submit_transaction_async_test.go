@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/go-stellar-sdk/protocols/horizon"
 
@@ -18,6 +19,7 @@ import (
 	proto "github.com/stellar/go-stellar-sdk/protocols/stellarcore"
 	"github.com/stellar/go-stellar-sdk/support/errors"
 	"github.com/stellar/go-stellar-sdk/support/render/problem"
+	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-horizon/internal/corestate"
 )
 
@@ -215,4 +217,32 @@ func TestAsyncSubmitTransactionHandler_TransactionStatusResponse(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, resp, testCase.expectedResponse)
 	}
+}
+
+func TestAsyncSubmitTransactionHandler_XDRDecodeLimitExceeded(t *testing.T) {
+	txB64 := buildOversizedEnvelopeXDR(t)
+
+	handler := AsyncSubmitTransactionHandler{
+		NetworkPassphrase: network.PublicNetworkPassphrase,
+		DecodeOptions:     xdr.DecodeOptions{MaxMemoryBytes: 1024 * 1024},
+	}
+
+	form := url.Values{}
+	form.Set("tx", txB64)
+
+	request, err := http.NewRequest(
+		"POST",
+		"http://localhost:8000/transactions_async",
+		strings.NewReader(form.Encode()),
+	)
+	require.NoError(t, err)
+	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	w := httptest.NewRecorder()
+	_, err = handler.GetResource(w, request)
+	assert.Error(t, err)
+	assert.IsType(t, &problem.P{}, err)
+	p := err.(*problem.P)
+	assert.Equal(t, "transaction_malformed", p.Type)
+	assert.Equal(t, http.StatusBadRequest, p.Status)
 }
