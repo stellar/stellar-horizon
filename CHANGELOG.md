@@ -8,7 +8,7 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 ## 25.1.0
 
 ### Updated
-- Updated `go-stellar-sdk` dependency to [v0.2.0](https://github.com/stellar/go-stellar-sdk/releases/tag/v0.2.0).
+- Updated `go-stellar-sdk` dependency to [v0.3.0](https://github.com/stellar/go-stellar-sdk/releases/tag/v0.3.0).
 
 ### Security Fixes
 - Reject non-uint64 types for `to_muxed_id` in SAC events ([#158](https://github.com/stellar/stellar-horizon/pull/158)).
