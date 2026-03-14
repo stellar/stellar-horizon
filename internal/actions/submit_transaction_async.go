@@ -9,6 +9,7 @@ import (
 	"github.com/stellar/go-stellar-sdk/support/errors"
 	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stellar/go-stellar-sdk/support/render/problem"
+	"github.com/stellar/go-stellar-sdk/xdr"
 	hProblem "github.com/stellar/stellar-horizon/internal/render/problem"
 )
 
@@ -21,6 +22,7 @@ type AsyncSubmitTransactionHandler struct {
 	DisableTxSub      bool
 	ClientWithMetrics coreClient
 	CoreStateGetter
+	DecodeOptions xdr.DecodeOptions // Decoded output size limit for XDR unmarshaling of user-supplied input
 }
 
 func (handler AsyncSubmitTransactionHandler) GetResource(_ HeaderWriter, r *http.Request) (interface{}, error) {
@@ -49,7 +51,7 @@ func (handler AsyncSubmitTransactionHandler) GetResource(_ HeaderWriter, r *http
 		}
 	}
 
-	info, err := extractEnvelopeInfo(raw, handler.NetworkPassphrase)
+	info, err := extractEnvelopeInfo(raw, handler.NetworkPassphrase, handler.DecodeOptions)
 	if err != nil {
 		return nil, &problem.P{
 			Type:   "transaction_malformed",

@@ -22,7 +22,7 @@ jobs:
 
       - uses: ./.github/actions/setup-go
         with:
-          go-version: "1.24"
+          go-version: "1.25"
 
       - name: Check dependencies
         run: ./gomod.sh
