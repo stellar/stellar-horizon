@@ -402,12 +402,13 @@ func assetsForAddressWithLimit(r *http.Request, addy string, limit int) ([]xdr.A
 		}
 		assets = append(assets, asset)
 		balances = append(balances, xdr.Int64(trustline.Balance))
+
+		// +1 accounts for the native XLM asset appended below
+		if len(assets)+1 > limit {
+			return nil, nil, fmt.Errorf("list of assets exceeds maximum length of %d", limit)
+		}
 	}
 	assets = append(assets, xdr.MustNewNativeAsset())
 	balances = append(balances, xdr.Int64(account.Balance))
-
-	if len(assets) > limit {
-		return nil, nil, fmt.Errorf("list of assets exceeds maximum length of %d", limit)
-	}
 	return assets, balances, nil
 }
