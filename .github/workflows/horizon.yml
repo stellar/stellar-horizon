@@ -117,7 +117,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       GO_VERSION: 1.25.0
-      STELLAR_CORE_VERSION: 24.1.1-2896.bc46d6004.noble
+      STELLAR_CORE_VERSION: 25.2.0-3058.bb195c49d.noble
     steps:
       - uses: actions/checkout@v3
         with:
