@@ -68,7 +68,7 @@ func TestContractMintToAccount(t *testing.T) {
 		contractID:       stellarAssetContractID(itest, asset),
 	})
 
-	fx := getTxEffects(itest, mintTx, asset)
+	fx := getTxEffects(itest, mintTx)
 	require.Len(t, fx, 1)
 	creditEffect := assertContainsEffect(t, fx,
 		effects.EffectAccountCredited)[0].(effects.AccountCredited)
@@ -91,7 +91,7 @@ func TestContractMintToAccount(t *testing.T) {
 	assertContainsBalance(itest, recipientKp, issuer, code, amount.MustParse("20"))
 	assertContainsBalance(itest, otherRecipientKp, issuer, code, amount.MustParse("30"))
 
-	fx = getTxEffects(itest, transferTx, asset)
+	fx = getTxEffects(itest, transferTx)
 	if integration.GetCoreMaxSupportedProtocol() < 23 {
 		assert.Len(t, fx, 2)
 		assertContainsEffect(t, fx,
@@ -173,7 +173,7 @@ func TestContractEventsWithMuxedInfo(t *testing.T) {
 	assert.Equal(t, "20.0000000", balanceChanges[0].Amount)
 	assert.Equal(t, "111", balanceChanges[0].DestinationMuxedId)
 
-	mintTxEffects := getTxEffects(itest, mintTx, usdAsset)
+	mintTxEffects := getTxEffects(itest, mintTx)
 	require.Len(t, mintTxEffects, 1)
 	creditEffect := assertContainsEffect(t, mintTxEffects,
 		effects.EffectAccountCredited)[0].(effects.AccountCredited)
@@ -209,7 +209,7 @@ func TestContractEventsWithMuxedInfo(t *testing.T) {
 	assert.Equal(t, "100.0000000", balanceChanges[0].Amount)
 	assert.Equal(t, "111", balanceChanges[0].DestinationMuxedId)
 
-	transferTxEvents := getTxEffects(itest, transferTx, nativeAsset)
+	transferTxEvents := getTxEffects(itest, transferTx)
 	require.Len(t, transferTxEvents, 2)
 	creditEffect = assertContainsEffect(t, transferTxEvents,
 		effects.EffectAccountCredited)[0].(effects.AccountCredited)
@@ -292,7 +292,7 @@ func TestContractMintToContract(t *testing.T) {
 		}
 	}
 
-	assertContractMintEffects(getTxEffects(itest, transferTx.Hash, asset))
+	assertContractMintEffects(getTxEffects(itest, transferTx.Hash))
 
 	// call transfer again to exercise code path when the contract balance already exists
 	invokeHostOp, err = txnbuild.NewPaymentToContract(txnbuild.PaymentToContractParams{
@@ -308,7 +308,7 @@ func TestContractMintToContract(t *testing.T) {
 	assert.NoError(t, err)
 	transferTx = itest.MustSubmitOperations(itest.MasterAccount(), itest.Master(), &invokeHostOp)
 
-	assertContractMintEffects(getTxEffects(itest, transferTx.Hash, asset))
+	assertContractMintEffects(getTxEffects(itest, transferTx.Hash))
 
 	balanceAmount, _, _ := assertInvokeHostFnSucceeds(
 		itest,
@@ -329,7 +329,7 @@ func TestContractMintToContract(t *testing.T) {
 			i128Param(int64(mintAmount.Hi), uint64(mintAmount.Lo)),
 			contractAddressParam(recipientContractID)),
 	)
-	assertContainsEffect(t, getTxEffects(itest, mintTx, asset),
+	assertContainsEffect(t, getTxEffects(itest, mintTx),
 		effects.EffectContractCredited)
 
 	balanceAmount, _, _ = assertInvokeHostFnSucceeds(
@@ -1350,7 +1350,7 @@ func TestContractTransferBetweenAccounts(t *testing.T) {
 	assertContainsBalance(itest, recipientKp, issuer, code, amount.MustParse("970"))
 	assertContainsBalance(itest, otherRecipientKp, issuer, code, amount.MustParse("30"))
 
-	fx := getTxEffects(itest, transferTx, asset)
+	fx := getTxEffects(itest, transferTx)
 	assert.NotEmpty(t, fx)
 	assertContainsEffect(t, fx, effects.EffectAccountCredited, effects.EffectAccountDebited)
 	assertAssetStats(itest, assetStats{
@@ -1431,7 +1431,7 @@ func TestContractTransferBetweenAccountAndContract(t *testing.T) {
 
 	assertAccountInvokeHostFunctionOperation(itest, recipientKp.Address(), recipientKp.Address(), strkeyRecipientContractID, "30.0000000")
 	assertContainsBalance(itest, recipientKp, issuer, code, amount.MustParse("970"))
-	assertContainsEffect(t, getTxEffects(itest, transferTx.Hash, asset),
+	assertContainsEffect(t, getTxEffects(itest, transferTx.Hash),
 		effects.EffectAccountDebited, effects.EffectContractCredited)
 	assertAssetStats(itest, assetStats{
 		code:             code,
@@ -1460,7 +1460,7 @@ func TestContractTransferBetweenAccountAndContract(t *testing.T) {
 
 	assertAccountInvokeHostFunctionOperation(itest, recipientKp.Address(), recipientKp.Address(), strkeyRecipientContractID, "70.0000000")
 	assertContainsBalance(itest, recipientKp, issuer, code, amount.MustParse("900"))
-	assertContainsEffect(t, getTxEffects(itest, transferTx.Hash, asset),
+	assertContainsEffect(t, getTxEffects(itest, transferTx.Hash),
 		effects.EffectAccountDebited, effects.EffectContractCredited)
 	assertAssetStats(itest, assetStats{
 		code:             code,
@@ -1480,7 +1480,7 @@ func TestContractTransferBetweenAccountAndContract(t *testing.T) {
 		transferFromContract(itest, recipientKp.Address(), asset, recipientContractID, recipientContractHash, "50", accountAddressParam(recipient.GetAccountID())),
 	)
 	assertAccountInvokeHostFunctionOperation(itest, recipientKp.Address(), strkeyRecipientContractID, recipientKp.Address(), "50.0000000")
-	assertContainsEffect(t, getTxEffects(itest, transferTxHash, asset),
+	assertContainsEffect(t, getTxEffects(itest, transferTxHash),
 		effects.EffectContractDebited, effects.EffectAccountCredited)
 	assertContainsBalance(itest, recipientKp, issuer, code, amount.MustParse("950"))
 	assertAssetStats(itest, assetStats{
@@ -1545,7 +1545,7 @@ func TestContractTransferBetweenContracts(t *testing.T) {
 		itest.Master(),
 		transferFromContract(itest, issuer, asset, emitterContractID, emitterContractHash, "10", contractAddressParam(recipientContractID)),
 	)
-	assertContainsEffect(t, getTxEffects(itest, transferTx, asset),
+	assertContainsEffect(t, getTxEffects(itest, transferTx),
 		effects.EffectContractCredited, effects.EffectContractDebited)
 
 	// Check balances of emitter and recipient
@@ -1625,7 +1625,7 @@ func TestContractBurnFromAccount(t *testing.T) {
 	)
 	assertAccountInvokeHostFunctionOperation(itest, recipientKp.Address(), recipientKp.Address(), "", "500.0000000")
 
-	fx := getTxEffects(itest, burnTx, asset)
+	fx := getTxEffects(itest, burnTx)
 	require.Len(t, fx, 1)
 	assetEffects := assertContainsEffect(t, fx, effects.EffectAccountDebited)
 	require.GreaterOrEqual(t, len(assetEffects), 1)
@@ -1693,7 +1693,7 @@ func TestContractBurnFromContract(t *testing.T) {
 	assert.Equal(itest.CurrentTest(), xdr.Uint64(9900000000), (*balanceAmount.I128).Lo)
 	assert.Equal(itest.CurrentTest(), xdr.Int64(0), (*balanceAmount.I128).Hi)
 
-	assertContainsEffect(t, getTxEffects(itest, burnTx, asset),
+	assertContainsEffect(t, getTxEffects(itest, burnTx),
 		effects.EffectContractDebited)
 
 	assertAssetStats(itest, assetStats{
@@ -1764,7 +1764,7 @@ func TestContractClawbackFromAccount(t *testing.T) {
 	)
 	assertAccountInvokeHostFunctionOperation(itest, recipientKp.Address(), recipientKp.Address(), "", "1000.0000000")
 
-	assertContainsEffect(t, getTxEffects(itest, clawTx, asset), effects.EffectAccountDebited)
+	assertContainsEffect(t, getTxEffects(itest, clawTx), effects.EffectAccountDebited)
 	assertContainsBalance(itest, recipientKp, issuer, code, 0)
 	assertAssetStats(itest, assetStats{
 		code:             code,
@@ -1827,7 +1827,7 @@ func TestContractClawbackFromContract(t *testing.T) {
 	assert.Equal(itest.CurrentTest(), xdr.Uint64(9900000000), (*balanceAmount.I128).Lo)
 	assert.Equal(itest.CurrentTest(), xdr.Int64(0), (*balanceAmount.I128).Hi)
 
-	assertContainsEffect(t, getTxEffects(itest, clawTx, asset),
+	assertContainsEffect(t, getTxEffects(itest, clawTx),
 		effects.EffectContractDebited)
 
 	assertAssetStats(itest, assetStats{
@@ -1915,19 +1915,14 @@ func assertContainsEffect(t *testing.T, fx []effects.Effect, effectTypes ...effe
 	return rv
 }
 
-// getTxEffects returns a transaction's effects, limited to 2 because it's to be
-// used for checking SAC effects.
-func getTxEffects(itest *integration.Test, txHash string, asset xdr.Asset) []effects.Effect {
+func getTxEffects(itest *integration.Test, txHash string) []effects.Effect {
 	t := itest.CurrentTest()
-	effects, err := itest.Client().Effects(horizonclient.EffectRequest{
+	fx, err := itest.Client().Effects(horizonclient.EffectRequest{
 		ForTransaction: txHash,
 		Order:          horizonclient.OrderDesc,
 	})
 	assert.NoError(t, err)
-	result := effects.Embedded.Records
-
-	assert.LessOrEqualf(t, len(result), 2, "txhash: %s", txHash)
-	return result
+	return fx.Embedded.Records
 }
 
 func assertAccountInvokeHostFunctionOperation(itest *integration.Test, account string, from string, to string, amount string) {
@@ -2263,4 +2258,123 @@ func mustCreateAndInstallContractWithTTL(itest *integration.Test, signer *keypai
 	contractHash := createContractOp.Ext.SorobanData.Resources.Footprint.ReadOnly[0].MustContractCode().Hash
 	contractID := createContractOp.Ext.SorobanData.Resources.Footprint.ReadWrite[0].MustContractData().Contract.ContractId
 	return *contractID, contractHash
+}
+
+// sacTrust constructs an InvokeHostFunction operation that calls the SAC
+// trust() function (CAP-0073) to create an unlimited trustline for the given
+// address.
+func sacTrust(itest *integration.Test, sourceAccount string, asset xdr.Asset, addr xdr.ScVal) *txnbuild.InvokeHostFunction {
+	return &txnbuild.InvokeHostFunction{
+		HostFunction: xdr.HostFunction{
+			Type: xdr.HostFunctionTypeHostFunctionTypeInvokeContract,
+			InvokeContract: &xdr.InvokeContractArgs{
+				ContractAddress: contractIDParam(stellarAssetContractID(itest, asset)),
+				FunctionName:    "trust",
+				Args:            xdr.ScVec{addr},
+			},
+		},
+		SourceAccount: sourceAccount,
+	}
+}
+
+// TestCAP0073SACTrust verifies that calling the SAC trust() function creates a
+// trustline and that Horizon emits a trustline_created effect.
+func TestCAP0073SACTrust(t *testing.T) {
+	if integration.GetCoreMaxSupportedProtocol() < 26 {
+		t.Skip("This test requires Protocol 26 (CAP-0073)")
+	}
+
+	itest := integration.NewTest(t, integration.Config{
+		EnableStellarRPC: true,
+	})
+
+	issuer := itest.Master().Address()
+	code := "USD"
+	asset := xdr.MustNewCreditAsset(code, issuer)
+
+	createSAC(itest, asset)
+
+	// Create a new account that does NOT have a trustline for the asset
+	recipientKp, _ := itest.CreateAccount("100")
+
+	// Call SAC trust() to create the trustline instead of classic ChangeTrust
+	_, trustTx, _ := assertInvokeHostFnSucceeds(
+		itest,
+		recipientKp,
+		sacTrust(itest, recipientKp.Address(), asset, accountAddressParam(recipientKp.Address())),
+	)
+
+	// Verify trustline was created via the accounts endpoint
+	assertContainsBalance(itest, recipientKp, issuer, code, 0)
+
+	// Verify the trustline_created effect was emitted
+	fx := getTxEffects(itest, trustTx)
+	require.NotEmpty(t, fx)
+	tlEffects := assertContainsEffect(t, fx, effects.EffectTrustlineCreated)
+	require.Len(t, tlEffects, 1)
+	tlCreated := tlEffects[0].(effects.TrustlineCreated)
+	assert.Equal(t, recipientKp.Address(), tlCreated.Account)
+	assert.Equal(t, code, tlCreated.Asset.Code)
+	assert.Equal(t, issuer, tlCreated.Asset.Issuer)
+	assert.Equal(t, "922337203685.4775807", tlCreated.Limit)
+
+	// Verify asset stats reflect the new trustline
+	assertAssetStats(itest, assetStats{
+		code:             code,
+		issuer:           issuer,
+		numAccounts:      1,
+		balanceAccounts:  0,
+		numContracts:     0,
+		balanceContracts: big.NewInt(0),
+		contractID:       stellarAssetContractID(itest, asset),
+	})
+}
+
+// TestCAP0073XLMTransferCreatesAccount verifies that transferring XLM via SAC
+// to a non-existent G-address auto-creates the account, and that Horizon emits
+// account_created and signer_created effects in addition to the transfer effects.
+func TestCAP0073XLMTransferCreatesAccount(t *testing.T) {
+	if integration.GetCoreMaxSupportedProtocol() < 26 {
+		t.Skip("This test requires Protocol 26 (CAP-0073)")
+	}
+
+	itest := integration.NewTest(t, integration.Config{
+		EnableStellarRPC: true,
+	})
+
+	nativeAsset := xdr.MustNewNativeAsset()
+	createSAC(itest, nativeAsset)
+
+	// Generate a keypair for an account that does NOT exist on the ledger
+	newAccountKp := keypair.MustRandom()
+
+	// Transfer XLM via SAC to the non-existent account — should auto-create it
+	senderKp := itest.Master()
+	_, transferTx, _ := assertInvokeHostFnSucceeds(
+		itest,
+		senderKp,
+		transfer(itest, senderKp.Address(), nativeAsset, "100", accountAddressParam(newAccountKp.Address())),
+	)
+
+	// Verify the new account exists and has the expected balance
+	assertContainsBalance(itest, newAccountKp, "", "", amount.MustParse("100"))
+
+	// Verify effects: should contain debit, credit, account_created, and signer_created
+	fx := getTxEffects(itest, transferTx)
+	require.NotEmpty(t, fx)
+	assertContainsEffect(t, fx,
+		effects.EffectAccountDebited,
+		effects.EffectAccountCredited,
+		effects.EffectAccountCreated,
+		effects.EffectSignerCreated,
+	)
+
+	// Verify account_created details
+	for _, e := range fx {
+		if e.GetType() == effects.EffectTypeNames[effects.EffectAccountCreated] {
+			created := e.(effects.AccountCreated)
+			assert.Equal(t, newAccountKp.Address(), created.Account)
+			assert.Equal(t, "100.0000000", created.StartingBalance)
+		}
+	}
 }

@@ -151,9 +151,21 @@ func (operation *transactionOperationWrapper) ingestEffects(accountLoader *histo
 			return innerErr
 		}
 
-		// For now, the only effects are related to the events themselves.
-		// Possible add'l work: https://github.com/stellar/go-stellar-sdk/issues/4585
-		err = wrapper.addInvokeHostFunctionEffects(contractEvents)
+		// Effects derived from SAC events (transfer, mint, burn, clawback).
+		if err = wrapper.addInvokeHostFunctionEffects(contractEvents); err != nil {
+			break
+		}
+
+		// CAP-0073: The SAC trust() function creates trustlines without
+		// emitting events, so we derive effects from ledger entry changes.
+		if err = wrapper.addInvokeHostFunctionTrustlineEffects(changes); err != nil {
+			break
+		}
+
+		// CAP-0073: XLM SAC transfers can auto-create accounts. The transfer
+		// event covers the credit/debit, but we need additional effects for
+		// the account creation itself.
+		err = wrapper.addInvokeHostFunctionAccountCreatedEffects(changes)
 	case xdr.OperationTypeExtendFootprintTtl, xdr.OperationTypeRestoreFootprint:
 		// do not produce effects for these operations as horizon only provides
 		// limited visibility into soroban operations
@@ -478,6 +490,45 @@ func (e *effectsWrapper) addAccountCreatedEffects() error {
 	return nil
 }
 
+// addInvokeHostFunctionAccountCreatedEffects scans ledger entry changes from an
+// InvokeHostFunction operation for newly created accounts. This handles the
+// CAP-0073 behavior where an XLM SAC transfer to a non-existent G-address
+// auto-creates the account.
+func (e *effectsWrapper) addInvokeHostFunctionAccountCreatedEffects(changes []ingest.Change) error {
+	for _, change := range changes {
+		if change.Type != xdr.LedgerEntryTypeAccount {
+			continue
+		}
+		if change.Pre != nil || change.Post == nil {
+			continue
+		}
+
+		account := change.Post.Data.MustAccount()
+
+		if err := e.addUnmuxed(
+			&account.AccountId,
+			history.EffectAccountCreated,
+			map[string]interface{}{
+				"starting_balance": amount.String(account.Balance),
+			},
+		); err != nil {
+			return err
+		}
+
+		if err := e.addUnmuxed(
+			&account.AccountId,
+			history.EffectSignerCreated,
+			map[string]interface{}{
+				"public_key": account.AccountId.Address(),
+				"weight":     keypair.DefaultSignerWeight,
+			},
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (e *effectsWrapper) addPaymentEffects() error {
 	op := e.operation.operation.Body.MustPaymentOp()
 
@@ -781,6 +832,39 @@ func (e *effectsWrapper) addChangeTrustEffects() error {
 		break
 	}
 
+	return nil
+}
+
+// addInvokeHostFunctionTrustlineEffects scans ledger entry changes from an
+// InvokeHostFunction operation for newly created trustlines. This handles the
+// CAP-0073 trust() SAC function which creates trustlines without emitting any
+// contract events.
+func (e *effectsWrapper) addInvokeHostFunctionTrustlineEffects(changes []ingest.Change) error {
+	for _, change := range changes {
+		if change.Type != xdr.LedgerEntryTypeTrustline {
+			continue
+		}
+		if change.Pre != nil || change.Post == nil {
+			continue
+		}
+
+		trustLine := change.Post.Data.MustTrustLine()
+
+		details := map[string]interface{}{
+			"limit": amount.String(trustLine.Limit),
+		}
+		if err := addAssetDetails(details, trustLine.Asset.ToAsset(), ""); err != nil {
+			return err
+		}
+
+		if err := e.addUnmuxed(
+			&trustLine.AccountId,
+			history.EffectTrustlineCreated,
+			details,
+		); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

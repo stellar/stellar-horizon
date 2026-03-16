@@ -785,9 +785,9 @@ func (i *Test) upgradeLimits() {
 	err = xdr.SafeUnmarshalBase64(string(contents), &configSet)
 	require.NoError(i.t, err)
 	coreImage := fmt.Sprintf("stellar/stellar-core:%v", i.config.ProtocolVersion)
-	if i.config.ProtocolVersion == 24 {
-		// protocol 24 docker image is not yet published with 24 tag because it's still an rc
-		// so in this case, we use the rc docker image
+	if i.config.ProtocolVersion >= 26 {
+		// Use the docker image from env for protocol versions where the
+		// standard tag doesn't exist yet (rc or vnext builds).
 		coreImage = i.coreValidatorDockerImage()
 	}
 	upgradeTransactions, upgradeKey, err := stellarcore.GenSorobanConfigUpgradeTxAndKey(stellarcore.GenSorobanConfig{

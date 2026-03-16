@@ -13,7 +13,7 @@ jobs:
         os: [ubuntu-24.04]
         go: ["1.25", "1.26"]
         pg: [14, 16]
-        protocol-version: [25]
+        protocol-version: [25, 26]
     runs-on: ${{ matrix.os }}
     services:
       postgres:
@@ -35,6 +35,9 @@ jobs:
       PROTOCOL_25_CORE_DEBIAN_PKG_VERSION: 25.2.0-3058.bb195c49d.noble
       PROTOCOL_25_CORE_DOCKER_IMG: stellar/stellar-core:25.2.0-3058.bb195c49d.noble
       PROTOCOL_25_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:25.0.0-preview1-143
+      PROTOCOL_26_CORE_DOCKER_IMG: stellar/stellar-core:25.2.1-3069.73babfde9.noble
+      PROTOCOL_26_CORE_DEBIAN_PKG_VERSION: 25.2.1-3069.73babfde9.noble
+      PROTOCOL_26_STELLAR_RPC_DOCKER_IMG: gkudra/stellar-rpc:testing
       PGHOST: localhost
       PGPORT: 5432
       PGUSER: postgres
@@ -66,22 +69,31 @@ jobs:
       - name: Pull and set Stellar Core image
         shell: bash
         run: |
-          docker pull "$PROTOCOL_${{ matrix.protocol-version }}_CORE_DOCKER_IMG"
-          echo HORIZON_INTEGRATION_TESTS_DOCKER_IMG="$PROTOCOL_${{ matrix.protocol-version }}_CORE_DOCKER_IMG" >> $GITHUB_ENV
+          # Bash indirect expansion: ${!IMG} dereferences the variable named by $IMG
+          IMG="PROTOCOL_${{ matrix.protocol-version }}_CORE_DOCKER_IMG"
+          docker pull "${!IMG}"
+          echo HORIZON_INTEGRATION_TESTS_DOCKER_IMG="${!IMG}" >> $GITHUB_ENV
 
       - name: Pull and set Stellar RPC image
         shell: bash
         run: |
-          docker pull "$PROTOCOL_${{ matrix.protocol-version }}_STELLAR_RPC_DOCKER_IMG"
-          echo HORIZON_INTEGRATION_TESTS_STELLAR_RPC_DOCKER_IMG="$PROTOCOL_${{ matrix.protocol-version }}_STELLAR_RPC_DOCKER_IMG" >> $GITHUB_ENV
+          # Bash indirect expansion: ${!IMG} dereferences the variable named by $IMG
+          IMG="PROTOCOL_${{ matrix.protocol-version }}_STELLAR_RPC_DOCKER_IMG"
+          if [ -n "${!IMG}" ]; then
+            docker pull "${!IMG}"
+            echo HORIZON_INTEGRATION_TESTS_STELLAR_RPC_DOCKER_IMG="${!IMG}" >> $GITHUB_ENV
+          fi
 
       - name: Install core
         run: |
-          sudo wget -qO - https://apt.stellar.org/SDF.asc | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=true sudo apt-key add -
-          sudo bash -c 'echo "deb https://apt.stellar.org noble unstable" > /etc/apt/sources.list.d/SDF-unstable.list'
-          sudo apt-get update && sudo apt-get install -y stellar-core="$PROTOCOL_${{ matrix.protocol-version }}_CORE_DEBIAN_PKG_VERSION"
-          echo "Using stellar core version $(stellar-core version)"
-          echo 'HORIZON_INTEGRATION_TESTS_CAPTIVE_CORE_BIN=/usr/bin/stellar-core' >> $GITHUB_ENV
+          PKG="PROTOCOL_${{ matrix.protocol-version }}_CORE_DEBIAN_PKG_VERSION"
+          if [ -n "${!PKG}" ]; then
+            sudo wget -qO - https://apt.stellar.org/SDF.asc | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=true sudo apt-key add -
+            sudo bash -c 'echo "deb https://apt.stellar.org noble unstable" > /etc/apt/sources.list.d/SDF-unstable.list'
+            sudo apt-get update && sudo apt-get install -y stellar-core="${!PKG}"
+            echo "Using stellar core version $(stellar-core version)"
+            echo 'HORIZON_INTEGRATION_TESTS_CAPTIVE_CORE_BIN=/usr/bin/stellar-core' >> $GITHUB_ENV
+          fi
 
       - name: Build Horizon reproducible build
         run: |
@@ -91,7 +103,7 @@ jobs:
       - name: Calculate the source hash
         id: calculate_source_hash
         run: |
-          combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-${{ env.PROTOCOL_24_CORE_DOCKER_IMG }}-${{ env.PROTOCOL_24_RPC_DOCKER_IMG }}-${{ env.PROTOCOL_24_CORE_DEBIAN_PKG_VERSION }}-${{ env.PREFIX }}" | sha256sum | cut -d ' ' -f 1)
+          combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-protocol-${{ matrix.protocol-version }}-${{ env.PROTOCOL_25_CORE_DOCKER_IMG }}-${{ env.PROTOCOL_25_STELLAR_RPC_DOCKER_IMG }}-${{ env.PROTOCOL_25_CORE_DEBIAN_PKG_VERSION }}-${{ env.PROTOCOL_26_CORE_DOCKER_IMG }}-${{ env.PREFIX }}" | sha256sum | cut -d ' ' -f 1)
           echo "COMBINED_SOURCE_HASH=$combined_hash" >> "$GITHUB_ENV"
 
       - name: Restore Horizon binary and integration tests source hash to cache
