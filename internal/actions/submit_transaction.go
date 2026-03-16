@@ -28,7 +28,8 @@ type SubmitTransactionHandler struct {
 	NetworkPassphrase string
 	DisableTxSub      bool
 	CoreStateGetter
-	SkipTxMeta bool
+	SkipTxMeta    bool
+	DecodeOptions xdr.DecodeOptions // Decoded output size limit for XDR unmarshaling of user-supplied input
 }
 
 type envelopeInfo struct {
@@ -38,9 +39,9 @@ type envelopeInfo struct {
 	parsed    xdr.TransactionEnvelope
 }
 
-func extractEnvelopeInfo(raw string, passphrase string) (envelopeInfo, error) {
+func extractEnvelopeInfo(raw string, passphrase string, decodeOptions xdr.DecodeOptions) (envelopeInfo, error) {
 	result := envelopeInfo{raw: raw}
-	err := xdr.SafeUnmarshalBase64(raw, &result.parsed)
+	err := xdr.SafeUnmarshalBase64WithOptions(raw, &result.parsed, decodeOptions)
 	if err != nil {
 		return result, err
 	}
@@ -171,7 +172,7 @@ func (handler SubmitTransactionHandler) GetResource(w HeaderWriter, r *http.Requ
 		return nil, err
 	}
 
-	info, err := extractEnvelopeInfo(raw, handler.NetworkPassphrase)
+	info, err := extractEnvelopeInfo(raw, handler.NetworkPassphrase, handler.DecodeOptions)
 	if err != nil {
 		return nil, &problem.P{
 			Type:   "transaction_malformed",

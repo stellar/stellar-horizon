@@ -1,6 +1,6 @@
 module github.com/stellar/stellar-horizon
 
-go 1.24.0
+go 1.25
 
 require (
 	cloud.google.com/go/storage v1.42.0 // indirect
@@ -36,7 +36,7 @@ require (
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.17.0
-	github.com/stellar/go-xdr v0.0.0-20231122183749-b53fb00bcac2 // indirect
+	github.com/stellar/go-xdr v0.0.0-20260312225820-cc2b0611aabf // indirect
 	github.com/stellar/throttled v2.2.3-0.20190823235211-89d75816f59d+incompatible
 	github.com/stretchr/testify v1.10.0
 	github.com/xdrpp/goxdr v0.1.1 // indirect
@@ -48,7 +48,7 @@ require (
 require (
 	github.com/creachadair/jrpc2 v1.2.0
 	github.com/fsouza/fake-gcs-server v1.49.2
-	github.com/stellar/go-stellar-sdk v0.0.0-20251210134752-6c46f8811c13
+	github.com/stellar/go-stellar-sdk v0.3.0
 )
 
 require (
