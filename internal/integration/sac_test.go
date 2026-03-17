@@ -598,12 +598,15 @@ func TestExpirationAndRestoration(t *testing.T) {
 }
 
 func insertAssetContract(itest *integration.Test, syntheticAssetContract history.AssetContract) {
-	assert.NoError(itest.CurrentTest(), itest.HorizonIngest().HistoryQ().Begin(context.Background()))
-	assert.NoError(itest.CurrentTest(), itest.HorizonIngest().HistoryQ().InsertAssetContracts(
+	// Use a cloned session to avoid racing with the Horizon app's Tick loop,
+	// which reads from the shared HistoryQ session concurrently.
+	q := &history.Q{SessionInterface: itest.HorizonIngest().HorizonSession()}
+	assert.NoError(itest.CurrentTest(), q.Begin(context.Background()))
+	assert.NoError(itest.CurrentTest(), q.InsertAssetContracts(
 		context.Background(),
 		[]history.AssetContract{syntheticAssetContract},
 	))
-	assert.NoError(itest.CurrentTest(), itest.HorizonIngest().HistoryQ().Commit())
+	assert.NoError(itest.CurrentTest(), q.Commit())
 }
 
 func TestEvictionAndRestoration(t *testing.T) {
