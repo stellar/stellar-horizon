@@ -272,7 +272,7 @@ func parseSacEventFromTxMetaV4(event *xdr.ContractEvent, networkPassphrase strin
 		if mapData == nil {
 			return nil, errors.New("data map is empty")
 		}
-		amount, memo, err = parseV4MapData(*mapData)
+		amount, memo, err = parseSacEventMap(*mapData)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse V4 map data: %w", err)
 		}
@@ -316,8 +316,12 @@ func parseSacEventFromTxMetaV4(event *xdr.ContractEvent, networkPassphrase strin
 	return sacEvent, nil
 }
 
-// parseV4MapData parses the ScMap data format used in V4 events
-func parseV4MapData(mapData xdr.ScMap) (xdr.Int128Parts, xdr.Memo, error) {
+// parseSacEventMap parses the ScMap data format used in V4 SAC events.
+// For SAC events, to_muxed_id represents the muxed account ID from
+// MuxedAddressObject - which is always a uint64. ScvBytes and ScvString are NOT
+// valid for SAC events (those are only used for classic transaction memo mappings
+// per CAP-67, which are processed through a different code path).
+func parseSacEventMap(mapData xdr.ScMap) (xdr.Int128Parts, xdr.Memo, error) {
 	var foundAmount, foundMuxedId bool
 	var amount xdr.Int128Parts
 	var memo xdr.Memo
@@ -342,21 +346,16 @@ func parseV4MapData(mapData xdr.ScMap) (xdr.Int128Parts, xdr.Memo, error) {
 
 		case "to_muxed_id":
 			foundMuxedId = true
+			// SAC events only emit uint64 for to_muxed_id (muxed account ID).
+			// ScvBytes/ScvString are NOT valid here - those are only for classic
+			// transaction memo mappings which use a different code path.
 			switch entry.Val.Type {
 			case xdr.ScValTypeScvU64:
 				if val, ok := entry.Val.GetU64(); ok {
 					memo = xdr.MemoID(uint64(val))
 				}
-			case xdr.ScValTypeScvBytes:
-				if val, ok := entry.Val.GetBytes(); ok {
-					memo = xdr.MemoHash(xdr.Hash(val[:]))
-				}
-			case xdr.ScValTypeScvString:
-				if val, ok := entry.Val.GetStr(); ok {
-					memo = xdr.MemoText(string(val))
-				}
 			default:
-				return amount, memo, fmt.Errorf("invalid to_muxed_id type for data: %s", entry.Val.Type)
+				return amount, memo, fmt.Errorf("invalid to_muxed_id type in SAC event: expected ScvU64, got %s", entry.Val.Type)
 			}
 		}
 	}

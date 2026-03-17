@@ -243,7 +243,7 @@ func TestStellarAssetContractEventParsing(t *testing.T) {
 			},
 		},
 		{
-			name:          "Valid V4 transfer with text memo",
+			name:          "V4 SAC event rejects ScvString for to_muxed_id",
 			txMetaVersion: 4,
 			eventType:     EventTypeTransfer,
 			topics: []xdr.ScVal{
@@ -252,20 +252,13 @@ func TestStellarAssetContractEventParsing(t *testing.T) {
 				makeAddress(zeroContract),
 				makeAsset(randomAsset),
 			},
-			data:       makeV4MapData(big.NewInt(1000), xdr.MemoText("hello")),
-			asset:      randomAsset,
-			contractID: mustGetContractID(randomAsset),
-			expectedResult: &StellarAssetContractEvent{
-				Type:            EventTypeTransfer,
-				Asset:           randomAsset,
-				From:            randomAccount,
-				To:              zeroContract,
-				Amount:          xdr.Int128Parts{Lo: 1000, Hi: 0},
-				DestinationMemo: xdr.MemoText("hello"),
-			},
+			data:          makeV4MapData(big.NewInt(1000), xdr.MemoText("hello")),
+			asset:         randomAsset,
+			contractID:    mustGetContractID(randomAsset),
+			expectedError: "invalid to_muxed_id type in SAC event: expected ScvU64, got ScValTypeScvString",
 		},
 		{
-			name:          "Valid V4 transfer with hash memo",
+			name:          "V4 SAC event rejects ScvBytes for to_muxed_id",
 			txMetaVersion: 4,
 			eventType:     EventTypeTransfer,
 			topics: []xdr.ScVal{
@@ -274,17 +267,10 @@ func TestStellarAssetContractEventParsing(t *testing.T) {
 				makeAddress(zeroContract),
 				makeAsset(randomAsset),
 			},
-			data:       makeV4MapData(big.NewInt(1000), xdr.MemoHash([32]byte{1, 2, 3, 4})),
-			asset:      randomAsset,
-			contractID: mustGetContractID(randomAsset),
-			expectedResult: &StellarAssetContractEvent{
-				Type:            EventTypeTransfer,
-				Asset:           randomAsset,
-				From:            randomAccount,
-				To:              zeroContract,
-				Amount:          xdr.Int128Parts{Lo: 1000, Hi: 0},
-				DestinationMemo: xdr.MemoHash([32]byte{1, 2, 3, 4}),
-			},
+			data:          makeV4MapData(big.NewInt(1000), xdr.MemoHash([32]byte{1, 2, 3, 4})),
+			asset:         randomAsset,
+			contractID:    mustGetContractID(randomAsset),
+			expectedError: "invalid to_muxed_id type in SAC event: expected ScvU64, got ScValTypeScvBytes",
 		},
 
 		// ===== INVALID EVENTS =====

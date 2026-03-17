@@ -9,6 +9,7 @@ import (
 	"github.com/stellar/go-stellar-sdk/ingest/sac"
 	"github.com/stellar/go-stellar-sdk/support/errors"
 	"github.com/stellar/go-stellar-sdk/xdr"
+
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 )
 
@@ -131,12 +132,14 @@ func (p *AssetStatsProcessor) addExpirationChange(change ingest.Change) error {
 		if pre.LiveUntilLedgerSeq == post.LiveUntilLedgerSeq {
 			return nil
 		}
-		// but we expect that the expiration ledger will never decrease
-		if pre.LiveUntilLedgerSeq > post.LiveUntilLedgerSeq {
+
+		// if a TTL was created, restored, or updated at ledger N
+		// the LiveUntilLedgerSeq must be >= current ledger
+		if uint32(post.LiveUntilLedgerSeq) < p.currentLedger {
 			return errors.Errorf(
-				"unexpected change in expiration ledger Pre: %v Post: %v",
-				pre.LiveUntilLedgerSeq,
+				"post TTL %v is less than current ledger %v",
 				post.LiveUntilLedgerSeq,
+				p.currentLedger,
 			)
 		}
 
