@@ -477,17 +477,14 @@ func (e *effectsWrapper) addAccountCreatedEffects() error {
 	); err != nil {
 		return err
 	}
-	if err := e.addUnmuxed(
+	return e.addUnmuxed(
 		&op.Destination,
 		history.EffectSignerCreated,
 		map[string]interface{}{
 			"public_key": op.Destination.Address(),
 			"weight":     keypair.DefaultSignerWeight,
 		},
-	); err != nil {
-		return err
-	}
-	return nil
+	)
 }
 
 // addInvokeHostFunctionAccountCreatedEffects scans ledger entry changes from an
@@ -502,31 +499,35 @@ func (e *effectsWrapper) addInvokeHostFunctionAccountCreatedEffects(changes []in
 		if change.Pre != nil || change.Post == nil {
 			continue
 		}
-
 		account := change.Post.Data.MustAccount()
-
-		if err := e.addUnmuxed(
-			&account.AccountId,
-			history.EffectAccountCreated,
-			map[string]interface{}{
-				"starting_balance": amount.String(account.Balance),
-			},
-		); err != nil {
-			return err
-		}
-
-		if err := e.addUnmuxed(
-			&account.AccountId,
-			history.EffectSignerCreated,
-			map[string]interface{}{
-				"public_key": account.AccountId.Address(),
-				"weight":     keypair.DefaultSignerWeight,
-			},
-		); err != nil {
+		if err := e.emitAccountCreatedEffects(&account.AccountId, account.Balance); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// emitAccountCreatedEffects emits EffectAccountCreated and EffectSignerCreated
+// for a newly created account. Used by both CreateAccount operations and
+// CAP-0073 auto-account-creation via SAC XLM transfers.
+func (e *effectsWrapper) emitAccountCreatedEffects(accountID *xdr.AccountId, balance xdr.Int64) error {
+	if err := e.addUnmuxed(
+		accountID,
+		history.EffectAccountCreated,
+		map[string]interface{}{
+			"starting_balance": amount.String(balance),
+		},
+	); err != nil {
+		return err
+	}
+	return e.addUnmuxed(
+		accountID,
+		history.EffectSignerCreated,
+		map[string]interface{}{
+			"public_key": accountID.Address(),
+			"weight":     keypair.DefaultSignerWeight,
+		},
+	)
 }
 
 func (e *effectsWrapper) addPaymentEffects() error {
@@ -847,25 +848,29 @@ func (e *effectsWrapper) addInvokeHostFunctionTrustlineEffects(changes []ingest.
 		if change.Pre != nil || change.Post == nil {
 			continue
 		}
-
 		trustLine := change.Post.Data.MustTrustLine()
-
-		details := map[string]interface{}{
-			"limit": amount.String(trustLine.Limit),
-		}
-		if err := addAssetDetails(details, trustLine.Asset.ToAsset(), ""); err != nil {
-			return err
-		}
-
-		if err := e.addUnmuxed(
-			&trustLine.AccountId,
-			history.EffectTrustlineCreated,
-			details,
-		); err != nil {
+		if err := e.emitTrustlineCreatedEffect(&trustLine); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// emitTrustlineCreatedEffect emits EffectTrustlineCreated for a newly created
+// trustline entry. Used by both ChangeTrust operations and CAP-0073 trust()
+// SAC function.
+func (e *effectsWrapper) emitTrustlineCreatedEffect(trustLine *xdr.TrustLineEntry) error {
+	details := map[string]interface{}{
+		"limit": amount.String(trustLine.Limit),
+	}
+	if err := addAssetDetails(details, trustLine.Asset.ToAsset(), ""); err != nil {
+		return err
+	}
+	return e.addUnmuxed(
+		&trustLine.AccountId,
+		history.EffectTrustlineCreated,
+		details,
+	)
 }
 
 func (e *effectsWrapper) addAllowTrustEffects() error {
