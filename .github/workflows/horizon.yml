@@ -69,31 +69,22 @@ jobs:
       - name: Pull and set Stellar Core image
         shell: bash
         run: |
-          # Bash indirect expansion: ${!IMG} dereferences the variable named by $IMG
-          IMG="PROTOCOL_${{ matrix.protocol-version }}_CORE_DOCKER_IMG"
-          docker pull "${!IMG}"
-          echo HORIZON_INTEGRATION_TESTS_DOCKER_IMG="${!IMG}" >> $GITHUB_ENV
+          docker pull "$PROTOCOL_${{ matrix.protocol-version }}_CORE_DOCKER_IMG"
+          echo HORIZON_INTEGRATION_TESTS_DOCKER_IMG="$PROTOCOL_${{ matrix.protocol-version }}_CORE_DOCKER_IMG" >> $GITHUB_ENV
 
       - name: Pull and set Stellar RPC image
         shell: bash
         run: |
-          # Bash indirect expansion: ${!IMG} dereferences the variable named by $IMG
-          IMG="PROTOCOL_${{ matrix.protocol-version }}_STELLAR_RPC_DOCKER_IMG"
-          if [ -n "${!IMG}" ]; then
-            docker pull "${!IMG}"
-            echo HORIZON_INTEGRATION_TESTS_STELLAR_RPC_DOCKER_IMG="${!IMG}" >> $GITHUB_ENV
-          fi
+          docker pull "$PROTOCOL_${{ matrix.protocol-version }}_STELLAR_RPC_DOCKER_IMG"
+          echo HORIZON_INTEGRATION_TESTS_STELLAR_RPC_DOCKER_IMG="$PROTOCOL_${{ matrix.protocol-version }}_STELLAR_RPC_DOCKER_IMG" >> $GITHUB_ENV
 
       - name: Install core
         run: |
-          PKG="PROTOCOL_${{ matrix.protocol-version }}_CORE_DEBIAN_PKG_VERSION"
-          if [ -n "${!PKG}" ]; then
-            sudo wget -qO - https://apt.stellar.org/SDF.asc | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=true sudo apt-key add -
-            sudo bash -c 'echo "deb https://apt.stellar.org noble unstable" > /etc/apt/sources.list.d/SDF-unstable.list'
-            sudo apt-get update && sudo apt-get install -y stellar-core="${!PKG}"
-            echo "Using stellar core version $(stellar-core version)"
-            echo 'HORIZON_INTEGRATION_TESTS_CAPTIVE_CORE_BIN=/usr/bin/stellar-core' >> $GITHUB_ENV
-          fi
+          sudo wget -qO - https://apt.stellar.org/SDF.asc | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=true sudo apt-key add -
+          sudo bash -c 'echo "deb https://apt.stellar.org noble unstable" > /etc/apt/sources.list.d/SDF-unstable.list'
+          sudo apt-get update && sudo apt-get install -y stellar-core="$PROTOCOL_${{ matrix.protocol-version }}_CORE_DEBIAN_PKG_VERSION"
+          echo "Using stellar core version $(stellar-core version)"
+          echo 'HORIZON_INTEGRATION_TESTS_CAPTIVE_CORE_BIN=/usr/bin/stellar-core' >> $GITHUB_ENV
 
       - name: Build Horizon reproducible build
         run: |
