@@ -3763,42 +3763,44 @@ func makeInvocationTransaction(
 	amount *big.Int,
 	types ...contractevents.EventType,
 ) ingest.LedgerTransaction {
-	meta := xdr.TransactionMetaV3{
-		// irrelevant for contract invocations: only events are inspected
-		Operations: []xdr.OperationMeta{},
-		SorobanMeta: &xdr.SorobanTransactionMeta{
-			Events: make([]xdr.ContractEvent, len(types)),
-		},
-	}
-
+	events := make([]xdr.ContractEvent, len(types))
 	for idx, type_ := range types {
-		event := contractevents.GenerateEvent(
-			type_,
-			from, to, admin,
-			asset,
-			amount,
-			networkPassphrase,
-			nil,
+		events[idx] = contractevents.GenerateEvent(
+			type_, from, to, admin, asset, amount, networkPassphrase, nil,
 		)
-		meta.SorobanMeta.Events[idx] = event
+	}
+	tx, _ := makeInvocationTransactionWithChanges(admin, nil, events)
+	return tx
+}
+
+// makeInvocationTransactionWithChanges builds an InvokeHostFunction
+// LedgerTransaction with the given ledger entry changes and SAC events.
+// It extracts the repeated envelope/result/meta boilerplate from tests.
+func makeInvocationTransactionWithChanges(
+	sourceAccount string,
+	changes xdr.LedgerEntryChanges,
+	events []xdr.ContractEvent,
+) (ingest.LedgerTransaction, transactionOperationWrapper) {
+	meta := xdr.TransactionMetaV3{
+		Operations: []xdr.OperationMeta{
+			{Changes: changes},
+		},
+		SorobanMeta: &xdr.SorobanTransactionMeta{
+			Events: events,
+		},
 	}
 
 	envelope := xdr.TransactionV1Envelope{
 		Tx: xdr.Transaction{
-			// the rest doesn't matter for effect ingestion
 			Ext: xdr.TransactionExt{
-				V: 1,
-				// sorobanData is needed to pass the check for IsSorobanTx
+				V:           1,
 				SorobanData: &xdr.SorobanTransactionData{},
 			},
 			Operations: []xdr.Operation{
 				{
-					SourceAccount: xdr.MustMuxedAddressPtr(admin),
+					SourceAccount: xdr.MustMuxedAddressPtr(sourceAccount),
 					Body: xdr.OperationBody{
-						Type: xdr.OperationTypeInvokeHostFunction,
-						// contents of the op are irrelevant as they aren't
-						// parsed by anyone yet, e.g. effects are generated
-						// purely from events
+						Type:                 xdr.OperationTypeInvokeHostFunction,
 						InvokeHostFunctionOp: &xdr.InvokeHostFunctionOp{},
 					},
 				},
@@ -3806,13 +3808,12 @@ func makeInvocationTransaction(
 		},
 	}
 
-	return ingest.LedgerTransaction{
+	tx := ingest.LedgerTransaction{
 		Index: 0,
 		Envelope: xdr.TransactionEnvelope{
 			Type: xdr.EnvelopeTypeEnvelopeTypeTx,
 			V1:   &envelope,
 		},
-		// the result just needs enough to look successful
 		Result: xdr.TransactionResultPair{
 			TransactionHash: xdr.Hash([32]byte{}),
 			Result: xdr.TransactionResult{
@@ -3824,4 +3825,331 @@ func makeInvocationTransaction(
 		},
 		UnsafeMeta: xdr.TransactionMeta{V: 3, V3: &meta},
 	}
+
+	operation := transactionOperationWrapper{
+		index:          0,
+		transaction:    tx,
+		operation:      tx.Envelope.Operations()[0],
+		ledgerSequence: 1,
+		network:        networkPassphrase,
+	}
+
+	return tx, operation
+}
+
+// TestCAP0073TrustlineEffects verifies that InvokeHostFunction operations that
+// create trustlines via ledger entry changes (CAP-0073 trust() function) emit
+// EffectTrustlineCreated even when no SAC events are present.
+func TestCAP0073TrustlineEffects(t *testing.T) {
+	admin := keypair.MustRandom().Address()
+	trustorAddr := keypair.MustRandom().Address()
+	trustorAccountID := xdr.MustAddress(trustorAddr)
+	asset := xdr.MustNewCreditAsset("USD", admin)
+
+	_, operation := makeInvocationTransactionWithChanges(
+		admin,
+		xdr.LedgerEntryChanges{
+			{
+				Type: xdr.LedgerEntryChangeTypeLedgerEntryCreated,
+				Created: &xdr.LedgerEntry{
+					Data: xdr.LedgerEntryData{
+						Type: xdr.LedgerEntryTypeTrustline,
+						TrustLine: &xdr.TrustLineEntry{
+							AccountId: trustorAccountID,
+							Asset:     asset.ToTrustLineAsset(),
+							Balance:   0,
+							Limit:     xdr.Int64(9223372036854775807),
+							Flags:     xdr.Uint32(xdr.TrustLineFlagsAuthorizedFlag),
+						},
+					},
+				},
+			},
+		},
+		nil,
+	)
+
+	assertIngestEffects(t, operation, []effect{
+		{
+			address:     trustorAddr,
+			operationID: toid.New(1, 0, 1).ToInt64(),
+			details: map[string]interface{}{
+				"limit":        "922337203685.4775807",
+				"asset_type":   "credit_alphanum4",
+				"asset_code":   "USD",
+				"asset_issuer": admin,
+			},
+			effectType: history.EffectTrustlineCreated,
+			order:      1,
+		},
+	})
+}
+
+// TestCAP0073AccountCreatedEffects verifies that an InvokeHostFunction
+// operation that auto-creates an account (CAP-0073 XLM SAC transfer to
+// non-existent G-address) emits EffectAccountCreated and EffectSignerCreated
+// in addition to the transfer effects derived from the SAC event.
+func TestCAP0073AccountCreatedEffects(t *testing.T) {
+	admin := keypair.MustRandom().Address()
+	from := keypair.MustRandom().Address()
+	newAccountAddr := keypair.MustRandom().Address()
+	newAccountID := xdr.MustAddress(newAccountAddr)
+	nativeAsset := xdr.MustNewNativeAsset()
+
+	event := contractevents.GenerateEvent(
+		contractevents.EventTypeTransfer,
+		from, newAccountAddr, admin,
+		nativeAsset,
+		big.NewInt(100_0000000),
+		networkPassphrase,
+		nil,
+	)
+
+	_, operation := makeInvocationTransactionWithChanges(
+		admin,
+		xdr.LedgerEntryChanges{
+			{
+				Type: xdr.LedgerEntryChangeTypeLedgerEntryCreated,
+				Created: &xdr.LedgerEntry{
+					Data: xdr.LedgerEntryData{
+						Type: xdr.LedgerEntryTypeAccount,
+						Account: &xdr.AccountEntry{
+							AccountId: newAccountID,
+							Balance:   xdr.Int64(100_0000000),
+						},
+					},
+				},
+			},
+		},
+		[]xdr.ContractEvent{event},
+	)
+
+	assertIngestEffects(t, operation, []effect{
+		{
+			address:     from,
+			operationID: toid.New(1, 0, 1).ToInt64(),
+			details: map[string]interface{}{
+				"amount":     "100.0000000",
+				"asset_type": "native",
+			},
+			effectType: history.EffectAccountDebited,
+			order:      1,
+		},
+		{
+			address:     newAccountAddr,
+			operationID: toid.New(1, 0, 1).ToInt64(),
+			details: map[string]interface{}{
+				"amount":     "100.0000000",
+				"asset_type": "native",
+			},
+			effectType: history.EffectAccountCredited,
+			order:      2,
+		},
+		{
+			address:     newAccountAddr,
+			operationID: toid.New(1, 0, 1).ToInt64(),
+			details: map[string]interface{}{
+				"starting_balance": "100.0000000",
+			},
+			effectType: history.EffectAccountCreated,
+			order:      3,
+		},
+		{
+			address:     newAccountAddr,
+			operationID: toid.New(1, 0, 1).ToInt64(),
+			details: map[string]interface{}{
+				"public_key": newAccountAddr,
+				"weight":     keypair.DefaultSignerWeight,
+			},
+			effectType: history.EffectSignerCreated,
+			order:      4,
+		},
+	})
+}
+
+// TestCAP0073TrustAndTransferCombined verifies that a single
+// InvokeHostFunction operation that creates both a trustline and an account
+// (e.g. a complex contract call) emits all effects correctly together.
+func TestCAP0073TrustAndTransferCombined(t *testing.T) {
+	admin := keypair.MustRandom().Address()
+	from := keypair.MustRandom().Address()
+	issuer := keypair.MustRandom().Address()
+	newAccountAddr := keypair.MustRandom().Address()
+	newAccountID := xdr.MustAddress(newAccountAddr)
+	trustorAddr := keypair.MustRandom().Address()
+	trustorAccountID := xdr.MustAddress(trustorAddr)
+	creditAsset := xdr.MustNewCreditAsset("EUR", issuer)
+	nativeAsset := xdr.MustNewNativeAsset()
+
+	event := contractevents.GenerateEvent(
+		contractevents.EventTypeTransfer,
+		from, newAccountAddr, admin,
+		nativeAsset,
+		big.NewInt(50_0000000),
+		networkPassphrase,
+		nil,
+	)
+
+	_, operation := makeInvocationTransactionWithChanges(
+		admin,
+		xdr.LedgerEntryChanges{
+			{
+				Type: xdr.LedgerEntryChangeTypeLedgerEntryCreated,
+				Created: &xdr.LedgerEntry{
+					Data: xdr.LedgerEntryData{
+						Type: xdr.LedgerEntryTypeTrustline,
+						TrustLine: &xdr.TrustLineEntry{
+							AccountId: trustorAccountID,
+							Asset:     creditAsset.ToTrustLineAsset(),
+							Balance:   0,
+							Limit:     xdr.Int64(9223372036854775807),
+							Flags:     xdr.Uint32(xdr.TrustLineFlagsAuthorizedFlag),
+						},
+					},
+				},
+			},
+			{
+				Type: xdr.LedgerEntryChangeTypeLedgerEntryCreated,
+				Created: &xdr.LedgerEntry{
+					Data: xdr.LedgerEntryData{
+						Type: xdr.LedgerEntryTypeAccount,
+						Account: &xdr.AccountEntry{
+							AccountId: newAccountID,
+							Balance:   xdr.Int64(50_0000000),
+						},
+					},
+				},
+			},
+		},
+		[]xdr.ContractEvent{event},
+	)
+
+	assertIngestEffects(t, operation, []effect{
+		{
+			address:     from,
+			operationID: toid.New(1, 0, 1).ToInt64(),
+			details: map[string]interface{}{
+				"amount":     "50.0000000",
+				"asset_type": "native",
+			},
+			effectType: history.EffectAccountDebited,
+			order:      1,
+		},
+		{
+			address:     newAccountAddr,
+			operationID: toid.New(1, 0, 1).ToInt64(),
+			details: map[string]interface{}{
+				"amount":     "50.0000000",
+				"asset_type": "native",
+			},
+			effectType: history.EffectAccountCredited,
+			order:      2,
+		},
+		{
+			address:     trustorAddr,
+			operationID: toid.New(1, 0, 1).ToInt64(),
+			details: map[string]interface{}{
+				"limit":        "922337203685.4775807",
+				"asset_type":   "credit_alphanum4",
+				"asset_code":   "EUR",
+				"asset_issuer": issuer,
+			},
+			effectType: history.EffectTrustlineCreated,
+			order:      3,
+		},
+		{
+			address:     newAccountAddr,
+			operationID: toid.New(1, 0, 1).ToInt64(),
+			details: map[string]interface{}{
+				"starting_balance": "50.0000000",
+			},
+			effectType: history.EffectAccountCreated,
+			order:      4,
+		},
+		{
+			address:     newAccountAddr,
+			operationID: toid.New(1, 0, 1).ToInt64(),
+			details: map[string]interface{}{
+				"public_key": newAccountAddr,
+				"weight":     keypair.DefaultSignerWeight,
+			},
+			effectType: history.EffectSignerCreated,
+			order:      5,
+		},
+	})
+}
+
+// TestCAP0073NoEffectsForExistingEntries verifies that the CAP-0073 effect
+// generation only fires for newly created entries, not for updates to
+// existing accounts or trustlines within an InvokeHostFunction operation.
+func TestCAP0073NoEffectsForExistingEntries(t *testing.T) {
+	admin := keypair.MustRandom().Address()
+	existingAccount := xdr.MustAddress(keypair.MustRandom().Address())
+	existingTrustlineAccount := xdr.MustAddress(keypair.MustRandom().Address())
+	asset := xdr.MustNewCreditAsset("USD", admin)
+
+	_, operation := makeInvocationTransactionWithChanges(
+		admin,
+		xdr.LedgerEntryChanges{
+			// Updated account — should NOT produce EffectAccountCreated
+			{
+				Type: xdr.LedgerEntryChangeTypeLedgerEntryState,
+				State: &xdr.LedgerEntry{
+					Data: xdr.LedgerEntryData{
+						Type: xdr.LedgerEntryTypeAccount,
+						Account: &xdr.AccountEntry{
+							AccountId: existingAccount,
+							Balance:   xdr.Int64(100_0000000),
+						},
+					},
+				},
+			},
+			{
+				Type: xdr.LedgerEntryChangeTypeLedgerEntryUpdated,
+				Updated: &xdr.LedgerEntry{
+					Data: xdr.LedgerEntryData{
+						Type: xdr.LedgerEntryTypeAccount,
+						Account: &xdr.AccountEntry{
+							AccountId: existingAccount,
+							Balance:   xdr.Int64(90_0000000),
+						},
+					},
+				},
+			},
+			// Updated trustline — should NOT produce EffectTrustlineCreated
+			{
+				Type: xdr.LedgerEntryChangeTypeLedgerEntryState,
+				State: &xdr.LedgerEntry{
+					Data: xdr.LedgerEntryData{
+						Type: xdr.LedgerEntryTypeTrustline,
+						TrustLine: &xdr.TrustLineEntry{
+							AccountId: existingTrustlineAccount,
+							Asset:     asset.ToTrustLineAsset(),
+							Balance:   100,
+							Limit:     xdr.Int64(1000_0000000),
+							Flags:     xdr.Uint32(xdr.TrustLineFlagsAuthorizedFlag),
+						},
+					},
+				},
+			},
+			{
+				Type: xdr.LedgerEntryChangeTypeLedgerEntryUpdated,
+				Updated: &xdr.LedgerEntry{
+					Data: xdr.LedgerEntryData{
+						Type: xdr.LedgerEntryTypeTrustline,
+						TrustLine: &xdr.TrustLineEntry{
+							AccountId: existingTrustlineAccount,
+							Asset:     asset.ToTrustLineAsset(),
+							Balance:   200,
+							Limit:     xdr.Int64(1000_0000000),
+							Flags:     xdr.Uint32(xdr.TrustLineFlagsAuthorizedFlag),
+						},
+					},
+				},
+			},
+		},
+		nil,
+	)
+
+	// No effects expected — only updates to existing entries, no creations
+	assertIngestEffects(t, operation, []effect{})
 }
