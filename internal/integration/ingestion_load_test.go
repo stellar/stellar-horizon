@@ -350,6 +350,8 @@ func TestIngestLoadTestCmd(t *testing.T) {
 	var restoreLedger uint32
 	var runID string
 	var err error
+	// Replacing this package-level var is not goroutine-safe; this is fine
+	// because these tests run serially, but it must not be used with t.Parallel().
 	originalRestore := horizoningest.RestoreSnapshot
 	t.Cleanup(func() { horizoningest.RestoreSnapshot = originalRestore })
 	horizoningest.RestoreSnapshot = func(ctx context.Context, historyQ history.IngestionQ) error {
@@ -475,6 +477,8 @@ func TestIngestLoadTestCmdWithFixtures(t *testing.T) {
 
 	var restoreLedger uint32
 	var err error
+	// Replacing this package-level var is not goroutine-safe; this is fine
+	// because these tests run serially, but it must not be used with t.Parallel().
 	originalRestore := horizoningest.RestoreSnapshot
 	t.Cleanup(func() { horizoningest.RestoreSnapshot = originalRestore })
 	horizoningest.RestoreSnapshot = func(ctx context.Context, historyQ history.IngestionQ) error {
@@ -547,6 +551,8 @@ func TestIngestLoadTestRestoreCmd(t *testing.T) {
 	var restoreLedger uint32
 	var runID string
 	var err error
+	// Replacing this package-level var is not goroutine-safe; this is fine
+	// because these tests run serially, but it must not be used with t.Parallel().
 	originalRestore := horizoningest.RestoreSnapshot
 	t.Cleanup(func() { horizoningest.RestoreSnapshot = originalRestore })
 	horizoningest.RestoreSnapshot = func(ctx context.Context, historyQ history.IngestionQ) error {

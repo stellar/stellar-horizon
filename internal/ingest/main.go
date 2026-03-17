@@ -652,7 +652,7 @@ func (s *system) BuildState(sequence uint32, skipChecks bool) error {
 // LoadTest initializes and runs an ingestion load test.
 // It takes paths for ledgers and optional fixtures files, as well as a specified ledger close duration.
 // If fixturesFilePath is provided, fixtures will be ingested before running the FSM.
-func (s *system) LoadTest(ledgersFilePath, fixturesFilePath string, merge bool, closeDuration time.Duration) error {
+func (s *system) LoadTest(ledgersFilePath, fixturesFilePath string, merge bool, closeDuration time.Duration) (returnErr error) {
 	if !s.config.DisableStateVerification {
 		return fmt.Errorf("state verification cannot be enabled during ingestion load tests")
 	}
@@ -662,57 +662,42 @@ func (s *system) LoadTest(ledgersFilePath, fixturesFilePath string, merge bool, 
 		return errors.Wrap(err, "failed to save loadtest snapshot")
 	}
 
+	// Restore snapshot on any exit path after save succeeds
+	defer func() {
+		restoreErr := RestoreSnapshot(s.ctx, s.historyQ)
+		returnErr = stderrors.Join(returnErr, errors.Wrap(restoreErr, "failed to restore snapshot"))
+	}()
+
 	// 2. Validate DB state (now guaranteed stable - other nodes blocked)
 	state, lastLedger, err := checkDBState(s.ctx, s.historyQ, CurrentVersion)
 	if err != nil {
-		restoreErr := RestoreSnapshot(s.ctx, s.historyQ)
-		return stderrors.Join(err, errors.Wrap(restoreErr, "failed to restore snapshot"))
+		return err
 	}
 	if state != dbStateValid {
-		restoreErr := RestoreSnapshot(s.ctx, s.historyQ)
-		return stderrors.Join(
-			fmt.Errorf("DB must be in valid state for load test (current: %v)", state),
-			errors.Wrap(restoreErr, "failed to restore snapshot"),
-		)
+		return fmt.Errorf("DB must be in valid state for load test (current: %v)", state)
 	}
 
 	// 3. Ingest fixtures if provided (within transaction)
 	if fixturesFilePath != "" {
 		firstSyntheticLedgerSeq, err := readFirstLedgerSequence(ledgersFilePath)
 		if err != nil {
-			restoreErr := RestoreSnapshot(s.ctx, s.historyQ)
-			return stderrors.Join(
-				errors.Wrap(err, "error reading first ledger sequence"),
-				errors.Wrap(restoreErr, "failed to restore snapshot"),
-			)
+			return errors.Wrap(err, "error reading first ledger sequence")
 		}
 
 		ledgerDiff := int64(lastLedger+1) - int64(firstSyntheticLedgerSeq)
 
 		if err = s.historyQ.Begin(s.ctx); err != nil {
-			restoreErr := RestoreSnapshot(s.ctx, s.historyQ)
-			return stderrors.Join(
-				errors.Wrap(err, "error starting transaction"),
-				errors.Wrap(restoreErr, "failed to restore snapshot"),
-			)
+			return errors.Wrap(err, "error starting transaction")
 		}
 
 		stats, err := s.runner.RunFixturesIngestion(s.ctx, fixturesFilePath, ledgerDiff)
 		if err != nil {
 			s.historyQ.Rollback()
-			restoreErr := RestoreSnapshot(s.ctx, s.historyQ)
-			return stderrors.Join(
-				errors.Wrap(err, "error ingesting fixtures"),
-				errors.Wrap(restoreErr, "failed to restore snapshot"),
-			)
+			return errors.Wrap(err, "error ingesting fixtures")
 		}
 
 		if err = s.historyQ.Commit(); err != nil {
-			restoreErr := RestoreSnapshot(s.ctx, s.historyQ)
-			return stderrors.Join(
-				errors.Wrap(err, "error committing fixtures"),
-				errors.Wrap(restoreErr, "failed to restore snapshot"),
-			)
+			return errors.Wrap(err, "error committing fixtures")
 		}
 
 		log.WithFields(stats.Map()).Info("Fixtures ingestion complete")
@@ -729,17 +714,16 @@ func (s *system) LoadTest(ledgersFilePath, fixturesFilePath string, merge bool, 
 	}
 	s.ledgerBackend = loadtest.NewLedgerBackend(config)
 
-	runErr := s.runStateMachine(startState{}, runOptions{
+	returnErr = s.runStateMachine(startState{}, runOptions{
 		isTerminalError: func(err error) bool {
 			return stderrors.Is(err, loadtest.ErrLoadTestDone)
 		},
 	})
-	if stderrors.Is(runErr, loadtest.ErrLoadTestDone) {
-		runErr = nil
+	if stderrors.Is(returnErr, loadtest.ErrLoadTestDone) {
+		returnErr = nil
 	}
 
-	restoreErr := RestoreSnapshot(s.ctx, s.historyQ)
-	return stderrors.Join(runErr, errors.Wrap(restoreErr, "failed to restore snapshot"))
+	return returnErr
 }
 
 // readFirstLedgerSequence reads the first ledger from a zstd-compressed XDR file

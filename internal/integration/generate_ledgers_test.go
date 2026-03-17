@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/BurntSushi/toml"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/stellar/go-stellar-sdk/historyarchive"
 	"github.com/stellar/go-stellar-sdk/ingest"
+	"github.com/stellar/go-stellar-sdk/ingest/ledgerbackend"
 	"github.com/stellar/go-stellar-sdk/keypair"
 	"github.com/stellar/go-stellar-sdk/xdr"
 
@@ -48,19 +48,13 @@ func TestGenerateLedgers(t *testing.T) {
 	}
 
 	coreBinaryPath := os.Getenv("HORIZON_INTEGRATION_TESTS_CAPTIVE_CORE_BIN")
-	var coreVersion string
 	if coreBinaryPath == "" {
 		var err error
 		coreBinaryPath, err = exec.LookPath("stellar-core")
 		require.NoError(t, err)
-		versionCmd := exec.Command(coreBinaryPath, "version")
-		output, err := versionCmd.CombinedOutput()
-		if err != nil {
-			t.Logf("could not determine stellar-core version:\n%s", string(output))
-		}
-		require.NoError(t, err)
-		coreVersion = strings.TrimSpace(string(output))
 	}
+	coreVersion, err := ledgerbackend.CoreBuildVersion(coreBinaryPath)
+	require.NoError(t, err)
 
 	// Use custom config if provided, otherwise use default
 	configPath := os.Getenv("LOADTEST_CORE_CONFIG_PATH")
@@ -132,8 +126,8 @@ func runApplyLoad(t *testing.T, coreBinaryPath, configPath string, cfg applyLoad
 	}
 	require.NoError(t, err)
 
-	// Parse pre-benchmark checkpoint from stellar-core output
-	// The config sets LOG_FILE_PATH="" so logs go to stdout
+	// Parse pre-benchmark checkpoint from stellar-core output.
+	// The config sets LOG_FILE_PATH="" so logs go to stdout.
 	checkpoint := parsePreBenchmarkCheckpoint(t, string(output))
 	t.Logf("Pre-benchmark checkpoint: ledger %d", checkpoint)
 
@@ -141,6 +135,8 @@ func runApplyLoad(t *testing.T, coreBinaryPath, configPath string, cfg applyLoad
 }
 
 func parsePreBenchmarkCheckpoint(t *testing.T, output string) uint32 {
+	// This parses a purpose-built log message from stellar-core's apply-load command.
+	// It is the intended interface for communicating the pre-benchmark checkpoint boundary.
 	re := regexp.MustCompile(`Published final checkpoint before benchmark: ledger (\d+)`)
 	matches := re.FindStringSubmatch(output)
 	require.NotNil(t, matches, "could not find 'Published final checkpoint before benchmark' in stellar-core output")
