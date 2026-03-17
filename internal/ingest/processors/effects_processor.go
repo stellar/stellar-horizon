@@ -491,6 +491,10 @@ func (e *effectsWrapper) addAccountCreatedEffects() error {
 // InvokeHostFunction operation for newly created accounts. This handles the
 // CAP-0073 behavior where an XLM SAC transfer to a non-existent G-address
 // auto-creates the account.
+//
+// Unlike addAccountCreatedEffects (classic CreateAccount), this does NOT emit
+// EffectAccountDebited for the sender — that is already covered by the SAC
+// transfer event processed in addInvokeHostFunctionEffects.
 func (e *effectsWrapper) addInvokeHostFunctionAccountCreatedEffects(changes []ingest.Change) error {
 	for _, change := range changes {
 		if change.Type != xdr.LedgerEntryTypeAccount {
