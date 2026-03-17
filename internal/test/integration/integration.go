@@ -784,11 +784,12 @@ func (i *Test) upgradeLimits() {
 	var configSet xdr.ConfigUpgradeSet
 	err = xdr.SafeUnmarshalBase64(string(contents), &configSet)
 	require.NoError(i.t, err)
-	coreImage := fmt.Sprintf("stellar/stellar-core:%v", i.config.ProtocolVersion)
-	if i.config.ProtocolVersion >= 26 {
-		// Use the docker image from env for protocol versions where the
-		// standard tag doesn't exist yet (rc or vnext builds).
-		coreImage = i.coreValidatorDockerImage()
+	// Use the env-provided docker image (HORIZON_INTEGRATION_TESTS_DOCKER_IMG)
+	// to generate config upgrade transactions, ensuring the same core build is
+	// used for both the validator and the upgrade tx generation.
+	coreImage := i.coreValidatorDockerImage()
+	if coreImage == "" {
+		coreImage = fmt.Sprintf("stellar/stellar-core:%v", i.config.ProtocolVersion)
 	}
 	upgradeTransactions, upgradeKey, err := stellarcore.GenSorobanConfigUpgradeTxAndKey(stellarcore.GenSorobanConfig{
 		BaseSeqNum:        0,
