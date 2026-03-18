@@ -105,17 +105,26 @@ func runApplyLoad(t *testing.T, coreBinaryPath, configPath string, cfg applyLoad
 	destConfigPath := filepath.Join(workDir, "apply-load.cfg")
 	copyFile(t, configPath, destConfigPath)
 
-	// Step 1: Initialize history archive
+	// Step 1: Initialize database
+	newDBCmd := exec.Command(coreBinaryPath, "new-db", "--conf", destConfigPath)
+	newDBCmd.Dir = workDir
+	output, err := newDBCmd.CombinedOutput()
+	if err != nil {
+		t.Logf("new-db failed:\n%s", string(output))
+	}
+	require.NoError(t, err)
+
+	// Step 2: Initialize history archive
 	newHistCmd := exec.Command(coreBinaryPath, "new-hist", cfg.HistoryArchiveName, "--conf", destConfigPath)
 	newHistCmd.Dir = workDir
-	output, err := newHistCmd.CombinedOutput()
+	output, err = newHistCmd.CombinedOutput()
 	if err != nil {
 		t.Logf("new-hist failed:\n%s", string(output))
 	}
 	require.NoError(t, err)
 	t.Logf("Initialized history archive: %s", cfg.HistoryArchiveName)
 
-	// Step 2: Execute stellar-core apply-load
+	// Step 3: Execute stellar-core apply-load
 	applyLoadCmd := exec.Command(coreBinaryPath, "apply-load", "--conf", destConfigPath)
 	applyLoadCmd.Dir = workDir
 	output, err = applyLoadCmd.CombinedOutput()
