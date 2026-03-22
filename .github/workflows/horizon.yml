@@ -32,7 +32,7 @@ jobs:
     env:
       HORIZON_INTEGRATION_TESTS_ENABLED: true
       HORIZON_INTEGRATION_TESTS_CORE_MAX_SUPPORTED_PROTOCOL: ${{ matrix.protocol-version }}
-      PROTOCOL_25_CORE_DEBIAN_PKG_VERSION: 25.2.1-3065.1d7e5d7e6.noble
+      PROTOCOL_25_CORE_DEBIAN_PKG_VERSION: 25.2.1-3065.1d7e5d7e6.noble~buildtests
       PROTOCOL_25_CORE_DOCKER_IMG: stellar/stellar-core:25.2.1-3065.1d7e5d7e6.noble
       PROTOCOL_25_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:25.0.0-preview1-143
       PGHOST: localhost
