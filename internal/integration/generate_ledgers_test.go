@@ -19,7 +19,6 @@ import (
 	"github.com/stellar/go-stellar-sdk/keypair"
 	"github.com/stellar/go-stellar-sdk/xdr"
 
-	horizoningest "github.com/stellar/stellar-horizon/internal/ingest"
 	"github.com/stellar/stellar-horizon/internal/test/integration"
 )
 
@@ -341,7 +340,7 @@ func verifyFixturesCompleteness(t *testing.T, workDir, metadataPath, networkPass
 		} else {
 			require.NoError(t, err)
 		}
-		require.True(t, ledger.ProtocolVersion() == horizoningest.MaxSupportedProtocolVersion)
+		require.True(t, ledger.ProtocolVersion() == integration.GetCoreMaxSupportedProtocol())
 
 		// Extract changes from this ledger
 		changeReader, err := ingest.NewLedgerChangeReaderFromLedgerCloseMeta(networkPassphrase, ledger)
