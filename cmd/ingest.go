@@ -83,6 +83,7 @@ var ingestVerifyRangeCmdOpts = support.ConfigOptions{
 }
 
 var ingestionLoadTestLedgersPath string
+var ingestionLoadTestFixturesPath string
 var ingestionLoadTestCloseDuration time.Duration
 var ingestionLoadTestMerge bool
 var ingestLoadTestCmdOpts = support.ConfigOptions{
@@ -93,6 +94,14 @@ var ingestLoadTestCmdOpts = support.ConfigOptions{
 		Required:    true,
 		Usage:       "path to ledgers file which will be replayed in the ingestion load test.",
 		ConfigKey:   &ingestionLoadTestLedgersPath,
+	},
+	{
+		Name:        "fixtures-path",
+		OptType:     types.String,
+		FlagDefault: "",
+		Required:    false,
+		Usage:       "[optional] path to fixtures file containing ledger entries to ingest before replaying ledgers.",
+		ConfigKey:   &ingestionLoadTestFixturesPath,
 	},
 	{
 		Name:        "merge",
@@ -423,6 +432,7 @@ func DefineIngestCommands(rootCmd *cobra.Command, horizonConfig *horizon.Config,
 			return runWithMetrics(horizonConfig.AdminPort, system, func() error {
 				return system.LoadTest(
 					ingestionLoadTestLedgersPath,
+					ingestionLoadTestFixturesPath,
 					ingestionLoadTestMerge,
 					ingestionLoadTestCloseDuration,
 				)

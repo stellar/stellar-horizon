@@ -5,6 +5,21 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## 26.0.0
+
+**This release adds support for Protocol 26**
+
+### Added
+- Added support for CAP-0077 (new result codes for protocol 26) ([#170](https://github.com/stellar/stellar-horizon/pull/170)).
+- Added CAP-0073 ingestion support, including new effects for minting, clawback, and transfer of regulated assets ([#171](https://github.com/stellar/stellar-horizon/pull/171)).
+
+## 25.1.0
+
+### Updated
+- Updated `go-stellar-sdk` dependency to [v0.3.0](https://github.com/stellar/go-stellar-sdk/releases/tag/v0.3.0).
+
+### Security Fixes
+- Reject non-uint64 types for `to_muxed_id` in SAC events ([#158](https://github.com/stellar/stellar-horizon/pull/158)).
 - Changed assetsForAddress() to assetsForAddressWithLimit() to enforce asset limit in actions package ([#156](https://github.com/stellar/stellar-horizon/pull/156)).
 
 ## 25.0.1

@@ -32,11 +32,11 @@ jobs:
     env:
       HORIZON_INTEGRATION_TESTS_ENABLED: true
       HORIZON_INTEGRATION_TESTS_CORE_MAX_SUPPORTED_PROTOCOL: ${{ matrix.protocol-version }}
-      PROTOCOL_25_CORE_DEBIAN_PKG_VERSION: 25.2.0-3058.bb195c49d.noble
+      PROTOCOL_25_CORE_DEBIAN_PKG_VERSION: 25.2.0-3058.bb195c49d.noble~buildtests
       PROTOCOL_25_CORE_DOCKER_IMG: stellar/stellar-core:25.2.0-3058.bb195c49d.noble
       PROTOCOL_25_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:25.1.0
       PROTOCOL_26_CORE_DOCKER_IMG: stellar/stellar-core:25.2.1-3069.73babfde9.noble
-      PROTOCOL_26_CORE_DEBIAN_PKG_VERSION: 25.2.1-3069.73babfde9.noble
+      PROTOCOL_26_CORE_DEBIAN_PKG_VERSION: 25.2.1-3069.73babfde9.noble~buildtests
       PROTOCOL_26_STELLAR_RPC_DOCKER_IMG: gkudra/stellar-rpc:testing
       PGHOST: localhost
       PGPORT: 5432
@@ -120,7 +120,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       GO_VERSION: 1.25.0
-      STELLAR_CORE_VERSION: 24.1.1-2896.bc46d6004.noble
+      STELLAR_CORE_VERSION: 25.2.1-3065.1d7e5d7e6.noble
     steps:
       - uses: actions/checkout@v3
         with:

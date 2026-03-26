@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
+	"os"
 	"time"
 
 	"github.com/stellar/go-stellar-sdk/ingest"
+	"github.com/stellar/go-stellar-sdk/ingest/loadtest"
 	"github.com/stellar/go-stellar-sdk/support/db"
 	"github.com/stellar/go-stellar-sdk/support/errors"
 	logpkg "github.com/stellar/go-stellar-sdk/support/log"
@@ -80,6 +83,11 @@ type ProcessorRunnerInterface interface {
 		stats ledgerStats,
 		err error,
 	)
+	RunFixturesIngestion(
+		ctx context.Context,
+		fixturesFilePath string,
+		ledgerDiff int64,
+	) (processors.StatsChangeProcessorResults, error)
 }
 
 var _ ProcessorRunnerInterface = (*ProcessorRunner)(nil)
@@ -634,4 +642,89 @@ func (s *ProcessorRunner) RunAllProcessorsOnLedger(ledger xdr.LedgerCloseMeta) (
 	stats.loaderStats = loaderStats
 
 	return
+}
+
+// RunFixturesIngestion ingests ledger entries from a fixtures file.
+// The ledgerDiff is applied to all ledger sequence values in the fixtures
+// using the same approach as loadtest.LedgerBackend.
+func (s *ProcessorRunner) RunFixturesIngestion(
+	ctx context.Context,
+	fixturesFilePath string,
+	ledgerDiff int64,
+) (processors.StatsChangeProcessorResults, error) {
+	changeStats := processors.StatsChangeProcessor{}
+	changeProcessor := buildChangeProcessor(
+		s.historyQ,
+		&changeStats,
+		historyArchiveSource,
+		0, // checkpointLedger not used for fixtures
+		s.config.NetworkPassphrase,
+	)
+
+	if err := registerChangeProcessors(nameRegistry{}, changeProcessor); err != nil {
+		return processors.StatsChangeProcessorResults{}, err
+	}
+
+	file, err := os.Open(fixturesFilePath)
+	if err != nil {
+		return changeStats.GetResults(), errors.Wrap(err, "error opening fixtures file")
+	}
+	defer file.Close()
+
+	stream, err := xdr.NewZstdStream(file)
+	if err != nil {
+		return changeStats.GetResults(), errors.Wrap(err, "error creating zstd stream")
+	}
+	defer stream.Close()
+
+	log.WithField("path", fixturesFilePath).Info("Processing fixtures file")
+
+	const minLedger = uint32(2) // genesis ledger
+
+	setLedgerSeq := func(cur uint32) uint32 {
+		newLedgerSeq := int64(cur) + ledgerDiff
+		if newLedgerSeq > math.MaxUint32 {
+			panic(fmt.Sprintf("value %v overflows when applying ledger diff %v", cur, ledgerDiff))
+		}
+		if newLedgerSeq < int64(minLedger) {
+			return minLedger
+		}
+		return uint32(newLedgerSeq)
+	}
+
+	var count int
+	for {
+		var entry xdr.LedgerEntry
+		if err := stream.ReadOne(&entry); err == io.EOF {
+			break
+		} else if err != nil {
+			return changeStats.GetResults(), errors.Wrap(err, "error reading fixture entry")
+		}
+
+		// Update ledger sequence values using same approach as loadtest.LedgerBackend
+		if err := loadtest.UpdateLedgerSeqInLedgerEntries(&entry, setLedgerSeq); err != nil {
+			return changeStats.GetResults(), errors.Wrap(err, "error updating ledger seq")
+		}
+
+		change := ingest.Change{
+			Type: entry.Data.Type,
+			Post: &entry,
+		}
+		if err := changeProcessor.ProcessChange(ctx, change); err != nil {
+			return changeStats.GetResults(), errors.Wrap(err, "error processing fixture")
+		}
+
+		count++
+		if count%logFrequency == 0 {
+			log.WithField("entries", count).Info("Processed fixture entries")
+		}
+	}
+
+	if err := changeProcessor.Commit(ctx); err != nil {
+		return changeStats.GetResults(), errors.Wrap(err, "error committing fixtures")
+	}
+
+	log.WithField("total_entries", count).Info("Finished processing fixtures")
+
+	return changeStats.GetResults(), nil
 }
