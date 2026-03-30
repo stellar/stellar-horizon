@@ -34,10 +34,10 @@ jobs:
       HORIZON_INTEGRATION_TESTS_CORE_MAX_SUPPORTED_PROTOCOL: ${{ matrix.protocol-version }}
       PROTOCOL_25_CORE_DEBIAN_PKG_VERSION: 25.2.0-3058.bb195c49d.noble~buildtests
       PROTOCOL_25_CORE_DOCKER_IMG: stellar/stellar-core:25.2.0-3058.bb195c49d.noble
-      PROTOCOL_25_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:25.1.0
+      PROTOCOL_25_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:26.0.0-testing-185
       PROTOCOL_26_CORE_DOCKER_IMG: stellar/stellar-core:25.2.1-3069.73babfde9.noble
       PROTOCOL_26_CORE_DEBIAN_PKG_VERSION: 25.2.1-3069.73babfde9.noble~buildtests
-      PROTOCOL_26_STELLAR_RPC_DOCKER_IMG: gkudra/stellar-rpc:testing
+      PROTOCOL_26_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:26.0.0-testing-185
       PGHOST: localhost
       PGPORT: 5432
       PGUSER: postgres
