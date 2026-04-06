@@ -2437,3 +2437,71 @@ func TestTestInvokeHostFnOperationParticipants(t *testing.T) {
 		participants,
 	)
 }
+
+// TestCAP0073InvokeHostFnParticipants verifies that participants are extracted
+// from ledger entry changes for CAP-0073 operations (trust() creating
+// trustlines and XLM transfer creating accounts) even when no SAC events
+// reference those accounts.
+func TestCAP0073InvokeHostFnParticipants(t *testing.T) {
+	sourceAddress := "GAUJETIZVEP2NRYLUESJ3LS66NVCEGMON4UDCBCSBEVPIID773P2W6AY"
+	source := xdr.MustMuxedAddress(sourceAddress)
+
+	trustlineAccountID := xdr.MustAddress(keypair.MustRandom().Address())
+	newAccountID := xdr.MustAddress(keypair.MustRandom().Address())
+	asset := xdr.MustNewCreditAsset("USD", keypair.MustRandom().Address())
+
+	tx, _ := makeInvocationTransactionWithChanges(
+		sourceAddress,
+		xdr.LedgerEntryChanges{
+			{
+				Type: xdr.LedgerEntryChangeTypeLedgerEntryCreated,
+				Created: &xdr.LedgerEntry{
+					Data: xdr.LedgerEntryData{
+						Type: xdr.LedgerEntryTypeTrustline,
+						TrustLine: &xdr.TrustLineEntry{
+							AccountId: trustlineAccountID,
+							Asset:     asset.ToTrustLineAsset(),
+							Balance:   0,
+							Limit:     xdr.Int64(9223372036854775807),
+						},
+					},
+				},
+			},
+			{
+				Type: xdr.LedgerEntryChangeTypeLedgerEntryCreated,
+				Created: &xdr.LedgerEntry{
+					Data: xdr.LedgerEntryData{
+						Type: xdr.LedgerEntryTypeAccount,
+						Account: &xdr.AccountEntry{
+							AccountId: newAccountID,
+							Balance:   xdr.Int64(100_0000000),
+						},
+					},
+				},
+			},
+		},
+		nil,
+	)
+
+	wrapper := transactionOperationWrapper{
+		transaction: tx,
+		operation: xdr.Operation{
+			SourceAccount: &source,
+			Body: xdr.OperationBody{
+				Type: xdr.OperationTypeInvokeHostFunction,
+			},
+		},
+		network: networkPassphrase,
+	}
+
+	participants, err := wrapper.Participants()
+	require.NoError(t, err)
+	assert.ElementsMatch(t,
+		[]xdr.AccountId{
+			xdr.MustAddress(source.Address()),
+			trustlineAccountID,
+			newAccountID,
+		},
+		participants,
+	)
+}

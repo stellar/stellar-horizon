@@ -151,9 +151,21 @@ func (operation *transactionOperationWrapper) ingestEffects(accountLoader *histo
 			return innerErr
 		}
 
-		// For now, the only effects are related to the events themselves.
-		// Possible add'l work: https://github.com/stellar/go-stellar-sdk/issues/4585
-		err = wrapper.addInvokeHostFunctionEffects(contractEvents)
+		// Effects derived from SAC events (transfer, mint, burn, clawback).
+		if err = wrapper.addInvokeHostFunctionEffects(contractEvents); err != nil {
+			break
+		}
+
+		// CAP-0073: The SAC trust() function creates trustlines without
+		// emitting events, so we derive effects from ledger entry changes.
+		if err = wrapper.addInvokeHostFunctionTrustlineEffects(changes); err != nil {
+			break
+		}
+
+		// CAP-0073: XLM SAC transfers can auto-create accounts. The transfer
+		// event covers the credit/debit, but we need additional effects for
+		// the account creation itself.
+		err = wrapper.addInvokeHostFunctionAccountCreatedEffects(changes)
 	case xdr.OperationTypeExtendFootprintTtl, xdr.OperationTypeRestoreFootprint:
 		// do not produce effects for these operations as horizon only provides
 		// limited visibility into soroban operations
@@ -465,17 +477,61 @@ func (e *effectsWrapper) addAccountCreatedEffects() error {
 	); err != nil {
 		return err
 	}
-	if err := e.addUnmuxed(
+	return e.addUnmuxed(
 		&op.Destination,
 		history.EffectSignerCreated,
 		map[string]interface{}{
 			"public_key": op.Destination.Address(),
 			"weight":     keypair.DefaultSignerWeight,
 		},
+	)
+}
+
+// addInvokeHostFunctionAccountCreatedEffects scans ledger entry changes from an
+// InvokeHostFunction operation for newly created accounts. This handles the
+// CAP-0073 behavior where an XLM SAC transfer to a non-existent G-address
+// auto-creates the account.
+//
+// Unlike addAccountCreatedEffects (classic CreateAccount), this does NOT emit
+// EffectAccountDebited for the sender — that is already covered by the SAC
+// transfer event processed in addInvokeHostFunctionEffects.
+func (e *effectsWrapper) addInvokeHostFunctionAccountCreatedEffects(changes []ingest.Change) error {
+	for _, change := range changes {
+		if change.Type != xdr.LedgerEntryTypeAccount {
+			continue
+		}
+		if change.Pre != nil || change.Post == nil {
+			continue
+		}
+		account := change.Post.Data.MustAccount()
+		if err := e.emitAccountCreatedEffects(&account.AccountId, account.Balance); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// emitAccountCreatedEffects emits EffectAccountCreated and EffectSignerCreated
+// for a newly created account. Used by both CreateAccount operations and
+// CAP-0073 auto-account-creation via SAC XLM transfers.
+func (e *effectsWrapper) emitAccountCreatedEffects(accountID *xdr.AccountId, balance xdr.Int64) error {
+	if err := e.addUnmuxed(
+		accountID,
+		history.EffectAccountCreated,
+		map[string]interface{}{
+			"starting_balance": amount.String(balance),
+		},
 	); err != nil {
 		return err
 	}
-	return nil
+	return e.addUnmuxed(
+		accountID,
+		history.EffectSignerCreated,
+		map[string]interface{}{
+			"public_key": accountID.Address(),
+			"weight":     keypair.DefaultSignerWeight,
+		},
+	)
 }
 
 func (e *effectsWrapper) addPaymentEffects() error {
@@ -782,6 +838,43 @@ func (e *effectsWrapper) addChangeTrustEffects() error {
 	}
 
 	return nil
+}
+
+// addInvokeHostFunctionTrustlineEffects scans ledger entry changes from an
+// InvokeHostFunction operation for newly created trustlines. This handles the
+// CAP-0073 trust() SAC function which creates trustlines without emitting any
+// contract events.
+func (e *effectsWrapper) addInvokeHostFunctionTrustlineEffects(changes []ingest.Change) error {
+	for _, change := range changes {
+		if change.Type != xdr.LedgerEntryTypeTrustline {
+			continue
+		}
+		if change.Pre != nil || change.Post == nil {
+			continue
+		}
+		trustLine := change.Post.Data.MustTrustLine()
+		if err := e.emitTrustlineCreatedEffect(&trustLine); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// emitTrustlineCreatedEffect emits EffectTrustlineCreated for a newly created
+// trustline entry. Used by both ChangeTrust operations and CAP-0073 trust()
+// SAC function.
+func (e *effectsWrapper) emitTrustlineCreatedEffect(trustLine *xdr.TrustLineEntry) error {
+	details := map[string]interface{}{
+		"limit": amount.String(trustLine.Limit),
+	}
+	if err := addAssetDetails(details, trustLine.Asset.ToAsset(), ""); err != nil {
+		return err
+	}
+	return e.addUnmuxed(
+		&trustLine.AccountId,
+		history.EffectTrustlineCreated,
+		details,
+	)
 }
 
 func (e *effectsWrapper) addAllowTrustEffects() error {

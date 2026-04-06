@@ -13,7 +13,7 @@ jobs:
         os: [ubuntu-24.04]
         go: ["1.25", "1.26"]
         pg: [14, 16]
-        protocol-version: [25]
+        protocol-version: [25, 26]
     runs-on: ${{ matrix.os }}
     services:
       postgres:
@@ -32,9 +32,12 @@ jobs:
     env:
       HORIZON_INTEGRATION_TESTS_ENABLED: true
       HORIZON_INTEGRATION_TESTS_CORE_MAX_SUPPORTED_PROTOCOL: ${{ matrix.protocol-version }}
-      PROTOCOL_25_CORE_DEBIAN_PKG_VERSION: 25.2.1-3065.1d7e5d7e6.noble~buildtests
-      PROTOCOL_25_CORE_DOCKER_IMG: stellar/stellar-core:25.2.1-3065.1d7e5d7e6.noble
-      PROTOCOL_25_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:25.0.0-preview1-143
+      PROTOCOL_25_CORE_DEBIAN_PKG_VERSION: 25.2.0-3058.bb195c49d.noble~buildtests
+      PROTOCOL_25_CORE_DOCKER_IMG: stellar/stellar-core:25.2.0-3058.bb195c49d.noble
+      PROTOCOL_25_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:26.0.0-testing-185
+      PROTOCOL_26_CORE_DOCKER_IMG: stellar/stellar-core:25.2.1-3069.73babfde9.noble
+      PROTOCOL_26_CORE_DEBIAN_PKG_VERSION: 25.2.1-3069.73babfde9.noble~buildtests
+      PROTOCOL_26_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:26.0.0-testing-185
       PGHOST: localhost
       PGPORT: 5432
       PGUSER: postgres
@@ -91,7 +94,7 @@ jobs:
       - name: Calculate the source hash
         id: calculate_source_hash
         run: |
-          combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-${{ env.PROTOCOL_24_CORE_DOCKER_IMG }}-${{ env.PROTOCOL_24_RPC_DOCKER_IMG }}-${{ env.PROTOCOL_24_CORE_DEBIAN_PKG_VERSION }}-${{ env.PREFIX }}" | sha256sum | cut -d ' ' -f 1)
+          combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-protocol-${{ matrix.protocol-version }}-${{ env.PROTOCOL_25_CORE_DOCKER_IMG }}-${{ env.PROTOCOL_25_STELLAR_RPC_DOCKER_IMG }}-${{ env.PROTOCOL_25_CORE_DEBIAN_PKG_VERSION }}-${{ env.PROTOCOL_26_CORE_DOCKER_IMG }}-${{ env.PREFIX }}" | sha256sum | cut -d ' ' -f 1)
           echo "COMBINED_SOURCE_HASH=$combined_hash" >> "$GITHUB_ENV"
 
       - name: Restore Horizon binary and integration tests source hash to cache

@@ -36,6 +36,9 @@ const (
 	OpNotAuthorized = "op_not_authorized"
 	// OpDoesNotExist occurs when claimable balance or sponsorship does not exist
 	OpDoesNotExist = "op_does_not_exist"
+	// OpTrustlineFrozen occurs when an operation fails because a required
+	// trustline is frozen.
+	OpTrustlineFrozen = "op_trustline_frozen"
 )
 
 // String returns the appropriate string representation of the provided result code
@@ -81,6 +84,8 @@ func String(code interface{}) (string, error) {
 			return "tx_malformed", nil
 		case xdr.TransactionResultCodeTxSorobanInvalid:
 			return "tx_soroban_invalid", nil
+		case xdr.TransactionResultCodeTxFrozenKeyAccessed:
+			return "tx_frozen_key_accessed", nil
 		}
 	case xdr.OperationResultCode:
 		switch code {
@@ -96,6 +101,8 @@ func String(code interface{}) (string, error) {
 			return "op_too_many_subentries", nil
 		case xdr.OperationResultCodeOpExceededWorkLimit:
 			return "op_exceeded_work_limit", nil
+		case xdr.OperationResultCodeOpTooManySponsoring:
+			return "op_too_many_sponsoring", nil
 		}
 	case xdr.CreateAccountResultCode:
 		switch code {
@@ -387,6 +394,8 @@ func String(code interface{}) (string, error) {
 			return OpNoTrust, nil
 		case xdr.ClaimClaimableBalanceResultCodeClaimClaimableBalanceNotAuthorized:
 			return OpNotAuthorized, nil
+		case xdr.ClaimClaimableBalanceResultCodeClaimClaimableBalanceTrustlineFrozen:
+			return OpTrustlineFrozen, nil
 		}
 	case xdr.BeginSponsoringFutureReservesResultCode:
 		switch code {
@@ -478,6 +487,8 @@ func String(code interface{}) (string, error) {
 			return "op_bad_price", nil
 		case xdr.LiquidityPoolDepositResultCodeLiquidityPoolDepositPoolFull:
 			return "op_pool_full", nil
+		case xdr.LiquidityPoolDepositResultCodeLiquidityPoolDepositTrustlineFrozen:
+			return OpTrustlineFrozen, nil
 		}
 	case xdr.LiquidityPoolWithdrawResultCode:
 		switch code {
@@ -493,6 +504,8 @@ func String(code interface{}) (string, error) {
 			return OpLineFull, nil
 		case xdr.LiquidityPoolWithdrawResultCodeLiquidityPoolWithdrawUnderMinimum:
 			return "op_under_minimum", nil
+		case xdr.LiquidityPoolWithdrawResultCodeLiquidityPoolWithdrawTrustlineFrozen:
+			return OpTrustlineFrozen, nil
 		}
 	case xdr.InvokeHostFunctionResultCode:
 		switch code {

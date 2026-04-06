@@ -35,7 +35,7 @@ import (
 const (
 	// MaxSupportedProtocolVersion defines the maximum supported version of
 	// the Stellar protocol.
-	MaxSupportedProtocolVersion uint32 = 25
+	MaxSupportedProtocolVersion uint32 = 26
 
 	// CurrentVersion reflects the latest version of the ingestion
 	// algorithm. This value is stored in KV store and is used to decide

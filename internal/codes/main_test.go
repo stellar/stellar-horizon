@@ -2,7 +2,9 @@ package codes
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -58,34 +60,15 @@ func TestForOperationResultCoversForAllOpTypes(t *testing.T) {
 	// If this is not equal it means one or more result struct is missing in resultTypes map.
 	assert.Equal(t, len(xdr.OperationTypeToStringMap), len(resultTypes))
 
-	type validEnum interface {
-		ValidEnum(v int32) bool
-	}
+	// Also check TransactionResultCode and OperationResultCode exhaustively
+	allCodeTypes := append(
+		slices.Collect(maps.Values(resultTypes)),
+		reflect.TypeOf(xdr.TransactionResultCode(0)),
+		reflect.TypeOf(xdr.OperationResultCode(0)),
+	)
 
-	for _, resultCode := range resultTypes {
-		integerCode := int32(0)
-		for {
-			// Create a new variable of result code type and set it to the current
-			// integer Code.
-			val := reflect.New(resultCode).Elem()
-			val.SetInt(int64(integerCode))
-
-			// Then check if integer value of the code is valid. If it's not, break.
-			// We exploit the fact that the code's integer values are a sequence:
-			// [0, -1, -2, ...].
-			iValue := val.Interface()
-			valid := iValue.(validEnum).ValidEnum(integerCode)
-			if !valid {
-				break
-			}
-
-			res, err := String(iValue)
-			if assert.NoError(t, err, fmt.Sprintf("type=%T code=%d not implemented", iValue, iValue)) {
-				// Ensure value is not empty even when implemented
-				assert.NotEmpty(t, res, fmt.Sprintf("type=%T code=%d empty", iValue, iValue))
-			}
-			integerCode--
-		}
+	for _, resultCode := range allCodeTypes {
+		assertAllEnumCodesCovered(t, resultCode)
 	}
 
 	// make sure the check works for an unknown operation type
@@ -133,3 +116,32 @@ func TestString(t *testing.T) {
 //TODO: op_inner refers to inner result code
 //TODO: non op_inner uses the outer result code
 //TODO: one test for each operation type
+
+type validEnum interface {
+	ValidEnum(v int32) bool
+}
+
+// assertAllEnumCodesCovered walks all valid enum values for a result code type
+// in both directions (0, -1, -2, ... and 1, 2, ...) and asserts that String()
+// handles each one.
+func assertAllEnumCodesCovered(t *testing.T, resultCode reflect.Type) {
+	t.Helper()
+	for _, step := range []int32{-1, 1} {
+		start := int32(0)
+		if step > 0 {
+			start = 1
+		}
+		for integerCode := start; ; integerCode += step {
+			val := reflect.New(resultCode).Elem()
+			val.SetInt(int64(integerCode))
+			iValue := val.Interface()
+			if !iValue.(validEnum).ValidEnum(integerCode) {
+				break
+			}
+			res, err := String(iValue)
+			if assert.NoError(t, err, fmt.Sprintf("type=%T code=%d not implemented", iValue, integerCode)) {
+				assert.NotEmpty(t, res, fmt.Sprintf("type=%T code=%d empty", iValue, integerCode))
+			}
+		}
+	}
+}
