@@ -139,7 +139,7 @@ func (handler FindPathsHandler) GetResource(w HeaderWriter, r *http.Request) (in
 			r, query.SourceAccount.Address(), handler.MaxAssetsParamLength,
 		)
 		if err != nil {
-			return nil, problem.MakeInvalidFieldProblem("source_assets", err)
+			return nil, problem.MakeInvalidFieldProblem("source_account", err)
 		}
 	} else {
 		for range query.SourceAssets {
@@ -309,7 +309,7 @@ func (handler FindFixedPathsHandler) GetResource(w HeaderWriter, r *http.Request
 	if destinationAccount != "" {
 		destinationAssets, _, err = assetsForAddressWithLimit(r, destinationAccount, handler.MaxAssetsParamLength)
 		if err != nil {
-			return nil, problem.MakeInvalidFieldProblem("destination_assets", err)
+			return nil, problem.MakeInvalidFieldProblem("destination_account", err)
 		}
 	}
 
@@ -405,7 +405,7 @@ func assetsForAddressWithLimit(r *http.Request, addy string, limit int) ([]xdr.A
 
 		// +1 accounts for the native XLM asset appended below
 		if len(assets)+1 > limit {
-			return nil, nil, fmt.Errorf("list of assets exceeds maximum length of %d", limit)
+			return nil, nil, fmt.Errorf("account has too many trustlines to use this endpoint (number of trustlines plus native XLM exceeds limit of %d)", limit)
 		}
 	}
 	assets = append(assets, xdr.MustNewNativeAsset())
