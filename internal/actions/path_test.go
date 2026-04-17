@@ -77,5 +77,5 @@ func TestAssetLimits(t *testing.T) {
 
 	// With limit 1: 2 assets > 1, should fail
 	_, _, err = assetsForAddressWithLimit(r.WithContext(ctx), address, 1)
-	assert.EqualError(t, err, "list of assets exceeds maximum length of 1")
+	assert.EqualError(t, err, "account has too many trustlines to use this endpoint (number of trustlines plus native XLM exceeds limit of 1)")
 }
