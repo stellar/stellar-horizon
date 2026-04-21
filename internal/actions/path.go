@@ -132,8 +132,12 @@ func (handler FindPathsHandler) GetResource(w HeaderWriter, r *http.Request) (in
 	}
 	query.DestinationAsset = qp.DestinationAsset()
 	if sourceAccount != "" {
-		sourceAccount := xdr.MustAddress(sourceAccount)
-		query.SourceAccount = &sourceAccount
+		var accountID xdr.AccountId
+		accountID, err = xdr.AddressToAccountId(sourceAccount)
+		if err != nil {
+			return nil, problem.MakeInvalidFieldProblem("source_account", err)
+		}
+		query.SourceAccount = &accountID
 		query.ValidateSourceBalance = true
 		query.SourceAssets, query.SourceAssetBalances, err = assetsForAddressWithLimit(
 			r, query.SourceAccount.Address(), handler.MaxAssetsParamLength,

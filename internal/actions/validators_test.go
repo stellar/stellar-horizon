@@ -2,11 +2,52 @@ package actions
 
 import (
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/asaskevich/govalidator"
+	"github.com/stellar/go-stellar-sdk/support/render/problem"
 	"github.com/stretchr/testify/assert"
 )
+
+// TestAssetFilterMixedCaseNativeRejected is a regression test for the panic
+// previously triggered by asset=Native on /accounts and /claimable_balances.
+// It exercises the full getParams pipeline (schema decode -> govalidator ->
+// Validateable.Validate) and verifies a 400 problem.P is returned instead of
+// a panic. If isAsset is ever loosened, or the valid:"asset" tag is ever
+// dropped from these struct fields, this test fails.
+func TestAssetFilterMixedCaseNativeRejected(t *testing.T) {
+	for _, variant := range []string{"Native", "NATIVE", "nAtIvE"} {
+		t.Run("claimable_balances/"+variant, func(t *testing.T) {
+			q := ClaimableBalancesQuery{}
+			r := makeRequest(t, map[string]string{"asset": variant}, map[string]string{}, nil)
+			assert.NotPanics(t, func() {
+				err := getParams(&q, r)
+				assert.Error(t, err)
+				p, ok := err.(*problem.P)
+				assert.True(t, ok, "expected *problem.P, got %T", err)
+				if ok {
+					assert.Equal(t, http.StatusBadRequest, p.Status)
+					assert.Equal(t, "asset", p.Extras["invalid_field"])
+				}
+			})
+		})
+		t.Run("accounts/"+variant, func(t *testing.T) {
+			q := AccountsQuery{}
+			r := makeRequest(t, map[string]string{"asset": variant}, map[string]string{}, nil)
+			assert.NotPanics(t, func() {
+				err := getParams(&q, r)
+				assert.Error(t, err)
+				p, ok := err.(*problem.P)
+				assert.True(t, ok, "expected *problem.P, got %T", err)
+				if ok {
+					assert.Equal(t, http.StatusBadRequest, p.Status)
+					assert.Equal(t, "asset", p.Extras["invalid_field"])
+				}
+			})
+		})
+	}
+}
 
 func TestAssetTypeValidator(t *testing.T) {
 	type Query struct {
@@ -143,6 +184,16 @@ func TestAssetValidator(t *testing.T) {
 		{
 			"empty colon",
 			":",
+			false,
+		},
+		{
+			"mixed-case native rejected",
+			"Native",
+			false,
+		},
+		{
+			"uppercase native rejected",
+			"NATIVE",
 			false,
 		},
 	} {

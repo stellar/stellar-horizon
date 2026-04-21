@@ -15,6 +15,117 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestClaimableBalancesQueryAsset(t *testing.T) {
+	issuer := "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+	for _, tc := range []struct {
+		name    string
+		filter  string
+		wantNil bool
+		wantErr bool
+	}{
+		{name: "empty", filter: "", wantNil: true, wantErr: false},
+		{name: "native", filter: "native", wantNil: false, wantErr: false},
+		{name: "valid credit", filter: "USD:" + issuer, wantNil: false, wantErr: false},
+		{name: "mixed-case native rejected", filter: "Native", wantNil: true, wantErr: true},
+		{name: "uppercase native rejected", filter: "NATIVE", wantNil: true, wantErr: true},
+		{name: "no colon", filter: "noColon", wantNil: true, wantErr: true},
+		{name: "bare colon", filter: ":", wantNil: true, wantErr: true},
+		{name: "missing issuer", filter: "A:", wantNil: true, wantErr: true},
+		{name: "missing code", filter: ":B", wantNil: true, wantErr: true},
+		{name: "extra colons", filter: "too:many:colons", wantNil: true, wantErr: true},
+		{name: "invalid issuer", filter: "USD:not-an-address", wantNil: true, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			q := ClaimableBalancesQuery{AssetFilter: tc.filter}
+			var (
+				asset *xdr.Asset
+				err   error
+			)
+			assert.NotPanics(t, func() { asset, err = q.asset() })
+			if tc.wantNil {
+				assert.Nil(t, asset)
+			} else {
+				assert.NotNil(t, asset)
+			}
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestClaimableBalancesQuerySponsor(t *testing.T) {
+	validAddress := "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+	for _, tc := range []struct {
+		name    string
+		sponsor string
+		wantNil bool
+		wantErr bool
+	}{
+		{name: "empty", sponsor: "", wantNil: true, wantErr: false},
+		{name: "valid address", sponsor: validAddress, wantNil: false, wantErr: false},
+		{name: "invalid address", sponsor: "not-an-address", wantNil: true, wantErr: true},
+		{name: "wrong prefix", sponsor: "AXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", wantNil: true, wantErr: true},
+		{name: "bare G", sponsor: "G", wantNil: true, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			q := ClaimableBalancesQuery{SponsorFilter: tc.sponsor}
+			var (
+				account *xdr.AccountId
+				err     error
+			)
+			assert.NotPanics(t, func() { account, err = q.sponsor() })
+			if tc.wantNil {
+				assert.Nil(t, account)
+			} else {
+				assert.NotNil(t, account)
+			}
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestClaimableBalancesQueryClaimant(t *testing.T) {
+	validAddress := "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+	for _, tc := range []struct {
+		name     string
+		claimant string
+		wantNil  bool
+		wantErr  bool
+	}{
+		{name: "empty", claimant: "", wantNil: true, wantErr: false},
+		{name: "valid address", claimant: validAddress, wantNil: false, wantErr: false},
+		{name: "invalid address", claimant: "not-an-address", wantNil: true, wantErr: true},
+		{name: "wrong prefix", claimant: "AXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", wantNil: true, wantErr: true},
+		{name: "bare G", claimant: "G", wantNil: true, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			q := ClaimableBalancesQuery{ClaimantFilter: tc.claimant}
+			var (
+				account *xdr.AccountId
+				err     error
+			)
+			assert.NotPanics(t, func() { account, err = q.claimant() })
+			if tc.wantNil {
+				assert.Nil(t, account)
+			} else {
+				assert.NotNil(t, account)
+			}
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestGetClaimableBalanceByID(t *testing.T) {
 	tt := test.Start(t)
 	defer tt.Finish()

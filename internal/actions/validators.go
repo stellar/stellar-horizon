@@ -55,7 +55,7 @@ func isTradeType(tradeType string) bool {
 func isAsset(assetString string) bool {
 	var asset xdr.Asset
 
-	if strings.ToLower(assetString) == "native" {
+	if assetString == "native" {
 		if err := asset.SetNative(); err != nil {
 			return false
 		}
