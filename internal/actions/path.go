@@ -46,26 +46,25 @@ func (q StrictReceivePathsQuery) Assets() ([]xdr.Asset, error) {
 }
 
 // Amount returns source amount
-func (q StrictReceivePathsQuery) Amount() xdr.Int64 {
+func (q StrictReceivePathsQuery) Amount() (xdr.Int64, error) {
 	parsed, err := amount.Parse(q.DestinationAmount)
 	if err != nil {
-		panic(err)
+		return 0, problem.MakeInvalidFieldProblem("destination_amount", err)
 	}
-	return parsed
+	return parsed, nil
 }
 
 // DestinationAsset returns an xdr.Asset
-func (q StrictReceivePathsQuery) DestinationAsset() xdr.Asset {
+func (q StrictReceivePathsQuery) DestinationAsset() (xdr.Asset, error) {
 	asset, err := xdr.BuildAsset(
 		q.DestinationAssetType,
 		q.DestinationAssetIssuer,
 		q.DestinationAssetCode,
 	)
 	if err != nil {
-		panic(err)
+		return xdr.Asset{}, problem.MakeInvalidFieldProblem("destination_asset", err)
 	}
-
-	return asset
+	return asset, nil
 }
 
 // URITemplate returns a rfc6570 URI template for the query struct
@@ -120,7 +119,10 @@ func (handler FindPathsHandler) GetResource(w HeaderWriter, r *http.Request) (in
 	}
 
 	query := paths.Query{}
-	query.DestinationAmount = qp.Amount()
+	query.DestinationAmount, err = qp.Amount()
+	if err != nil {
+		return nil, err
+	}
 	sourceAccount := qp.SourceAccount
 	query.SourceAssets, _ = qp.Assets()
 
@@ -130,7 +132,10 @@ func (handler FindPathsHandler) GetResource(w HeaderWriter, r *http.Request) (in
 			fmt.Errorf("list of assets exceeds maximum length of %d", handler.MaxAssetsParamLength),
 		)
 	}
-	query.DestinationAsset = qp.DestinationAsset()
+	query.DestinationAsset, err = qp.DestinationAsset()
+	if err != nil {
+		return nil, err
+	}
 	if sourceAccount != "" {
 		var accountID xdr.AccountId
 		accountID, err = xdr.AddressToAccountId(sourceAccount)
@@ -268,26 +273,25 @@ func (q FindFixedPathsQuery) Assets() ([]xdr.Asset, error) {
 }
 
 // Amount returns source amount
-func (q FindFixedPathsQuery) Amount() xdr.Int64 {
+func (q FindFixedPathsQuery) Amount() (xdr.Int64, error) {
 	parsed, err := amount.Parse(q.SourceAmount)
 	if err != nil {
-		panic(err)
+		return 0, problem.MakeInvalidFieldProblem("source_amount", err)
 	}
-	return parsed
+	return parsed, nil
 }
 
 // SourceAsset returns an xdr.Asset
-func (q FindFixedPathsQuery) SourceAsset() xdr.Asset {
+func (q FindFixedPathsQuery) SourceAsset() (xdr.Asset, error) {
 	asset, err := xdr.BuildAsset(
 		q.SourceAssetType,
 		q.SourceAssetIssuer,
 		q.SourceAssetCode,
 	)
 	if err != nil {
-		panic(err)
+		return xdr.Asset{}, problem.MakeInvalidFieldProblem("source_asset", err)
 	}
-
-	return asset
+	return asset, nil
 }
 
 // GetResource returns a list of strict send paths
@@ -329,8 +333,14 @@ func (handler FindFixedPathsHandler) GetResource(w HeaderWriter, r *http.Request
 		return nil, errors.Wrap(err, "error in rollback")
 	}
 
-	sourceAsset := qp.SourceAsset()
-	amountToSpend := qp.Amount()
+	sourceAsset, err := qp.SourceAsset()
+	if err != nil {
+		return nil, err
+	}
+	amountToSpend, err := qp.Amount()
+	if err != nil {
+		return nil, err
+	}
 
 	records := []paths.Path{}
 	if len(destinationAssets) > 0 {
