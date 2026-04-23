@@ -3,6 +3,7 @@ package actions
 import (
 	"fmt"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stellar/go-stellar-sdk/keypair"
@@ -14,6 +15,35 @@ import (
 	"github.com/stellar/stellar-horizon/internal/test"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestLiquidityPoolsQueryValidate(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		reserves string
+		wantErr  bool
+	}{
+		{name: "empty", reserves: "", wantErr: false},
+		{name: "one reserve", reserves: "native", wantErr: false},
+		{name: "two reserves", reserves: "native," + usdAsset.StringCanonical(), wantErr: false},
+		{name: "three natives rejected", reserves: "native,native,native", wantErr: true},
+		{name: "three mixed assets rejected", reserves: "native," + usdAsset.StringCanonical() + "," + eurAsset.StringCanonical(), wantErr: true},
+		{name: "long attack payload rejected", reserves: strings.Repeat("native,", 10000) + "native", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			q := LiquidityPoolsQuery{Reserves: tc.reserves}
+			err := q.Validate()
+			if tc.wantErr {
+				assert.Error(t, err)
+				p, ok := err.(*problem.P)
+				assert.True(t, ok, "expected *problem.P, got %T", err)
+				assert.Equal(t, "reserves", p.Extras["invalid_field"])
+				assert.Contains(t, p.Extras["reason"], "maximum length of 2")
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
 
 func TestGetLiquidityPoolByID(t *testing.T) {
 	tt := test.Start(t)

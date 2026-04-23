@@ -2,6 +2,7 @@ package actions
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -15,6 +16,11 @@ import (
 	"github.com/stellar/stellar-horizon/internal/ledger"
 	"github.com/stellar/stellar-horizon/internal/resourceadapter"
 )
+
+// A liquidity pool has exactly two reserve assets, so any filter value above
+// two can only match zero pools while still forcing the server to allocate and
+// build an oversized SQL query.
+const maxLiquidityPoolReserves = 2
 
 // GetLiquidityPoolByIDHandler is the action handler for all end-points returning a liquidity pool.
 type GetLiquidityPoolByIDHandler struct{}
@@ -73,6 +79,14 @@ func (q LiquidityPoolsQuery) URITemplate() string {
 
 // Validate validates and parses the query
 func (q *LiquidityPoolsQuery) Validate() error {
+	// Reject over-long inputs before calling strings.Split, which would
+	// otherwise allocate a slice proportional to the number of commas.
+	if strings.Count(q.Reserves, ",")+1 > maxLiquidityPoolReserves {
+		return problem.MakeInvalidFieldProblem(
+			"reserves",
+			fmt.Errorf("reserves exceeds maximum length of %d", maxLiquidityPoolReserves),
+		)
+	}
 	assets := []xdr.Asset{}
 	reserves := strings.Split(q.Reserves, ",")
 	reservesErr := problem.MakeInvalidFieldProblem(
