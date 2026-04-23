@@ -1,6 +1,7 @@
 package history
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stellar/go-stellar-sdk/toid"
@@ -39,6 +40,34 @@ func filterByAccount(trades []Trade, account string) []Trade {
 		}
 	}
 	return result
+}
+
+// TestCreateTradesSQLUsesUnionAll guards against a regression where the account,
+// offer, or liquidity-pool filter variant's subquery UNION is switched back to
+// plain UNION (which forces a server-side dedup sort and was the dominant
+// temp-file I/O source on pubnet). The two branches are disjoint by protocol
+// invariant, so UNION ALL is semantically equivalent and significantly cheaper.
+func TestCreateTradesSQLUsesUnionAll(t *testing.T) {
+	cases := []struct {
+		name  string
+		query historyTradesQuery
+	}{
+		{"account", historyTradesQuery{accountID: 1, tradeType: AllTrades, orderPreserved: true}},
+		{"offer", historyTradesQuery{offerID: 1, tradeType: AllTrades, orderPreserved: true}},
+		{"pool", historyTradesQuery{poolID: 1, tradeType: AllTrades, orderPreserved: true}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			sql, _, err := createTradesSQL(descPQ, 0, c.query)
+			if err != nil {
+				t.Fatalf("createTradesSQL failed: %v", err)
+			}
+			if !strings.Contains(sql, "UNION ALL") {
+				t.Errorf("generated SQL must use UNION ALL (not UNION) for the %s filter; got: %s", c.name, sql)
+			}
+		})
+	}
 }
 
 func TestSelectTrades(t *testing.T) {

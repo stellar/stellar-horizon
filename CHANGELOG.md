@@ -5,6 +5,12 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Fixed
+- Reduce PostgreSQL temp-file I/O for the `/trades` endpoint when filtered by account, offer, or liquidity pool. The account-filter query pattern was the dominant contributor to slow-query time and replication lag on pubnet. The subquery UNION now uses `UNION ALL` (the two branches are disjoint by protocol invariant — an account cannot match its own offer, a trade matches two distinct offers, and an LP trade has the pool on exactly one side) and each branch now applies the outer `LIMIT` so only the top rows per branch are materialized rather than the entire filtered set.
+
+### DB Schema Migration
+- Add composite index `htrd_by_base_account_op_order` on `history_trades(base_account_id, history_operation_id, "order")` and `htrd_by_counter_account_op_order` on `(counter_account_id, history_operation_id, "order")` to give the planner a density-independent, spill-free plan for account-filtered trade queries. At pubnet scale each index build takes multiple hours; the migration uses `CREATE INDEX CONCURRENTLY` to avoid blocking writes. The existing single-column indexes `htrd_by_base_account` and `htrd_by_counter_account` are retained until follow-up observation confirms the composites cover all usage.
+
 ## 26.0.0
 
 **This release adds support for Protocol 26**

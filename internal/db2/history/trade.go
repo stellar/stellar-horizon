@@ -204,8 +204,8 @@ func createTradesSQL(page db2.PageQuery, oldestLedger int32, query historyTrades
 			secondSelect = sql.Where("htrd.counter_liquidity_pool_id = ?", query.poolID)
 		}
 
-		firstSelect = appendOrdering(firstSelect, oldestLedger, op, idx, page.Order)
-		secondSelect = appendOrdering(secondSelect, oldestLedger, op, idx, page.Order)
+		firstSelect = appendOrdering(firstSelect, oldestLedger, op, idx, page.Order).Limit(page.Limit)
+		secondSelect = appendOrdering(secondSelect, oldestLedger, op, idx, page.Order).Limit(page.Limit)
 		firstSQL, firstArgs, err := firstSelect.ToSql()
 		if err != nil {
 			return "", nil, errors.Wrap(err, "error building a firstSelect query")
@@ -215,7 +215,13 @@ func createTradesSQL(page db2.PageQuery, oldestLedger int32, query historyTrades
 			return "", nil, errors.Wrap(err, "error building a secondSelect query")
 		}
 
-		rawSQL := fmt.Sprintf("(%s) UNION (%s) ", firstSQL, secondSQL)
+		// UNION ALL is safe here: the two branches filter on base_/counter_ columns of the same
+		// field (account, offer, or liquidity_pool), and stellar-core's invariants guarantee those
+		// columns never hold the same non-null value in a single trade row — an account cannot
+		// match its own offer, a trade matches two distinct offers, and an LP trade has one side
+		// as the pool and the other as an account (so exactly one of base_/counter_liquidity_pool_id
+		// is non-null). This lets PostgreSQL skip the dedup sort UNION would otherwise force.
+		rawSQL := fmt.Sprintf("(%s) UNION ALL (%s) ", firstSQL, secondSQL)
 		args := append(firstArgs, secondArgs...)
 		// Order the final UNION:
 		switch page.Order {
