@@ -20,6 +20,46 @@ import (
 	"github.com/stellar/stellar-horizon/internal/test"
 )
 
+func TestAccountsQueryAsset(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		filter  string
+		wantNil bool
+		wantErr bool
+	}{
+		{name: "empty", filter: "", wantNil: true, wantErr: false},
+		{name: "valid credit", filter: "USD:" + trustLineIssuer, wantNil: false, wantErr: false},
+		{name: "lowercase native rejected", filter: "native", wantNil: true, wantErr: true},
+		{name: "mixed-case native rejected", filter: "Native", wantNil: true, wantErr: true},
+		{name: "uppercase native rejected", filter: "NATIVE", wantNil: true, wantErr: true},
+		{name: "no colon", filter: "noColon", wantNil: true, wantErr: true},
+		{name: "bare colon", filter: ":", wantNil: true, wantErr: true},
+		{name: "missing issuer", filter: "A:", wantNil: true, wantErr: true},
+		{name: "missing code", filter: ":B", wantNil: true, wantErr: true},
+		{name: "extra colons", filter: "too:many:colons", wantNil: true, wantErr: true},
+		{name: "invalid issuer", filter: "USD:not-an-address", wantNil: true, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			q := AccountsQuery{AssetFilter: tc.filter}
+			var (
+				asset *xdr.Asset
+				err   error
+			)
+			assert.NotPanics(t, func() { asset, err = q.Asset() })
+			if tc.wantNil {
+				assert.Nil(t, asset)
+			} else {
+				assert.NotNil(t, asset)
+			}
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 var (
 	trustLineIssuer = "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
 	accountOne      = "GABGMPEKKDWR2WFH5AJOZV5PDKLJEHGCR3Q24ALETWR5H3A7GI3YTS7V"

@@ -18,6 +18,114 @@ var (
 	maxAssetsParamLength = 2
 )
 
+func TestStrictReceivePathsQueryAmount(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		amount  string
+		wantErr bool
+	}{
+		{name: "valid", amount: "10.0", wantErr: false},
+		{name: "empty", amount: "", wantErr: true},
+		{name: "not a number", amount: "abc", wantErr: true},
+		{name: "malformed decimal", amount: "1.2.3", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			q := StrictReceivePathsQuery{DestinationAmount: tc.amount}
+			var err error
+			assert.NotPanics(t, func() { _, err = q.Amount() })
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestStrictReceivePathsQueryDestinationAsset(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		assetType string
+		code      string
+		issuer    string
+		wantErr   bool
+	}{
+		{name: "native", assetType: "native", wantErr: false},
+		{name: "credit", assetType: "credit_alphanum4", code: "USD", issuer: dummyIssuer, wantErr: false},
+		{name: "invalid type", assetType: "garbage", wantErr: true},
+		{name: "bad issuer", assetType: "credit_alphanum4", code: "USD", issuer: "not-an-address", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			q := StrictReceivePathsQuery{
+				DestinationAssetType:   tc.assetType,
+				DestinationAssetCode:   tc.code,
+				DestinationAssetIssuer: tc.issuer,
+			}
+			var err error
+			assert.NotPanics(t, func() { _, err = q.DestinationAsset() })
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestFindFixedPathsQueryAmount(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		amount  string
+		wantErr bool
+	}{
+		{name: "valid", amount: "10.0", wantErr: false},
+		{name: "empty", amount: "", wantErr: true},
+		{name: "not a number", amount: "abc", wantErr: true},
+		{name: "malformed decimal", amount: "1.2.3", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			q := FindFixedPathsQuery{SourceAmount: tc.amount}
+			var err error
+			assert.NotPanics(t, func() { _, err = q.Amount() })
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestFindFixedPathsQuerySourceAsset(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		assetType string
+		code      string
+		issuer    string
+		wantErr   bool
+	}{
+		{name: "native", assetType: "native", wantErr: false},
+		{name: "credit", assetType: "credit_alphanum4", code: "USD", issuer: dummyIssuer, wantErr: false},
+		{name: "invalid type", assetType: "garbage", wantErr: true},
+		{name: "bad issuer", assetType: "credit_alphanum4", code: "USD", issuer: "not-an-address", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			q := FindFixedPathsQuery{
+				SourceAssetType:   tc.assetType,
+				SourceAssetCode:   tc.code,
+				SourceAssetIssuer: tc.issuer,
+			}
+			var err error
+			assert.NotPanics(t, func() { _, err = q.SourceAsset() })
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestAssetsForAddressRequiresTransaction(t *testing.T) {
 	tt := test.Start(t)
 	defer tt.Finish()

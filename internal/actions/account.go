@@ -96,7 +96,11 @@ func (q AccountsQuery) Validate() error {
 		)
 	}
 
-	numParams, err := countNonEmpty(q.Sponsor, q.Signer, q.Asset(), q.LiquidityPool)
+	asset, err := q.Asset()
+	if err != nil {
+		return err
+	}
+	numParams, err := countNonEmpty(q.Sponsor, q.Signer, asset, q.LiquidityPool)
 	if err != nil {
 		return errors.Wrap(err, "Could not count request params")
 	}
@@ -108,15 +112,22 @@ func (q AccountsQuery) Validate() error {
 }
 
 // Asset returns an xdr.Asset representing the Asset we want to find the trustees by.
-func (q AccountsQuery) Asset() *xdr.Asset {
+// The native asset is rejected by Validate above with a specific error message, so
+// this method does not special-case "native"; it is treated as a malformed filter
+// (single token, no colon) and returns the generic asset-format error.
+func (q AccountsQuery) Asset() (*xdr.Asset, error) {
 	if len(q.AssetFilter) == 0 {
-		return nil
+		return nil, nil
 	}
-
 	parts := strings.Split(q.AssetFilter, ":")
-	asset := xdr.MustNewCreditAsset(parts[0], parts[1])
-
-	return &asset
+	if len(parts) != 2 {
+		return nil, problem.MakeInvalidFieldProblem("asset", errors.New(customTagsErrorMessages["asset"]))
+	}
+	asset, err := xdr.NewCreditAsset(parts[0], parts[1])
+	if err != nil {
+		return nil, problem.MakeInvalidFieldProblem("asset", err)
+	}
+	return &asset, nil
 }
 
 // GetAccountsHandler is the action handler for the /accounts endpoint
@@ -166,7 +177,15 @@ func (handler GetAccountsHandler) GetResourcePage(
 			return nil, errors.Wrap(err, "loading account records")
 		}
 	} else {
-		records, err = historyQ.AccountsForAsset(ctx, *qp.Asset(), pq)
+		var asset *xdr.Asset
+		asset, err = qp.Asset()
+		if err != nil {
+			return nil, err
+		}
+		if asset == nil {
+			return nil, invalidAccountsParams
+		}
+		records, err = historyQ.AccountsForAsset(ctx, *asset, pq)
 		if err != nil {
 			return nil, errors.Wrap(err, "loading account records")
 		}

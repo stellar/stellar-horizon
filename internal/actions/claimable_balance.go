@@ -69,33 +69,45 @@ type ClaimableBalancesQuery struct {
 	ClaimantFilter string `schema:"claimant" valid:"accountID,optional"`
 }
 
-func (q ClaimableBalancesQuery) asset() *xdr.Asset {
-	if len(q.AssetFilter) > 0 {
-		switch q.AssetFilter {
-		case "native":
-			asset := xdr.MustNewNativeAsset()
-			return &asset
-		default:
-			parts := strings.Split(q.AssetFilter, ":")
-			asset := xdr.MustNewCreditAsset(parts[0], parts[1])
-			return &asset
-		}
+func (q ClaimableBalancesQuery) asset() (*xdr.Asset, error) {
+	if len(q.AssetFilter) == 0 {
+		return nil, nil
 	}
-	return nil
+	if q.AssetFilter == "native" {
+		asset := xdr.MustNewNativeAsset()
+		return &asset, nil
+	}
+	parts := strings.Split(q.AssetFilter, ":")
+	if len(parts) != 2 {
+		return nil, problem.MakeInvalidFieldProblem("asset", errors.New(customTagsErrorMessages["asset"]))
+	}
+	asset, err := xdr.NewCreditAsset(parts[0], parts[1])
+	if err != nil {
+		return nil, problem.MakeInvalidFieldProblem("asset", err)
+	}
+	return &asset, nil
 }
 
-func (q ClaimableBalancesQuery) sponsor() *xdr.AccountId {
-	if q.SponsorFilter != "" {
-		return xdr.MustAddressPtr(q.SponsorFilter)
+func (q ClaimableBalancesQuery) sponsor() (*xdr.AccountId, error) {
+	if q.SponsorFilter == "" {
+		return nil, nil
 	}
-	return nil
+	accountID, err := xdr.AddressToAccountId(q.SponsorFilter)
+	if err != nil {
+		return nil, problem.MakeInvalidFieldProblem("sponsor", err)
+	}
+	return &accountID, nil
 }
 
-func (q ClaimableBalancesQuery) claimant() *xdr.AccountId {
-	if q.ClaimantFilter != "" {
-		return xdr.MustAddressPtr(q.ClaimantFilter)
+func (q ClaimableBalancesQuery) claimant() (*xdr.AccountId, error) {
+	if q.ClaimantFilter == "" {
+		return nil, nil
 	}
-	return nil
+	accountID, err := xdr.AddressToAccountId(q.ClaimantFilter)
+	if err != nil {
+		return nil, problem.MakeInvalidFieldProblem("claimant", err)
+	}
+	return &accountID, nil
 }
 
 // URITemplate returns a rfc6570 URI template the query struct
@@ -124,11 +136,23 @@ func (handler GetClaimableBalancesHandler) GetResourcePage(
 		return nil, err
 	}
 
+	asset, err := qp.asset()
+	if err != nil {
+		return nil, err
+	}
+	sponsor, err := qp.sponsor()
+	if err != nil {
+		return nil, err
+	}
+	claimant, err := qp.claimant()
+	if err != nil {
+		return nil, err
+	}
 	query := history.ClaimableBalancesQuery{
 		PageQuery: pq,
-		Asset:     qp.asset(),
-		Sponsor:   qp.sponsor(),
-		Claimant:  qp.claimant(),
+		Asset:     asset,
+		Sponsor:   sponsor,
+		Claimant:  claimant,
 	}
 
 	_, _, err = query.Cursor()
