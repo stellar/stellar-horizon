@@ -5,7 +5,7 @@ go 1.25
 require (
 	cloud.google.com/go/storage v1.42.0 // indirect
 	github.com/2opremio/pretty v0.2.2-0.20230601220618-e1d5758b2a95
-	github.com/BurntSushi/toml v1.3.2
+	github.com/BurntSushi/toml v1.3.2 // indirect
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/adjust/goautoneg v0.0.0-20150426214442-d788f35a0315
@@ -36,7 +36,7 @@ require (
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.17.0
-	github.com/stellar/go-xdr v0.0.0-20260312225820-cc2b0611aabf // indirect
+	github.com/stellar/go-xdr v0.0.0-20260423131911-a87d4d0789c3 // indirect
 	github.com/stellar/throttled v2.2.3-0.20190823235211-89d75816f59d+incompatible
 	github.com/stretchr/testify v1.11.1
 	github.com/xdrpp/goxdr v0.1.1 // indirect
@@ -48,7 +48,7 @@ require (
 require (
 	github.com/creachadair/jrpc2 v1.2.0
 	github.com/fsouza/fake-gcs-server v1.49.2
-	github.com/stellar/go-stellar-sdk v0.3.1-0.20260325174035-031e5bfdc4bd
+	github.com/stellar/go-stellar-sdk v0.5.1-0.20260504173038-3f90dff249a9
 )
 
 require (
@@ -136,7 +136,7 @@ require (
 	github.com/imkira/go-interpol v1.1.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/klauspost/compress v1.17.6
+	github.com/klauspost/compress v1.17.6 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
