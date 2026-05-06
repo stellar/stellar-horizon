@@ -12,6 +12,8 @@ import (
 	"github.com/stellar/stellar-horizon/internal/test/integration"
 )
 
+const LOADTEST_EXPECTED_NUM_LEDGERS = 30
+
 // TestGenerateLedgers generates ledgers using stellar-core's apply-load command.
 // The generated ledgers can be written to a compressed XDR file for use in load testing.
 // It also extracts ledger entry fixtures from the pre-benchmark checkpoint.
@@ -54,8 +56,17 @@ func TestGenerateLedgers(t *testing.T) {
 	logger.SetLevel(log.InfoLevel)
 
 	// Create and run the apply-load generator
-	a, err := loadtest.NewApplyLoad(logger, coreBinaryPath, configPath, outputPath, fixturesPath, workDir)
+	res, err := loadtest.ApplyLoad(t.Context(), loadtest.Options{
+		CoreBinaryPath: coreBinaryPath,
+		ConfigPath:     configPath,
+		OutputPath:     outputPath,
+		FixturesPath:   fixturesPath,
+		WorkDirPath:    workDir,
+		Logger:         logger,
+	})
 	require.NoError(t, err)
+	require.Equal(t, LOADTEST_EXPECTED_NUM_LEDGERS, res.CountLedgers, "Expected %d ledgers, got %d",
+		LOADTEST_EXPECTED_NUM_LEDGERS, res.CountLedgers)
+	require.Greater(t, res.CountFixtures, 0, "Expected at least 1 fixture, got %d", res.CountFixtures)
 	t.Log("Successfully initialized apply-load generator")
-	require.NoError(t, a.RunApplyLoadAndWrite(t.Context()))
 }
