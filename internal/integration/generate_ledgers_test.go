@@ -68,5 +68,4 @@ func TestGenerateLedgers(t *testing.T) {
 	require.Equal(t, LOADTEST_EXPECTED_NUM_LEDGERS, res.CountLedgers, "Expected %d ledgers, got %d",
 		LOADTEST_EXPECTED_NUM_LEDGERS, res.CountLedgers)
 	require.Greater(t, res.CountFixtures, 0, "Expected at least 1 fixture, got %d", res.CountFixtures)
-	t.Log("Successfully initialized apply-load generator")
 }
