@@ -2,6 +2,7 @@ package integration
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -47,9 +48,15 @@ func TestGenerateLedgers(t *testing.T) {
 		configPath = "testdata/apply-load.cfg"
 	}
 
-	outputPath := os.Getenv("LOADTEST_OUTPUT_PATH")
-	fixturesPath := os.Getenv("LOADTEST_FIXTURES_PATH")
 	workDir := t.TempDir()
+	outputPath := os.Getenv("LOADTEST_OUTPUT_PATH")
+	if outputPath == "" {
+		outputPath = filepath.Join(workDir, "ledgers.xdr.zst")
+	}
+	fixturesPath := os.Getenv("LOADTEST_FIXTURES_PATH")
+	if fixturesPath == "" {
+		fixturesPath = filepath.Join(workDir, "fixtures.xdr.zst")
+	}
 
 	logger := log.New()
 	logger.SetOutput(&testWriter{test: t})
