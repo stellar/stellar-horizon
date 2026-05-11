@@ -55,7 +55,7 @@ func TestGenerateLedgers(t *testing.T) {
 	logger.SetOutput(&testWriter{test: t})
 	logger.SetLevel(log.InfoLevel)
 
-	// Create and run the apply-load generator
+	// Run apply-load
 	res, err := loadtest.ApplyLoad(t.Context(), loadtest.Options{
 		CoreBinaryPath: coreBinaryPath,
 		ConfigPath:     configPath,
