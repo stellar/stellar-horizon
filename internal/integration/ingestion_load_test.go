@@ -29,13 +29,28 @@ import (
 
 const loadTestNetworkPassphrase = "load test network"
 
+// applyLoadNetworkPassphrase is the network passphrase force-set by core's
+// apply-load command starting with stellar-core 27. Older cores used the
+// NETWORK_PASSPHRASE from the apply-load config, which set
+// loadTestNetworkPassphrase.
+const applyLoadNetworkPassphrase = "Apply Load"
+
+// loadTestNetworkPassphraseFor returns the network passphrase embedded in the
+// load-test ledger fixtures for the given protocol version.
+func loadTestNetworkPassphraseFor(protocolVersion uint32) string {
+	if protocolVersion >= 27 {
+		return applyLoadNetworkPassphrase
+	}
+	return loadTestNetworkPassphrase
+}
+
 func TestLoadTestLedgerBackend(t *testing.T) {
 	if integration.GetCoreMaxSupportedProtocol() < 25 {
 		t.Skip("This test run does not support less than Protocol 25")
 	}
 
 	itest := integration.NewTest(t, integration.Config{
-		NetworkPassphrase: loadTestNetworkPassphrase,
+		NetworkPassphrase: loadTestNetworkPassphraseFor(integration.GetCoreMaxSupportedProtocol()),
 	})
 	senderKP, senderAccount := itest.CreateAccount("10000000")
 	recipientKP, _ := itest.CreateAccount("10000000")
@@ -186,6 +201,7 @@ func TestLoadTestLedgerBackend(t *testing.T) {
 }
 
 func TestLoadTestLedgerBackendWithoutMerge(t *testing.T) {
+	fixturePassphrase := loadTestNetworkPassphraseFor(horizoningest.MaxSupportedProtocolVersion)
 	replayConfig := loadtest.LedgerBackendConfig{
 		NetworkPassphrase:   "invalid passphrase",
 		LedgersFilePath:     filepath.Join("testdata", fmt.Sprintf("load-test-ledgers-v%d.xdr.zstd", horizoningest.MaxSupportedProtocolVersion)),
@@ -215,7 +231,7 @@ func TestLoadTestLedgerBackendWithoutMerge(t *testing.T) {
 
 	// now, we recreate the loadtest ledger backend with the
 	// correct network passphrase
-	replayConfig.NetworkPassphrase = loadTestNetworkPassphrase
+	replayConfig.NetworkPassphrase = fixturePassphrase
 	loadTestBackend = loadtest.NewLedgerBackend(replayConfig)
 
 	_, err := loadTestBackend.GetLatestLedgerSequence(context.Background())
@@ -295,14 +311,14 @@ func TestLoadTestLedgerBackendWithoutMerge(t *testing.T) {
 
 	require.NoError(t, loadTestBackend.Close())
 
-	changes := extractChanges(t, loadTestNetworkPassphrase, ledgers[0:1])
+	changes := extractChanges(t, fixturePassphrase, ledgers[0:1])
 	checkLedgerSequenceInChanges(t, changes, startLedger)
 
 	for cur := startLedger + 1; cur <= endLedger; cur++ {
 		i := int(cur - startLedger)
-		changes = extractChanges(t, loadTestNetworkPassphrase, ledgers[i:i+1])
+		changes = extractChanges(t, fixturePassphrase, ledgers[i:i+1])
 		expectedChanges := extractChanges(
-			t, loadTestNetworkPassphrase, []xdr.LedgerCloseMeta{generatedLedgers[i]},
+			t, fixturePassphrase, []xdr.LedgerCloseMeta{generatedLedgers[i]},
 		)
 		checkLedgerSequenceInChanges(t, changes, cur)
 		requireChangesAreEqual(t, expectedChanges, changes)
@@ -314,7 +330,7 @@ func TestIngestLoadTestCmd(t *testing.T) {
 		t.Skip("This test run does not support less than Protocol 25")
 	}
 	itest := integration.NewTest(t, integration.Config{
-		NetworkPassphrase: loadTestNetworkPassphrase,
+		NetworkPassphrase: loadTestNetworkPassphraseFor(integration.GetCoreMaxSupportedProtocol()),
 	})
 
 	ledgersFilePath := filepath.Join("testdata", fmt.Sprintf("load-test-ledgers-v%d.xdr.zstd", itest.Config().ProtocolVersion))
@@ -433,7 +449,7 @@ func TestIngestLoadTestCmdWithFixtures(t *testing.T) {
 	}
 	networkPassphrase := os.Getenv("LOADTEST_NETWORK_PASSPHRASE")
 	if networkPassphrase == "" {
-		networkPassphrase = loadTestNetworkPassphrase
+		networkPassphrase = loadTestNetworkPassphraseFor(integration.GetCoreMaxSupportedProtocol())
 	}
 	itest := integration.NewTest(t, integration.Config{
 		NetworkPassphrase: networkPassphrase,
@@ -514,7 +530,7 @@ func TestIngestLoadTestRestoreCmd(t *testing.T) {
 		t.Skip("This test run does not support less than Protocol 25")
 	}
 	itest := integration.NewTest(t, integration.Config{
-		NetworkPassphrase: loadTestNetworkPassphrase,
+		NetworkPassphrase: loadTestNetworkPassphraseFor(integration.GetCoreMaxSupportedProtocol()),
 	})
 
 	ledgersFilePath := filepath.Join("testdata", fmt.Sprintf("load-test-ledgers-v%d.xdr.zstd", itest.Config().ProtocolVersion))
