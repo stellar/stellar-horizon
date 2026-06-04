@@ -30,10 +30,11 @@ import (
 //   - HORIZON_INTEGRATION_TESTS_ENABLED=true
 //
 // Optional env vars:
-//   - HORIZON_INTEGRATION_TESTS_CAPTIVE_CORE_BIN: Path to stellar-core 25.x with BUILD_TESTS enabled
-//     (default: looks for "stellar-core" in PATH)
+//   - HORIZON_INTEGRATION_TESTS_CAPTIVE_CORE_BIN: Path to stellar-core 25.x or newer with
+//     BUILD_TESTS enabled (default: looks for "stellar-core" in PATH)
 //   - LOADTEST_CORE_CONFIG_PATH: Path to custom apply-load config file
-//     (default: testdata/apply-load.cfg)
+//     (default: testdata/apply-load.cfg for stellar-core < 27,
+//     testdata/apply-load-v27.cfg otherwise)
 //   - LOADTEST_OUTPUT_PATH: Destination path for compressed ledger XDR output
 //     (default: empty, no file written)
 //   - LOADTEST_FIXTURES_PATH: Destination path for compressed fixtures XDR output
@@ -55,10 +56,22 @@ func TestGenerateLedgers(t *testing.T) {
 	coreVersion, err := ledgerbackend.CoreBuildVersion(coreBinaryPath)
 	require.NoError(t, err)
 
-	// Use custom config if provided, otherwise use default
+	// The apply-load command runs at the core's current ledger protocol version,
+	// which may be greater than HORIZON_INTEGRATION_TESTS_CORE_MAX_SUPPORTED_PROTOCOL.
+	coreProtocolVersion, err := ledgerbackend.CoreProtocolVersion(coreBinaryPath)
+	require.NoError(t, err)
+
+	// Use custom config if provided, otherwise use a default based on the core
+	// version. Core 27 reworked the apply-load configuration (removed the sampled
+	// APPLY_LOAD_* load parameters in favor of APPLY_LOAD_MODE), so older configs
+	// fail to parse on newer cores and vice versa.
 	configPath := os.Getenv("LOADTEST_CORE_CONFIG_PATH")
 	if configPath == "" {
-		configPath = "testdata/apply-load.cfg"
+		if coreMajorVersion(t, coreVersion) >= 27 {
+			configPath = "testdata/apply-load-v27.cfg"
+		} else {
+			configPath = "testdata/apply-load.cfg"
+		}
 	}
 
 	outputPath := os.Getenv("LOADTEST_OUTPUT_PATH")
@@ -77,7 +90,7 @@ func TestGenerateLedgers(t *testing.T) {
 
 	t.Log("Verifying fixtures completeness...")
 	metadataPath := filepath.Join(workDir, cfg.MetadataOutputStream)
-	verifyFixturesCompleteness(t, workDir, metadataPath, cfg.NetworkPassphrase, preBenchmarkCheckpoint)
+	verifyFixturesCompleteness(t, workDir, metadataPath, cfg.NetworkPassphrase, preBenchmarkCheckpoint, coreProtocolVersion)
 
 	// Stream ledgers to output file, or just count them for verification
 	// Only include benchmark ledgers (after the pre-benchmark checkpoint),
@@ -95,6 +108,17 @@ func TestGenerateLedgers(t *testing.T) {
 		count := streamFixturesToFile(t, workDir, cfg.NetworkPassphrase, preBenchmarkCheckpoint, fixturesPath)
 		t.Logf("Wrote %d ledger entry fixtures", count)
 	}
+}
+
+// coreMajorVersion extracts the major version from the output of
+// "stellar-core version", e.g. "stellar-core 27.0.0 (7696c069d...)" -> 27.
+func coreMajorVersion(t *testing.T, coreVersion string) int {
+	re := regexp.MustCompile(`(\d+)\.\d+\.\d+`)
+	matches := re.FindStringSubmatch(coreVersion)
+	require.NotNil(t, matches, "could not parse major version from %q", coreVersion)
+	major, err := strconv.Atoi(matches[1])
+	require.NoError(t, err)
+	return major
 }
 
 func runApplyLoad(t *testing.T, coreBinaryPath, configPath string, cfg applyLoadConfig) (string, uint32) {
@@ -304,7 +328,7 @@ func copyFile(t *testing.T, src, dst string) {
 	require.NoError(t, os.WriteFile(dst, data, 0644))
 }
 
-func verifyFixturesCompleteness(t *testing.T, workDir, metadataPath, networkPassphrase string, checkpointLedger uint32) {
+func verifyFixturesCompleteness(t *testing.T, workDir, metadataPath, networkPassphrase string, checkpointLedger uint32, coreProtocolVersion uint) {
 	// Step 1: Load all ledger entry keys from fixtures into a set
 	knownKeys := make(map[string]bool)
 	checkpointReader := openCheckpointReader(t, workDir, networkPassphrase, checkpointLedger)
@@ -340,7 +364,10 @@ func verifyFixturesCompleteness(t *testing.T, workDir, metadataPath, networkPass
 		} else {
 			require.NoError(t, err)
 		}
-		require.True(t, ledger.ProtocolVersion() == integration.GetCoreMaxSupportedProtocol())
+		// apply-load runs at the core's current ledger protocol version, which may
+		// exceed HORIZON_INTEGRATION_TESTS_CORE_MAX_SUPPORTED_PROTOCOL (e.g. an
+		// unreleased core whose current protocol is one past the max supported one).
+		require.Equal(t, uint32(coreProtocolVersion), ledger.ProtocolVersion())
 
 		// Extract changes from this ledger
 		changeReader, err := ingest.NewLedgerChangeReaderFromLedgerCloseMeta(networkPassphrase, ledger)
