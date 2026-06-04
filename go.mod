@@ -171,4 +171,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/stellar/go-stellar-sdk => github.com/sisuresh/go v0.0.0-20260603233216-130456cc9b69
+replace github.com/stellar/go-stellar-sdk => github.com/sisuresh/go v0.0.0-20260603235145-a8d5b3066361
