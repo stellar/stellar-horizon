@@ -207,7 +207,7 @@ func (f *fakeLedgerBackend) GetLedger(ctx context.Context, sequence uint32) (xdr
 }
 
 func (f *fakeLedgerBackend) GetLedgerRaw(ctx context.Context, sequence uint32) ([]byte, error) {
-	_, meta, err := f.getLedgerAsync(ctx, sequence)
+	meta, err := f.GetLedger(ctx, sequence)
 	if err != nil {
 		return nil, err
 	}
