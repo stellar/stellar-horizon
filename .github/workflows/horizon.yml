@@ -35,8 +35,8 @@ jobs:
       PROTOCOL_25_CORE_DEBIAN_PKG_VERSION: 25.2.0-3058.bb195c49d.noble~buildtests
       PROTOCOL_25_CORE_DOCKER_IMG: stellar/stellar-core:25.2.0-3058.bb195c49d.noble
       PROTOCOL_25_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:26.0.0-testing-185
-      PROTOCOL_26_CORE_DOCKER_IMG: stellar/stellar-core:25.2.1-3069.73babfde9.noble
-      PROTOCOL_26_CORE_DEBIAN_PKG_VERSION: 25.2.1-3069.73babfde9.noble~buildtests
+      PROTOCOL_26_CORE_DOCKER_IMG: stellar/stellar-core:27.0.0-3288.7696c069d.jammy
+      PROTOCOL_26_CORE_DEBIAN_PKG_VERSION: 27.0.0-3288.7696c069d.jammy~buildtests
       PROTOCOL_26_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:26.0.0-testing-185
       PGHOST: localhost
       PGPORT: 5432
@@ -82,6 +82,11 @@ jobs:
         run: |
           sudo wget -qO - https://apt.stellar.org/SDF.asc | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=true sudo apt-key add -
           sudo bash -c 'echo "deb https://apt.stellar.org noble unstable" > /etc/apt/sources.list.d/SDF-unstable.list'
+          # The 27.0.0 core build is only published for jammy, so add the jammy unstable repo as well,
+          # plus the LLVM-20 jammy repo for its libc++1/libc++abi1/libunwind runtime dependencies.
+          sudo bash -c 'echo "deb https://apt.stellar.org jammy unstable" >> /etc/apt/sources.list.d/SDF-unstable.list'
+          sudo wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=true sudo apt-key add -
+          sudo bash -c 'echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-20 main" > /etc/apt/sources.list.d/llvm-jammy.list'
           sudo apt-get update && sudo apt-get install -y stellar-core="$PROTOCOL_${{ matrix.protocol-version }}_CORE_DEBIAN_PKG_VERSION"
           echo "Using stellar core version $(stellar-core version)"
           echo 'HORIZON_INTEGRATION_TESTS_CAPTIVE_CORE_BIN=/usr/bin/stellar-core' >> $GITHUB_ENV
