@@ -13,7 +13,7 @@ jobs:
         os: [ubuntu-24.04]
         go: ["1.25", "1.26"]
         pg: [14, 16]
-        protocol-version: [25, 26]
+        protocol-version: [26, 27]
     runs-on: ${{ matrix.os }}
     services:
       postgres:
@@ -32,12 +32,12 @@ jobs:
     env:
       HORIZON_INTEGRATION_TESTS_ENABLED: true
       HORIZON_INTEGRATION_TESTS_CORE_MAX_SUPPORTED_PROTOCOL: ${{ matrix.protocol-version }}
-      PROTOCOL_25_CORE_DEBIAN_PKG_VERSION: 25.2.0-3058.bb195c49d.noble~buildtests
-      PROTOCOL_25_CORE_DOCKER_IMG: stellar/stellar-core:25.2.0-3058.bb195c49d.noble
-      PROTOCOL_25_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:26.0.0-testing-185
-      PROTOCOL_26_CORE_DOCKER_IMG: stellar/stellar-core:27.0.0-3288.7696c069d.jammy
-      PROTOCOL_26_CORE_DEBIAN_PKG_VERSION: 27.0.0-3288.7696c069d.jammy~buildtests
-      PROTOCOL_26_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:26.0.0-testing-185
+      PROTOCOL_26_CORE_DOCKER_IMG: stellar/stellar-core:26.0.0-3089.8e43a2d3b.noble
+      PROTOCOL_26_CORE_DEBIAN_PKG_VERSION: 26.0.0-3089.8e43a2d3b.noble
+      PROTOCOL_26_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:26.0.0
+      PROTOCOL_27_CORE_DOCKER_IMG: stellar/stellar-core:27.0.0-3288.7696c069d.noble
+      PROTOCOL_27_CORE_DEBIAN_PKG_VERSION: 27.0.0-3288.7696c069d.noble
+      PROTOCOL_27_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:26.0.0
       PGHOST: localhost
       PGPORT: 5432
       PGUSER: postgres
