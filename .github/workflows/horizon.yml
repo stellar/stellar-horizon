@@ -37,7 +37,7 @@ jobs:
       PROTOCOL_26_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:26.0.0
       PROTOCOL_27_CORE_DOCKER_IMG: stellar/stellar-core:27.0.0-3288.7696c069d.noble
       PROTOCOL_27_CORE_DEBIAN_PKG_VERSION: 27.0.0-3288.7696c069d.noble~buildtests
-      PROTOCOL_27_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:27.0.0-preview
+      PROTOCOL_27_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:27.0.0-preview-190
       PGHOST: localhost
       PGPORT: 5432
       PGUSER: postgres
