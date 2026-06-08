@@ -99,7 +99,7 @@ jobs:
       - name: Calculate the source hash
         id: calculate_source_hash
         run: |
-          combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-protocol-${{ matrix.protocol-version }}-${{ env.PROTOCOL_25_CORE_DOCKER_IMG }}-${{ env.PROTOCOL_25_STELLAR_RPC_DOCKER_IMG }}-${{ env.PROTOCOL_25_CORE_DEBIAN_PKG_VERSION }}-${{ env.PROTOCOL_26_CORE_DOCKER_IMG }}-${{ env.PREFIX }}" | sha256sum | cut -d ' ' -f 1)
+          combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-protocol-${{ matrix.protocol-version }}-${{ env.PROTOCOL_27_CORE_DOCKER_IMG }}-${{ env.PROTOCOL_27_STELLAR_RPC_DOCKER_IMG }}-${{ env.PROTOCOL_27_CORE_DEBIAN_PKG_VERSION }}-${{ env.PROTOCOL_26_CORE_DOCKER_IMG }}-${{ env.PREFIX }}" | sha256sum | cut -d ' ' -f 1)
           echo "COMBINED_SOURCE_HASH=$combined_hash" >> "$GITHUB_ENV"
 
       - name: Restore Horizon binary and integration tests source hash to cache
