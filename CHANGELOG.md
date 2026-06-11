@@ -5,6 +5,21 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## 27.0.0
+
+**This release adds support for Protocol 27**
+
+### Added
+- Added Protocol 27 ingestion support, including CAP-0071, and bumped `MaxSupportedProtocolVersion` to 27 ([#186](https://github.com/stellar/stellar-horizon/pull/186), [#190](https://github.com/stellar/stellar-horizon/pull/190)).
+
+### Updated
+- Updated `go-stellar-sdk` dependency to [v0.6.0](https://github.com/stellar/go-stellar-sdk/releases/tag/v0.6.0) ([#191](https://github.com/stellar/stellar-horizon/pull/191)).
+
+### Fixed
+- Return structured errors from filter parsing in query endpoints ([#183](https://github.com/stellar/stellar-horizon/pull/183)).
+- Validate the maximum number of reserves in the `/liquidity_pools` endpoint, rejecting filter values above two early instead of running a query that can only return no results ([#182](https://github.com/stellar/stellar-horizon/pull/182)).
+- Fixed misleading error field names in the `/paths/strict-send` and `/paths/strict-receive` path finding endpoints so the reported field matches the parameter the user actually provided ([#180](https://github.com/stellar/stellar-horizon/pull/180)).
+
 ## 26.0.0
 
 **This release adds support for Protocol 26**
