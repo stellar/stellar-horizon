@@ -13,7 +13,7 @@ jobs:
         os: [ubuntu-24.04]
         go: ["1.25", "1.26"]
         pg: [14, 16]
-        protocol-version: [26, 27]
+        protocol-version: [27, 28]
     runs-on: ${{ matrix.os }}
     services:
       postgres:
@@ -32,12 +32,15 @@ jobs:
     env:
       HORIZON_INTEGRATION_TESTS_ENABLED: true
       HORIZON_INTEGRATION_TESTS_CORE_MAX_SUPPORTED_PROTOCOL: ${{ matrix.protocol-version }}
-      PROTOCOL_26_CORE_DOCKER_IMG: stellar/stellar-core:26.0.0-3089.8e43a2d3b.jammy
-      PROTOCOL_26_CORE_DEBIAN_PKG_VERSION: 26.0.0-3089.8e43a2d3b.jammy~buildtests
-      PROTOCOL_26_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:26.0.0
       PROTOCOL_27_CORE_DOCKER_IMG: stellar/stellar-core:27.0.0-3288.7696c069d.jammy
       PROTOCOL_27_CORE_DEBIAN_PKG_VERSION: 27.0.0-3288.7696c069d.jammy~buildtests
       PROTOCOL_27_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:27.0.0-preview-190
+      # Protocol 28 (CAP-0083) runs against the vnext (next-protocol-enabled) core build.
+      PROTOCOL_28_CORE_DOCKER_IMG: stellar/unsafe-stellar-core:27.0.1-3348.ff61f2e6d.jammy-vnext
+      PROTOCOL_28_CORE_DEBIAN_PKG_VERSION: 27.0.1-3348.ff61f2e6d.jammy~vnext~buildtests
+      # TODO: bump to a Protocol 28 stellar-rpc image once stellar-rpc#789 publishes one.
+      # Left commented so the P28 leg stays amber instead of silently testing against a P27 RPC.
+      # PROTOCOL_28_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:27.0.0-194
       PGHOST: localhost
       PGPORT: 5432
       PGUSER: postgres
@@ -99,7 +102,7 @@ jobs:
       - name: Calculate the source hash
         id: calculate_source_hash
         run: |
-          combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-protocol-${{ matrix.protocol-version }}-${{ env.PROTOCOL_27_CORE_DOCKER_IMG }}-${{ env.PROTOCOL_27_STELLAR_RPC_DOCKER_IMG }}-${{ env.PROTOCOL_27_CORE_DEBIAN_PKG_VERSION }}-${{ env.PROTOCOL_26_CORE_DOCKER_IMG }}-${{ env.PREFIX }}" | sha256sum | cut -d ' ' -f 1)
+          combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-protocol-${{ matrix.protocol-version }}-${{ env.PROTOCOL_28_CORE_DOCKER_IMG }}-${{ env.PROTOCOL_28_STELLAR_RPC_DOCKER_IMG }}-${{ env.PROTOCOL_28_CORE_DEBIAN_PKG_VERSION }}-${{ env.PROTOCOL_27_CORE_DOCKER_IMG }}-${{ env.PREFIX }}" | sha256sum | cut -d ' ' -f 1)
           echo "COMBINED_SOURCE_HASH=$combined_hash" >> "$GITHUB_ENV"
 
       - name: Restore Horizon binary and integration tests source hash to cache
