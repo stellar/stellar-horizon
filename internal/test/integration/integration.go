@@ -157,6 +157,12 @@ func NewTest(t *testing.T, config Config) *Test {
 		t.Skip("skipping integration test: HORIZON_INTEGRATION_TESTS_ENABLED not set")
 	}
 
+	if config.EnableStellarRPC && os.Getenv("HORIZON_INTEGRATION_TESTS_STELLAR_RPC_DOCKER_IMG") == "" {
+		t.Skip("AMBER (tracked: stellar-rpc#789): no stellar-rpc image configured for this protocol; " +
+			"skipping rather than falling back to stellar/stellar-rpc:latest (a P27 RPC). " +
+			"Affects sac/invokehostfunction/extend_footprint_ttl/txsub/txsub_async/transaction.")
+	}
+
 	if config.ProtocolVersion == 0 {
 		// Default to the maximum supported protocol version
 		config.ProtocolVersion = ingest.MaxSupportedProtocolVersion

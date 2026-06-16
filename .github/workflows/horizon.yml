@@ -9,6 +9,8 @@ jobs:
   integration:
     name: Integration tests
     strategy:
+      # Never let a new-protocol leg cancel and mask a known-good previous-protocol leg.
+      fail-fast: false
       matrix:
         os: [ubuntu-24.04]
         go: ["1.25", "1.26"]
@@ -39,8 +41,15 @@ jobs:
       PROTOCOL_28_CORE_DOCKER_IMG: stellar/unsafe-stellar-core:27.0.1-3348.ff61f2e6d.jammy-vnext
       PROTOCOL_28_CORE_DEBIAN_PKG_VERSION: 27.0.1-3348.ff61f2e6d.jammy~vnext~buildtests
       # TODO: bump to a Protocol 28 stellar-rpc image once stellar-rpc#789 publishes one.
-      # Left commented so the P28 leg stays amber instead of silently testing against a P27 RPC.
+      # Until then the P28 leg builds a stellar-rpc image from #789 source (see the
+      # "Build P28 stellar-rpc image" step). Setting this var disables both that build
+      # step and the in-test amber skip. Left commented so the empty-var path is exercised.
       # PROTOCOL_28_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:27.0.0-194
+      # Pinned head of stellar-rpc#789 (fork sisuresh/stellar-rpc, base protocol-next).
+      # No p28-cap-0083 branch exists on stellar/stellar-rpc; the commit is reachable
+      # upstream only via refs/pull/789/head. Re-pin (and the cache key tracks it) when
+      # #789 advances. Used by the P28 build step and the integration-test cache hash.
+      PROTOCOL_28_STELLAR_RPC_PR_SHA: dbd841c89b0f7966659cbace2f7d1af699ebb98b
       PGHOST: localhost
       PGPORT: 5432
       PGUSER: postgres
@@ -78,8 +87,36 @@ jobs:
       - name: Pull and set Stellar RPC image
         shell: bash
         run: |
-          docker pull "$PROTOCOL_${{ matrix.protocol-version }}_STELLAR_RPC_DOCKER_IMG"
-          echo HORIZON_INTEGRATION_TESTS_STELLAR_RPC_DOCKER_IMG="$PROTOCOL_${{ matrix.protocol-version }}_STELLAR_RPC_DOCKER_IMG" >> $GITHUB_ENV
+          IMG="$PROTOCOL_${{ matrix.protocol-version }}_STELLAR_RPC_DOCKER_IMG"
+          if [ -n "$IMG" ]; then
+            docker pull "$IMG"
+          else
+            echo "::warning::No prebuilt stellar-rpc image for protocol ${{ matrix.protocol-version }}; will build from source if available (see next step)."
+          fi
+          echo "HORIZON_INTEGRATION_TESTS_STELLAR_RPC_DOCKER_IMG=$IMG" >> "$GITHUB_ENV"
+
+      - name: Build P28 stellar-rpc image from stellar-rpc#789
+        if: matrix.protocol-version == '28' && env.HORIZON_INTEGRATION_TESTS_STELLAR_RPC_DOCKER_IMG == ''
+        shell: bash
+        env:
+          # Single source of truth lives in the job-level env block above.
+          RPC_PR_SHA: ${{ env.PROTOCOL_28_STELLAR_RPC_PR_SHA }}
+        run: |
+          git init -q /tmp/stellar-rpc
+          # Prefer the exact SHA (reproducible); fall back to the PR head ref.
+          git -C /tmp/stellar-rpc fetch --depth 1 https://github.com/stellar/stellar-rpc.git "$RPC_PR_SHA" \
+            || git -C /tmp/stellar-rpc fetch --depth 1 https://github.com/stellar/stellar-rpc.git refs/pull/789/head
+          git -C /tmp/stellar-rpc checkout -q FETCH_HEAD
+          GOT="$(git -C /tmp/stellar-rpc rev-parse HEAD)"
+          if [ "$GOT" != "$RPC_PR_SHA" ]; then
+            echo "::error::stellar-rpc#789 head moved (expected $RPC_PR_SHA, got $GOT); re-pin PROTOCOL_28_STELLAR_RPC_PR_SHA and the cache hash."
+            exit 1
+          fi
+          docker build --pull --platform linux/amd64 \
+            -f /tmp/stellar-rpc/cmd/stellar-rpc/docker/Dockerfile \
+            --build-arg STELLAR_CORE_VERSION="$PROTOCOL_28_CORE_DEBIAN_PKG_VERSION" \
+            -t stellar/stellar-rpc:p28-local /tmp/stellar-rpc
+          echo "HORIZON_INTEGRATION_TESTS_STELLAR_RPC_DOCKER_IMG=stellar/stellar-rpc:p28-local" >> "$GITHUB_ENV"
 
       - name: Install core
         run: |
@@ -102,7 +139,7 @@ jobs:
       - name: Calculate the source hash
         id: calculate_source_hash
         run: |
-          combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-protocol-${{ matrix.protocol-version }}-${{ env.PROTOCOL_28_CORE_DOCKER_IMG }}-${{ env.PROTOCOL_28_STELLAR_RPC_DOCKER_IMG }}-${{ env.PROTOCOL_28_CORE_DEBIAN_PKG_VERSION }}-${{ env.PROTOCOL_27_CORE_DOCKER_IMG }}-${{ env.PREFIX }}" | sha256sum | cut -d ' ' -f 1)
+          combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-protocol-${{ matrix.protocol-version }}-${{ env.PROTOCOL_28_CORE_DOCKER_IMG }}-${{ env.PROTOCOL_28_STELLAR_RPC_PR_SHA }}-${{ env.PROTOCOL_28_CORE_DEBIAN_PKG_VERSION }}-${{ env.PROTOCOL_27_CORE_DOCKER_IMG }}-${{ env.PREFIX }}" | sha256sum | cut -d ' ' -f 1)
           echo "COMBINED_SOURCE_HASH=$combined_hash" >> "$GITHUB_ENV"
 
       - name: Restore Horizon binary and integration tests source hash to cache
