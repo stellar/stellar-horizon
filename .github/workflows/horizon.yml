@@ -38,8 +38,11 @@ jobs:
       PROTOCOL_27_CORE_DEBIAN_PKG_VERSION: 27.0.0-3288.7696c069d.jammy~buildtests
       PROTOCOL_27_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:27.0.0-preview-190
       # Protocol 28 (CAP-0083) runs against the vnext (next-protocol-enabled) core build.
-      PROTOCOL_28_CORE_DOCKER_IMG: stellar/unsafe-stellar-core:27.0.1-3348.ff61f2e6d.jammy-vnext
-      PROTOCOL_28_CORE_DEBIAN_PKG_VERSION: 27.0.1-3348.ff61f2e6d.jammy~vnext~buildtests
+      # Pinned to 3312 (02fa3131b), which predates stellar-core#5325 (the
+      # init-order change that breaks `offline-info` on a fresh storage
+      # dir). Bump once that's fixed upstream.
+      PROTOCOL_28_CORE_DOCKER_IMG: stellar/unsafe-stellar-core:27.0.1-3312.02fa3131b.jammy-vnext
+      PROTOCOL_28_CORE_DEBIAN_PKG_VERSION: 27.0.1-3312.02fa3131b.jammy~vnext~buildtests
       # No Protocol 28 stellar-rpc image is published yet (tracked: stellar-rpc#789).
       # Leave EMPTY on purpose: the P27 RPC image bundles a P27 captive-core that
       # cannot ingest a protocol-28 network, so bringing it up makes every
