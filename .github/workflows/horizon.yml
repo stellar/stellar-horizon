@@ -35,8 +35,8 @@ jobs:
       PROTOCOL_26_CORE_DOCKER_IMG: stellar/stellar-core:26.0.0-3089.8e43a2d3b.jammy
       PROTOCOL_26_CORE_DEBIAN_PKG_VERSION: 26.0.0-3089.8e43a2d3b.jammy~buildtests
       PROTOCOL_26_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:26.0.0
-      PROTOCOL_27_CORE_DOCKER_IMG: stellar/stellar-core:27.0.0-3288.7696c069d.jammy
-      PROTOCOL_27_CORE_DEBIAN_PKG_VERSION: 27.0.0-3288.7696c069d.jammy~buildtests
+      PROTOCOL_27_CORE_DOCKER_IMG: stellar/stellar-core:27.0.1-3363.3589a696b.jammy
+      PROTOCOL_27_CORE_DEBIAN_PKG_VERSION: 27.0.1-3363.3589a696b.jammy~buildtests
       PROTOCOL_27_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:27.0.0-preview-190
       PGHOST: localhost
       PGPORT: 5432
@@ -125,7 +125,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       GO_VERSION: 1.25.0
-      STELLAR_CORE_VERSION: 27.0.0-3288.7696c069d.noble
+      STELLAR_CORE_VERSION: 27.0.1-3363.3589a696b.noble
     steps:
       - uses: actions/checkout@v3
         with:
