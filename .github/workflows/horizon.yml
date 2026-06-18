@@ -38,8 +38,13 @@ jobs:
       PROTOCOL_27_CORE_DEBIAN_PKG_VERSION: 27.0.0-3288.7696c069d.jammy~buildtests
       PROTOCOL_27_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:27.0.0-preview-190
       # Protocol 28 (CAP-0083) runs against the vnext (next-protocol-enabled) core build.
+      # Captive-core deb pinned to 3367 (3589a696b), which includes stellar-core#5329
+      # — the fix for the QueryServer.cpp:124 contiguous-snapshot assertion that
+      # fires during fresh-storage-dir catchup. Docker stays at 3348 vnext since
+      # no vnext docker image for 3367 is published yet; the validator container
+      # only closes ledgers contiguously and doesn't trigger the assertion.
       PROTOCOL_28_CORE_DOCKER_IMG: stellar/unsafe-stellar-core:27.0.1-3348.ff61f2e6d.jammy-vnext
-      PROTOCOL_28_CORE_DEBIAN_PKG_VERSION: 27.0.1-3348.ff61f2e6d.jammy~vnext~buildtests
+      PROTOCOL_28_CORE_DEBIAN_PKG_VERSION: 27.0.1-3367.3589a696b.jammy~vnext~buildtests
       # No Protocol 28 stellar-rpc image is published yet (tracked: stellar-rpc#789).
       # Leave EMPTY on purpose: the P27 RPC image bundles a P27 captive-core that
       # cannot ingest a protocol-28 network, so bringing it up makes every
