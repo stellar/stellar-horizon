@@ -13,7 +13,7 @@ jobs:
         os: [ubuntu-24.04]
         go: ["1.25", "1.26"]
         pg: [14, 16]
-        protocol-version: [26, 27]
+        protocol-version: [27, 28]
     runs-on: ${{ matrix.os }}
     services:
       postgres:
@@ -32,12 +32,23 @@ jobs:
     env:
       HORIZON_INTEGRATION_TESTS_ENABLED: true
       HORIZON_INTEGRATION_TESTS_CORE_MAX_SUPPORTED_PROTOCOL: ${{ matrix.protocol-version }}
-      PROTOCOL_26_CORE_DOCKER_IMG: stellar/stellar-core:26.0.0-3089.8e43a2d3b.jammy
-      PROTOCOL_26_CORE_DEBIAN_PKG_VERSION: 26.0.0-3089.8e43a2d3b.jammy~buildtests
-      PROTOCOL_26_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:26.0.0
       PROTOCOL_27_CORE_DOCKER_IMG: stellar/stellar-core:27.0.0-3288.7696c069d.jammy
       PROTOCOL_27_CORE_DEBIAN_PKG_VERSION: 27.0.0-3288.7696c069d.jammy~buildtests
       PROTOCOL_27_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:27.0.0-preview-190
+      # Protocol 28 (CAP-0083) runs against the vnext (next-protocol-enabled) core build.
+      # Pinned to 3367 (3589a696b), which includes stellar-core#5329 — the fix
+      # for the QueryServer.cpp:124 contiguous-snapshot assertion that aborted
+      # captive-core catchup on builds 3313..3366.
+      PROTOCOL_28_CORE_DOCKER_IMG: stellar/unsafe-stellar-core:27.0.1-3367.3589a696b.jammy-vnext
+      PROTOCOL_28_CORE_DEBIAN_PKG_VERSION: 27.0.1-3367.3589a696b.jammy~vnext~buildtests
+      # No Protocol 28 stellar-rpc image is published yet (tracked: stellar-rpc#789).
+      # Leave EMPTY on purpose: the P27 RPC image bundles a P27 captive-core that
+      # cannot ingest a protocol-28 network, so bringing it up makes every
+      # EnableStellarRPC test hang in waitForStellarRPC() ("DB is empty") until the
+      # 75m suite timeout. With this empty, NewTest() AMBER-skips RPC-dependent tests
+      # (sac/invokehostfunction/extend_footprint_ttl/txsub/txsub_async/transaction)
+      # on the P28 leg. Re-pin to a real P28 image once #789 publishes one.
+      PROTOCOL_28_STELLAR_RPC_DOCKER_IMG: ""
       PGHOST: localhost
       PGPORT: 5432
       PGUSER: postgres
@@ -75,8 +86,13 @@ jobs:
       - name: Pull and set Stellar RPC image
         shell: bash
         run: |
-          docker pull "$PROTOCOL_${{ matrix.protocol-version }}_STELLAR_RPC_DOCKER_IMG"
-          echo HORIZON_INTEGRATION_TESTS_STELLAR_RPC_DOCKER_IMG="$PROTOCOL_${{ matrix.protocol-version }}_STELLAR_RPC_DOCKER_IMG" >> $GITHUB_ENV
+          IMG="$PROTOCOL_${{ matrix.protocol-version }}_STELLAR_RPC_DOCKER_IMG"
+          if [ -n "$IMG" ]; then
+            docker pull "$IMG"
+          else
+            echo "::warning::No stellar-rpc image for protocol ${{ matrix.protocol-version }}; RPC-dependent tests will AMBER-skip (tracked: stellar-rpc#789)."
+          fi
+          echo "HORIZON_INTEGRATION_TESTS_STELLAR_RPC_DOCKER_IMG=$IMG" >> "$GITHUB_ENV"
 
       - name: Install core
         run: |
@@ -99,7 +115,7 @@ jobs:
       - name: Calculate the source hash
         id: calculate_source_hash
         run: |
-          combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-protocol-${{ matrix.protocol-version }}-${{ env.PROTOCOL_27_CORE_DOCKER_IMG }}-${{ env.PROTOCOL_27_STELLAR_RPC_DOCKER_IMG }}-${{ env.PROTOCOL_27_CORE_DEBIAN_PKG_VERSION }}-${{ env.PROTOCOL_26_CORE_DOCKER_IMG }}-${{ env.PREFIX }}" | sha256sum | cut -d ' ' -f 1)
+          combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-protocol-${{ matrix.protocol-version }}-${{ env.PROTOCOL_28_CORE_DOCKER_IMG }}-${{ env.PROTOCOL_28_STELLAR_RPC_DOCKER_IMG }}-${{ env.PROTOCOL_28_CORE_DEBIAN_PKG_VERSION }}-${{ env.PROTOCOL_27_CORE_DOCKER_IMG }}-${{ env.PROTOCOL_27_STELLAR_RPC_DOCKER_IMG }}-${{ env.PROTOCOL_27_CORE_DEBIAN_PKG_VERSION }}-${{ env.PREFIX }}" | sha256sum | cut -d ' ' -f 1)
           echo "COMBINED_SOURCE_HASH=$combined_hash" >> "$GITHUB_ENV"
 
       - name: Restore Horizon binary and integration tests source hash to cache
