@@ -9,8 +9,6 @@ jobs:
   integration:
     name: Integration tests
     strategy:
-      # Never let a new-protocol leg cancel and mask a known-good previous-protocol leg.
-      fail-fast: false
       matrix:
         os: [ubuntu-24.04]
         go: ["1.25", "1.26"]
