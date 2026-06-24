@@ -53,14 +53,16 @@ func TestLoadTestLedgerBackend(t *testing.T) {
 	require.True(t, tx.Successful)
 
 	replayConfig := loadtest.LedgerBackendConfig{
-		NetworkPassphrase:   "invalid passphrase",
-		LedgersFilePath:     filepath.Join("testdata", fmt.Sprintf("load-test-ledgers-v%d.xdr.zstd", itest.Config().ProtocolVersion)),
+		NetworkPassphrase: "invalid passphrase",
+		LedgersFilePaths: []string{
+			filepath.Join("testdata", fmt.Sprintf("load-test-ledgers-v%d.xdr.zstd", itest.Config().ProtocolVersion)),
+		},
 		LedgerCloseDuration: 3 * time.Second / 2,
 		LedgerBackend:       newCaptiveCore(itest),
 	}
 	var generatedLedgers []xdr.LedgerCloseMeta
 
-	readFile(t, replayConfig.LedgersFilePath,
+	readFile(t, replayConfig.LedgersFilePaths[0],
 		func() *xdr.LedgerCloseMeta { return &xdr.LedgerCloseMeta{} },
 		func(ledger *xdr.LedgerCloseMeta) {
 			generatedLedgers = append(generatedLedgers, *ledger)
@@ -187,13 +189,15 @@ func TestLoadTestLedgerBackend(t *testing.T) {
 
 func TestLoadTestLedgerBackendWithoutMerge(t *testing.T) {
 	replayConfig := loadtest.LedgerBackendConfig{
-		NetworkPassphrase:   "invalid passphrase",
-		LedgersFilePath:     filepath.Join("testdata", fmt.Sprintf("load-test-ledgers-v%d.xdr.zstd", horizoningest.MaxSupportedProtocolVersion)),
+		NetworkPassphrase: "invalid passphrase",
+		LedgersFilePaths: []string{
+			filepath.Join("testdata", fmt.Sprintf("load-test-ledgers-v%d.xdr.zstd", horizoningest.MaxSupportedProtocolVersion)),
+		},
 		LedgerCloseDuration: 3 * time.Second / 2,
 	}
 	var generatedLedgers []xdr.LedgerCloseMeta
 
-	readFile(t, replayConfig.LedgersFilePath,
+	readFile(t, replayConfig.LedgersFilePaths[0],
 		func() *xdr.LedgerCloseMeta { return &xdr.LedgerCloseMeta{} },
 		func(ledger *xdr.LedgerCloseMeta) {
 			generatedLedgers = append(generatedLedgers, *ledger)

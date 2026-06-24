@@ -706,7 +706,7 @@ func (s *system) LoadTest(ledgersFilePath, fixturesFilePath string, merge bool, 
 	// 4. Set up loadtest backend and run FSM
 	config := loadtest.LedgerBackendConfig{
 		NetworkPassphrase:   s.config.NetworkPassphrase,
-		LedgersFilePath:     ledgersFilePath,
+		LedgersFilePaths:    []string{ledgersFilePath},
 		LedgerCloseDuration: closeDuration,
 	}
 	if merge {

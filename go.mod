@@ -36,7 +36,7 @@ require (
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.17.0
-	github.com/stellar/go-xdr v0.0.0-20260423131911-a87d4d0789c3 // indirect
+	github.com/stellar/go-xdr v0.0.0-20260529210834-0bf8f4956364 // indirect
 	github.com/stellar/throttled v2.2.3-0.20190823235211-89d75816f59d+incompatible
 	github.com/stretchr/testify v1.11.1
 	github.com/xdrpp/goxdr v0.1.1 // indirect
@@ -48,7 +48,7 @@ require (
 require (
 	github.com/creachadair/jrpc2 v1.2.0
 	github.com/fsouza/fake-gcs-server v1.49.2
-	github.com/stellar/go-stellar-sdk v0.5.1-0.20260506215501-d170348eff6c
+	github.com/stellar/go-stellar-sdk v0.6.1-0.20260623184313-0844c2c845ff
 )
 
 require (
