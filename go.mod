@@ -170,3 +170,5 @@ require (
 	google.golang.org/protobuf v1.36.10
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/stellar/go-stellar-sdk => github.com/sisuresh/go v0.0.0-20260625074621-094cee3852e4

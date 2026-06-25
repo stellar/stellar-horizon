@@ -90,6 +90,65 @@ func TestNewEffect_EffectTrustlineAuthorizedToMaintainLiabilities(t *testing.T) 
 	tt.Equal(effect, page.Embedded.Records[0].(effects.TrustlineAuthorizedToMaintainLiabilities))
 }
 
+// TestNewEffect_EffectContractCredited_MuxedDestination is the load-bearing
+// round-trip test for CAP-0084: it proves that destination_muxed_id written to
+// an effect's `details` survives the details -> SDK struct -> API JSON path.
+// The "0" sub-case is the regression guard for the zero-value trap — it fails
+// if the SDK field is ever changed back to uint64 + ",string" + omitempty,
+// which silently drops a mux id of 0.
+func TestNewEffect_EffectContractCredited_MuxedDestination(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		muxedID string
+	}{
+		{name: "normal id", muxedID: "42"},
+		{name: "zero id round-trips", muxedID: "0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tt := assert.New(t)
+			ctx, _ := test.ContextWithLogBuffer()
+
+			details := `{
+				"asset_type":            "credit_alphanum4",
+				"asset_code":            "USD",
+				"asset_issuer":          "GDRW375MAYR46ODGF2WGANQC2RRZL7O246DYHHCGWTV2RE7IHE2QUQLD",
+				"contract":              "CB7KKMERLBFGQQILA4LM5VHDVL2RQVAQNLPMQHYBAM3J42UIIVZJSGEC",
+				"amount":                "0.0012345",
+				"destination_muxed_id":  "` + tc.muxedID + `"
+			}`
+
+			hEffect := history.Effect{
+				Account:            "GDQNY3PBOJOKYZSRMK2S7LHHGWZIUISD4QORETLMXEWXBI7KFZZMKTL3",
+				HistoryOperationID: 1,
+				Order:              1,
+				Type:               history.EffectContractCredited,
+				DetailsString:      null.StringFrom(details),
+			}
+			resource, err := NewEffect(ctx, hEffect, history.Ledger{})
+			tt.NoError(err)
+
+			effect, ok := resource.(effects.ContractCredited)
+			tt.True(ok)
+			tt.Equal("contract_credited", effect.Base.Type)
+			tt.Equal(tc.muxedID, effect.DestinationMuxedID)
+
+			var resourcePage hal.Page
+			resourcePage.Add(resource)
+			binary, err := json.Marshal(resourcePage)
+			tt.NoError(err)
+
+			// The id must be present in the serialized API JSON, including "0".
+			tt.Contains(string(binary), `"destination_muxed_id":"`+tc.muxedID+`"`)
+
+			var page effects.EffectsPage
+			tt.NoError(json.Unmarshal(binary, &page))
+			tt.Len(page.Embedded.Records, 1)
+			tt.Equal(effect, page.Embedded.Records[0].(effects.ContractCredited))
+			tt.Equal(tc.muxedID, page.Embedded.Records[0].(effects.ContractCredited).DestinationMuxedID)
+		})
+	}
+}
+
 func TestNewEffect_EffectTrade_Muxed(t *testing.T) {
 	tt := assert.New(t)
 	ctx, _ := test.ContextWithLogBuffer()

@@ -3754,6 +3754,192 @@ func TestInvokeHostFunctionEffects(t *testing.T) {
 	}
 }
 
+// TestInvokeHostFunctionMuxedContractEffects verifies that a SAC
+// transfer/mint whose `to` is a muxed contract (CAP-0084) surfaces the
+// destination mux id as `destination_muxed_id` on the contract_credited
+// effect. The mux id rides in the V4 to_muxed_id event-map entry. A mux id of
+// 0 is a valid id and must be surfaced as the string "0" (not omitted): the
+// SDK resource field is a string precisely so "0" survives the round-trip.
+func TestInvokeHostFunctionMuxedContractEffects(t *testing.T) {
+	admin := keypair.MustRandom().Address()
+	asset := xdr.MustNewCreditAsset("TESTER", admin)
+	fromAccount := keypair.MustRandom().Address()
+	toContractBytes := xdr.Hash{1}
+	toContract := strkey.MustEncode(strkey.VersionByteContract, toContractBytes[:])
+	amount := big.NewInt(12345)
+
+	assetDetails := func() map[string]interface{} {
+		return map[string]interface{}{
+			"amount":       "0.0012345",
+			"asset_code":   strings.Trim(asset.GetCode(), "\x00"),
+			"asset_issuer": asset.GetIssuer(),
+			"asset_type":   "credit_alphanum12",
+		}
+	}
+
+	contractCreditedDetails := func(muxedID string) map[string]interface{} {
+		d := assetDetails()
+		d["contract"] = toContract
+		d["destination_muxed_id"] = muxedID
+		return d
+	}
+
+	testCases := []struct {
+		desc      string
+		eventType contractevents.EventType
+		muxedID   uint64
+		expected  []effect
+	}{
+		{
+			desc:      "transfer to muxed contract",
+			eventType: contractevents.EventTypeTransfer,
+			muxedID:   111,
+			expected: []effect{
+				{
+					order:       1,
+					address:     fromAccount,
+					effectType:  history.EffectAccountDebited,
+					operationID: toid.New(1, 0, 1).ToInt64(),
+					details:     assetDetails(),
+				}, {
+					order:       2,
+					address:     admin,
+					effectType:  history.EffectContractCredited,
+					operationID: toid.New(1, 0, 1).ToInt64(),
+					details:     contractCreditedDetails("111"),
+				},
+			},
+		}, {
+			desc:      "mint to muxed contract (mux id 0)",
+			eventType: contractevents.EventTypeMint,
+			muxedID:   0,
+			expected: []effect{
+				{
+					order:       1,
+					address:     admin,
+					effectType:  history.EffectContractCredited,
+					operationID: toid.New(1, 0, 1).ToInt64(),
+					details:     contractCreditedDetails("0"),
+				},
+			},
+		},
+	}
+
+	// Build a V4 SAC event by hand: GenerateEvent always emits the V3-shaped
+	// mint (admin topic + 4 topics), but the V4 parser requires the 3-topic
+	// admin-less mint. Both transfer and mint carry the destination mux id in
+	// the to_muxed_id event-map entry.
+	sym := func(s string) xdr.ScVal {
+		v := xdr.ScSymbol(s)
+		return xdr.ScVal{Type: xdr.ScValTypeScvSymbol, Sym: &v}
+	}
+	contractAddr := func(c string) xdr.ScVal {
+		var cid xdr.ContractId
+		copy(cid[:], strkey.MustDecode(strkey.VersionByteContract, c))
+		return xdr.ScVal{Type: xdr.ScValTypeScvAddress, Address: &xdr.ScAddress{
+			Type: xdr.ScAddressTypeScAddressTypeContract, ContractId: &cid,
+		}}
+	}
+	accountAddr := func(g string) xdr.ScVal {
+		return xdr.ScVal{Type: xdr.ScValTypeScvAddress, Address: &xdr.ScAddress{
+			Type: xdr.ScAddressTypeScAddressTypeAccount, AccountId: xdr.MustAddressPtr(g),
+		}}
+	}
+	assetSep11 := func() xdr.ScVal {
+		s := xdr.ScString(asset.StringCanonical())
+		return xdr.ScVal{Type: xdr.ScValTypeScvString, Str: &s}
+	}
+	mapData := func(muxedID uint64) xdr.ScVal {
+		amt := xdr.Int128Parts{Lo: xdr.Uint64(amount.Int64()), Hi: 0}
+		mux := xdr.Uint64(muxedID)
+		m := &xdr.ScMap{
+			xdr.ScMapEntry{Key: sym("amount"), Val: xdr.ScVal{Type: xdr.ScValTypeScvI128, I128: &amt}},
+			xdr.ScMapEntry{Key: sym("to_muxed_id"), Val: xdr.ScVal{Type: xdr.ScValTypeScvU64, U64: &mux}},
+		}
+		return xdr.ScVal{Type: xdr.ScValTypeScvMap, Map: &m}
+	}
+	buildEvent := func(t *testing.T, eventType contractevents.EventType, muxedID uint64) xdr.ContractEvent {
+		var topics []xdr.ScVal
+		switch eventType {
+		case contractevents.EventTypeTransfer:
+			topics = []xdr.ScVal{sym("transfer"), accountAddr(fromAccount), contractAddr(toContract), assetSep11()}
+		case contractevents.EventTypeMint:
+			topics = []xdr.ScVal{sym("mint"), contractAddr(toContract), assetSep11()}
+		default:
+			t.Fatalf("unsupported event type %q", eventType)
+		}
+		rawID, err := asset.ContractID(networkPassphrase)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cid := xdr.ContractId(rawID)
+		return xdr.ContractEvent{
+			Type:       xdr.ContractEventTypeContract,
+			ContractId: &cid,
+			Body: xdr.ContractEventBody{
+				V:  0,
+				V0: &xdr.ContractEventV0{Topics: xdr.ScVec(topics), Data: mapData(muxedID)},
+			},
+		}
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.desc, func(t *testing.T) {
+			event := buildEvent(t, testCase.eventType, testCase.muxedID)
+
+			meta := xdr.TransactionMetaV4{
+				Operations: []xdr.OperationMetaV2{
+					{Events: []xdr.ContractEvent{event}},
+				},
+			}
+			envelope := xdr.TransactionV1Envelope{
+				Tx: xdr.Transaction{
+					Ext: xdr.TransactionExt{
+						V:           1,
+						SorobanData: &xdr.SorobanTransactionData{},
+					},
+					Operations: []xdr.Operation{
+						{
+							SourceAccount: xdr.MustMuxedAddressPtr(admin),
+							Body: xdr.OperationBody{
+								Type:                 xdr.OperationTypeInvokeHostFunction,
+								InvokeHostFunctionOp: &xdr.InvokeHostFunctionOp{},
+							},
+						},
+					},
+				},
+			}
+			tx := ingest.LedgerTransaction{
+				Index: 0,
+				Envelope: xdr.TransactionEnvelope{
+					Type: xdr.EnvelopeTypeEnvelopeTypeTx,
+					V1:   &envelope,
+				},
+				Result: xdr.TransactionResultPair{
+					TransactionHash: xdr.Hash([32]byte{}),
+					Result: xdr.TransactionResult{
+						FeeCharged: 1234,
+						Result: xdr.TransactionResultResult{
+							Code: xdr.TransactionResultCodeTxSuccess,
+						},
+					},
+				},
+				UnsafeMeta: xdr.TransactionMeta{V: 4, V4: &meta},
+			}
+
+			operation := transactionOperationWrapper{
+				index:          0,
+				transaction:    tx,
+				operation:      tx.Envelope.Operations()[0],
+				ledgerSequence: 1,
+				network:        networkPassphrase,
+			}
+
+			assertIngestEffects(t, operation, testCase.expected)
+		})
+	}
+}
+
 // makeInvocationTransaction returns a single transaction containing a single
 // invokeHostFunction operation that generates the specified Stellar Asset
 // Contract events in its txmeta.

@@ -243,6 +243,32 @@ func TestStellarAssetContractEventParsing(t *testing.T) {
 			},
 		},
 		{
+			// CAP-0084 muxed-contract destination: in a well-formed SAC event
+			// the `to` topic is the BASE contract address (type Contract); the
+			// mux id rides in the to_muxed_id map entry (exactly as CAP-67 does
+			// for muxed accounts). A mux id of 0 is a valid id and must parse.
+			name:          "Valid V4 transfer to muxed-contract destination (mux id 0)",
+			txMetaVersion: 4,
+			eventType:     EventTypeTransfer,
+			topics: []xdr.ScVal{
+				makeSymbol("transfer"),
+				makeAddress(randomAccount),
+				makeAddress(zeroContract),
+				makeAsset(randomAsset),
+			},
+			data:       makeV4MapData(big.NewInt(1000), xdr.MemoID(0)),
+			asset:      randomAsset,
+			contractID: mustGetContractID(randomAsset),
+			expectedResult: &StellarAssetContractEvent{
+				Type:            EventTypeTransfer,
+				Asset:           randomAsset,
+				From:            randomAccount,
+				To:              zeroContract,
+				Amount:          xdr.Int128Parts{Lo: 1000, Hi: 0},
+				DestinationMemo: xdr.MemoID(0),
+			},
+		},
+		{
 			name:          "V4 SAC event rejects ScvString for to_muxed_id",
 			txMetaVersion: 4,
 			eventType:     EventTypeTransfer,
@@ -521,6 +547,28 @@ func TestStellarAssetContractEventParsing(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestParseAddressMuxedContract locks in the go-stellar-sdk CAP-0084 behavior:
+// a SC_ADDRESS_TYPE_MUXED_CONTRACT ScAddress renders as "<C-strkey>:<id>" via
+// ScAddress.String(). This guards against regressing to the interim placeholder
+// that errored on the muxed-contract arm.
+func TestParseAddressMuxedContract(t *testing.T) {
+	muxedID := xdr.Uint64(42)
+	topic := xdr.ScVal{
+		Type: xdr.ScValTypeScvAddress,
+		Address: &xdr.ScAddress{
+			Type: xdr.ScAddressTypeScAddressTypeMuxedContract,
+			MuxedContract: &xdr.MuxedContract{
+				Id:         muxedID,
+				ContractId: xdr.ContractId(zeroContractHash),
+			},
+		},
+	}
+
+	addr, err := parseAddress(topic)
+	require.NoError(t, err)
+	assert.Equal(t, zeroContract+":42", addr)
 }
 
 // Test helper functions

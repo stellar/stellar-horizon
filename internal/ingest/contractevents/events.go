@@ -42,7 +42,12 @@ type StellarAssetContractEvent struct {
 	DestinationMemo xdr.Memo // Can be uint64, []byte, or string (V4 only)
 }
 
-// parseAddress extracts and converts an address from an ScVal
+// parseAddress extracts and converts an address from an ScVal.
+//
+// CAP-0084 (P28) adds a muxed-contract destination arm
+// (SC_ADDRESS_TYPE_MUXED_CONTRACT); ScAddress.String() renders it directly, and
+// the destination mux id is surfaced via the to_muxed_id event-map convention
+// (see parseSacEventMap), mirroring the CAP-67 muxed-ACCOUNT handling.
 func parseAddress(topic xdr.ScVal) (string, error) {
 	addr, ok := topic.GetAddress()
 	if !ok {
@@ -317,10 +322,14 @@ func parseSacEventFromTxMetaV4(event *xdr.ContractEvent, networkPassphrase strin
 }
 
 // parseSacEventMap parses the ScMap data format used in V4 SAC events.
-// For SAC events, to_muxed_id represents the muxed account ID from
-// MuxedAddressObject - which is always a uint64. ScvBytes and ScvString are NOT
-// valid for SAC events (those are only used for classic transaction memo mappings
-// per CAP-67, which are processed through a different code path).
+// For SAC events, to_muxed_id represents the muxed id of the destination -
+// which is always a uint64. This applies both to a muxed-ACCOUNT destination
+// (CAP-67) and, under CAP-0084 (P28, Muxed Contract Addresses), to a
+// muxed-CONTRACT destination: transfer and mint accept a muxed-contract `to`
+// and surface its mux id via the exact same to_muxed_id event-map convention,
+// so no new decode branch is needed here. ScvBytes and ScvString are NOT valid
+// for SAC events (those are only used for classic transaction memo mappings per
+// CAP-67, which are processed through a different code path).
 func parseSacEventMap(mapData xdr.ScMap) (xdr.Int128Parts, xdr.Memo, error) {
 	var foundAmount, foundMuxedId bool
 	var amount xdr.Int128Parts
@@ -346,9 +355,11 @@ func parseSacEventMap(mapData xdr.ScMap) (xdr.Int128Parts, xdr.Memo, error) {
 
 		case "to_muxed_id":
 			foundMuxedId = true
-			// SAC events only emit uint64 for to_muxed_id (muxed account ID).
-			// ScvBytes/ScvString are NOT valid here - those are only for classic
-			// transaction memo mappings which use a different code path.
+			// SAC events only emit uint64 for to_muxed_id: the mux id of a
+			// muxed-account destination (CAP-67) or a muxed-contract
+			// destination (CAP-0084). ScvBytes/ScvString are NOT valid here -
+			// those are only for classic transaction memo mappings which use a
+			// different code path.
 			switch entry.Val.Type {
 			case xdr.ScValTypeScvU64:
 				if val, ok := entry.Val.GetU64(); ok {

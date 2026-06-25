@@ -1627,6 +1627,13 @@ func (e *effectsWrapper) addInvokeHostFunctionEffects(events []xdr.ContractEvent
 				}
 			} else {
 				toDetails["contract"] = evt.To
+				// CAP-0084: a muxed-contract destination carries its mux id in
+				// to_muxed_id. No canonical muxed-contract strkey exists yet, so
+				// surface the raw id as a detail field, mirroring
+				// operations_processor's SAC balance-change handling.
+				if memoId != nil {
+					toDetails["destination_muxed_id"] = fmt.Sprintf("%d", *memoId)
+				}
 				e.addMuxed(source, history.EffectContractCredited, toDetails)
 			}
 
@@ -1666,6 +1673,13 @@ func (e *effectsWrapper) addInvokeHostFunctionEffects(events []xdr.ContractEvent
 				}
 			} else {
 				details["contract"] = evt.To
+				// CAP-0084: a muxed-contract destination carries its mux id in
+				// to_muxed_id. No canonical muxed-contract strkey exists yet, so
+				// surface the raw id as a detail field, mirroring
+				// operations_processor's SAC balance-change handling.
+				if memoId != nil {
+					details["destination_muxed_id"] = fmt.Sprintf("%d", *memoId)
+				}
 				e.addMuxed(source, history.EffectContractCredited, details)
 			}
 
