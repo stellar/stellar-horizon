@@ -317,10 +317,15 @@ func parseSacEventFromTxMetaV4(event *xdr.ContractEvent, networkPassphrase strin
 }
 
 // parseSacEventMap parses the ScMap data format used in V4 SAC events.
-// For SAC events, to_muxed_id represents the muxed account ID from
-// MuxedAddressObject - which is always a uint64. ScvBytes and ScvString are NOT
-// valid for SAC events (those are only used for classic transaction memo mappings
-// per CAP-67, which are processed through a different code path).
+// For SAC events, to_muxed_id is always a uint64. It carries either the muxed
+// account ID from a MuxedAddressObject (CAP-67) or, under CAP-0084, the muxed
+// contract ID from a MUXED_CONTRACT ScAddress. In both cases the SAC host
+// de-muxes the destination before emitting the event: the `to` topic holds the
+// base (account or contract) address and the mux id is surfaced separately as a
+// uint64, so the two are byte-identical in shape and indistinguishable from the
+// event alone. This holds for both transfer and mint. ScvBytes and ScvString are
+// NOT valid for SAC events (those are only used for classic transaction memo
+// mappings per CAP-67, which are processed through a different code path).
 func parseSacEventMap(mapData xdr.ScMap) (xdr.Int128Parts, xdr.Memo, error) {
 	var foundAmount, foundMuxedId bool
 	var amount xdr.Int128Parts
@@ -346,9 +351,11 @@ func parseSacEventMap(mapData xdr.ScMap) (xdr.Int128Parts, xdr.Memo, error) {
 
 		case "to_muxed_id":
 			foundMuxedId = true
-			// SAC events only emit uint64 for to_muxed_id (muxed account ID).
-			// ScvBytes/ScvString are NOT valid here - those are only for classic
-			// transaction memo mappings which use a different code path.
+			// SAC events only emit uint64 for to_muxed_id (muxed account ID under
+			// CAP-67, or muxed contract ID under CAP-0084 - both de-muxed by the
+			// host to a uint64). ScvBytes/ScvString are NOT valid here - those are
+			// only for classic transaction memo mappings which use a different
+			// code path.
 			switch entry.Val.Type {
 			case xdr.ScValTypeScvU64:
 				if val, ok := entry.Val.GetU64(); ok {

@@ -21,6 +21,11 @@ var (
 	randomAccount    = keypair.MustRandom().Address()
 	zeroContractHash = xdr.Hash([32]byte{})
 	zeroContract     = strkey.MustEncode(strkey.VersionByteContract, zeroContractHash[:])
+	// muxedContractHash stands in for the base contract a CAP-0084
+	// MUXED_CONTRACT address de-muxes to. The host emits this base contract in
+	// the `to` topic and surfaces the mux id separately as a uint64.
+	muxedContractHash = xdr.Hash([32]byte{0xCA, 0xFE, 0xBA, 0xBE})
+	muxedContract     = strkey.MustEncode(strkey.VersionByteContract, muxedContractHash[:])
 )
 
 // Test fixture structure
@@ -240,6 +245,55 @@ func TestStellarAssetContractEventParsing(t *testing.T) {
 				To:              zeroContract,
 				Amount:          xdr.Int128Parts{Lo: 1000, Hi: 0},
 				DestinationMemo: xdr.MemoID(12345),
+			},
+		},
+		{
+			// CAP-0084: a transfer to a muxed contract destination. The host
+			// de-muxes the MUXED_CONTRACT address, emitting the base contract in
+			// the `to` topic and the mux id as a uint64 to_muxed_id - byte-identical
+			// in shape to the CAP-67 muxed-account case above, by design.
+			name:          "V4 transfer to muxed contract (CAP-0084)",
+			txMetaVersion: 4,
+			eventType:     EventTypeTransfer,
+			topics: []xdr.ScVal{
+				makeSymbol("transfer"),
+				makeAddress(randomAccount),
+				makeAddress(muxedContract),
+				makeAsset(randomAsset),
+			},
+			data:       makeV4MapData(big.NewInt(1000), xdr.MemoID(67890)),
+			asset:      randomAsset,
+			contractID: mustGetContractID(randomAsset),
+			expectedResult: &StellarAssetContractEvent{
+				Type:            EventTypeTransfer,
+				Asset:           randomAsset,
+				From:            randomAccount,
+				To:              muxedContract,
+				Amount:          xdr.Int128Parts{Lo: 1000, Hi: 0},
+				DestinationMemo: xdr.MemoID(67890),
+			},
+		},
+		{
+			// CAP-0084: a mint to a muxed contract destination. The mint path
+			// de-muxes the destination identically to transfer, so the muxed
+			// contract id surfaces as a uint64 to_muxed_id as well.
+			name:          "V4 mint to muxed contract (CAP-0084)",
+			txMetaVersion: 4,
+			eventType:     EventTypeMint,
+			topics: []xdr.ScVal{
+				makeSymbol("mint"),
+				makeAddress(muxedContract), // to (no admin in V4)
+				makeAsset(randomAsset),
+			},
+			data:       makeV4MapData(big.NewInt(2000), xdr.MemoID(67890)),
+			asset:      randomAsset,
+			contractID: mustGetContractID(randomAsset),
+			expectedResult: &StellarAssetContractEvent{
+				Type:            EventTypeMint,
+				Asset:           randomAsset,
+				To:              muxedContract,
+				Amount:          xdr.Int128Parts{Lo: 2000, Hi: 0},
+				DestinationMemo: xdr.MemoID(67890),
 			},
 		},
 		{
