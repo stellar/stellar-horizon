@@ -1,0 +1,191 @@
+name: Horizon Integration Tests
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  workflow_call:
+    inputs:
+      horizon_git_ref:
+        description: 'Git ref (branch, tag, or SHA) of stellar/stellar-horizon to run tests on. Required when running from separate repo, branch tip otherwise.'
+        required: false
+        type: string
+      protocol_version:
+        description: 'Protocol version to test (e.g. 27)'
+        required: true
+        type: string
+      core_deb_version:
+        description: 'Stellar Core debian package version (e.g. 27.0.0-3288.7696c069d.jammy~buildtests). Mutually exclusive with core_git_ref.'
+        required: false
+        type: string
+      core_docker_img:
+        description: 'Full docker image reference for Stellar Core (e.g. stellar/stellar-core:27.0.0-3288.7696c069d.jammy). Mutually exclusive with core_git_ref.'
+        required: false
+        type: string
+      core_git_ref:
+        description: 'Git ref (branch, tag, or SHA) of stellar/stellar-core to build from source. Mutually exclusive with core_deb_version/core_docker_img.'
+        required: false
+        type: string
+      stellar_rpc_docker_img:
+        description: 'Full docker image reference for Stellar RPC (e.g. stellar/stellar-rpc:27.0.0)'
+        required: true
+        type: string
+
+jobs:
+  integration:
+    name: Integration tests
+    strategy:
+      matrix:
+        os: [ubuntu-24.04]
+        go: ["1.25", "1.26"]
+        pg: [14, 16]
+    runs-on: ${{ matrix.os }}
+    services:
+      postgres:
+        image: postgres:${{ matrix.pg }}
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    env:
+      HORIZON_INTEGRATION_TESTS_ENABLED: true
+      HORIZON_INTEGRATION_TESTS_CORE_MAX_SUPPORTED_PROTOCOL: ${{ inputs.protocol_version }}
+      HORIZON_INTEGRATION_TESTS_CAPTIVE_CORE_BIN: /usr/bin/stellar-core
+      CORE_DEBIAN_PKG_VERSION: ${{ inputs.core_deb_version }}
+      CORE_DOCKER_IMG: ${{ inputs.core_docker_img }}
+      CORE_GIT_REF: ${{ inputs.core_git_ref || '' }}
+      HORIZON_GIT_REF: ${{ inputs.horizon_git_ref || '' }}
+      STELLAR_RPC_DOCKER_IMG: ${{ inputs.stellar_rpc_docker_img }}
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Because this is a callable workflow, we need to explicitly specify the repo, since otherwise
+          # it will check out the caller's repo.
+          repository: stellar/stellar-horizon
+          # For pull requests, build and test the PR head not a merge of the PR with the destination.
+          ref: ${{ env.HORIZON_GIT_REF || github.event.pull_request.head.sha || github.ref }}
+          # We need to full history for git-restore-mtime to know what modification dates to use.
+          # Otherwise, the Go test cache will fail (due to the modification time of fixtures changing).
+          fetch-depth: "0"
+
+      # In order to debug the integration tests, run 'touch continue' once you connect to the ssh session
+      #
+      # - name: Setup upterm session
+      #  uses: lhotari/action-upterm@d23c2722bdab893785c9fbeae314cbf080645bd7
+      #  with:
+      #    ## limits ssh access and adds the ssh public key for the user which triggered the workflow
+      #    limit-access-to-actor: true
+      #    ## limits ssh access and adds the ssh public keys of the listed GitHub users
+      #    limit-access-to-users: <yourGithubUser>
+
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: ${{ matrix.go }}
+
+      # --- Build stellar-core from source when core_git_ref is provided ---
+      - name: Build Stellar Core from source
+        if: env.CORE_GIT_REF != ''
+        run: |
+          echo "Building stellar-core from source at ref: ${CORE_GIT_REF}"
+          git clone --depth 50 https://github.com/stellar/stellar-core.git /tmp/stellar-core-src
+          cd /tmp/stellar-core-src
+          git fetch origin "${CORE_GIT_REF}" && git checkout FETCH_HEAD || git checkout "${CORE_GIT_REF}"
+          git submodule update --init --recursive
+
+          # Build using stellar-core's own Dockerfile.testing
+          docker build --pull --platform linux/amd64 \
+            -f docker/Dockerfile.testing \
+            -t stellar-core:local-build .
+
+          # Extract the binary from the image for captive core use
+          docker create --name stellar-core-extract stellar-core:local-build
+          sudo docker cp stellar-core-extract:/usr/local/bin/stellar-core /usr/bin/stellar-core
+          docker rm stellar-core-extract
+
+          # Install runtime dependencies needed by the source-built binary on the host.
+          # The binary is built on ubuntu:noble with clang-20/libc++, so we need the
+          # matching libc++ runtime libraries on the ubuntu-24.04 runner.
+          sudo wget -O /etc/apt/trusted.gpg.d/apt.llvm.org.asc https://apt.llvm.org/llvm-snapshot.gpg.key
+          sudo bash -c 'echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" > /etc/apt/sources.list.d/llvm.list'
+          sudo apt-get update
+          sudo apt-get install -y libc++abi1-20 libc++1-20
+
+          echo "Built stellar-core from source:"
+          stellar-core version
+
+      - name: Set Stellar Core docker image (from source build)
+        if: env.CORE_GIT_REF != ''
+        run: |
+          echo HORIZON_INTEGRATION_TESTS_DOCKER_IMG="stellar-core:local-build" >> $GITHUB_ENV
+
+      # --- Use pre-built debian package and docker image when core_git_ref is NOT provided ---
+      - name: Pull and set Stellar Core image
+        if: env.CORE_GIT_REF == ''
+        run: |
+          docker pull "$CORE_DOCKER_IMG"
+          echo HORIZON_INTEGRATION_TESTS_DOCKER_IMG="$CORE_DOCKER_IMG" >> $GITHUB_ENV
+
+      - name: Install Captive Core from debian package
+        if: env.CORE_GIT_REF == ''
+        run: |
+          sudo wget -qO - https://apt.stellar.org/SDF.asc | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=true sudo apt-key add -
+          sudo bash -c 'echo "deb https://apt.stellar.org noble unstable" > /etc/apt/sources.list.d/SDF-unstable.list'
+          # The 27.0.0 core build is only published for jammy, so add the jammy unstable repo as well,
+          # plus the LLVM-20 jammy repo for its libc++1/libc++abi1/libunwind runtime dependencies.
+          sudo bash -c 'echo "deb https://apt.stellar.org jammy unstable" >> /etc/apt/sources.list.d/SDF-unstable.list'
+          sudo wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=true sudo apt-key add -
+          sudo bash -c 'echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-20 main" > /etc/apt/sources.list.d/llvm-jammy.list'
+          sudo apt-get update && sudo apt-get install -y stellar-core="$CORE_DEBIAN_PKG_VERSION"
+          echo "Using stellar core version $(stellar-core version)"
+
+      - name: Pull and set Stellar RPC image
+        run: |
+          docker pull "$STELLAR_RPC_DOCKER_IMG"
+          echo HORIZON_INTEGRATION_TESTS_STELLAR_RPC_DOCKER_IMG="$STELLAR_RPC_DOCKER_IMG" >> $GITHUB_ENV
+
+      - name: Build Horizon reproducible build
+        run: |
+          go build -v -trimpath -buildvcs=false .
+          touch empty
+
+      # The test-skipping cache only makes sense when core comes from pinned artifacts.
+      # A core_git_ref may be a moving branch, so from-source builds always run the tests.
+      - name: Calculate the source hash
+        if: env.CORE_GIT_REF == ''
+        id: calculate_source_hash
+        run: |
+          combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-protocol-${{ inputs.protocol_version }}-${{ env.CORE_DOCKER_IMG }}-${{ env.STELLAR_RPC_DOCKER_IMG }}-${{ env.CORE_DEBIAN_PKG_VERSION }}" | sha256sum | cut -d ' ' -f 1)
+          echo "COMBINED_SOURCE_HASH=$combined_hash" >> "$GITHUB_ENV"
+
+      - name: Restore Horizon binary and integration tests source hash to cache
+        if: env.CORE_GIT_REF == ''
+        id: horizon_binary_tests_hash
+        uses: actions/cache/restore@v4
+        with:
+          path: ./empty
+          lookup-only: true
+          key: ${{ env.COMBINED_SOURCE_HASH }}
+
+      - if: ${{ steps.horizon_binary_tests_hash.outputs.cache-hit != 'true' }}
+        name: Run Horizon Integration Tests
+        run: go test -race -timeout 75m -v ./internal/integration/...
+
+      - name: Save Horizon binary and integration tests source hash to cache
+        if: ${{ success() && env.CORE_GIT_REF == '' && steps.horizon_binary_tests_hash.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ./empty
+          key: ${{ env.COMBINED_SOURCE_HASH }}

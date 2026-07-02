@@ -6,119 +6,31 @@ on:
   pull_request:
 
 jobs:
-  integration:
-    name: Integration tests
-    strategy:
-      matrix:
-        os: [ubuntu-24.04]
-        go: ["1.25", "1.26"]
-        pg: [14, 16]
-        protocol-version: [26, 27]
-    runs-on: ${{ matrix.os }}
-    services:
-      postgres:
-        image: postgres:${{ matrix.pg }}
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_DB: postgres
-          POSTGRES_PASSWORD: postgres
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-    env:
-      HORIZON_INTEGRATION_TESTS_ENABLED: true
-      HORIZON_INTEGRATION_TESTS_CORE_MAX_SUPPORTED_PROTOCOL: ${{ matrix.protocol-version }}
-      PROTOCOL_26_CORE_DOCKER_IMG: stellar/stellar-core:26.0.0-3089.8e43a2d3b.jammy
-      PROTOCOL_26_CORE_DEBIAN_PKG_VERSION: 26.0.0-3089.8e43a2d3b.jammy~buildtests
-      PROTOCOL_26_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:26.0.0
-      PROTOCOL_27_CORE_DOCKER_IMG: stellar/stellar-core:27.0.0-3288.7696c069d.jammy
-      PROTOCOL_27_CORE_DEBIAN_PKG_VERSION: 27.0.0-3288.7696c069d.jammy~buildtests
-      PROTOCOL_27_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:27.0.0-preview-190
-      PGHOST: localhost
-      PGPORT: 5432
-      PGUSER: postgres
-      PGPASSWORD: postgres
-      PGDATABASE: postgres
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          # For pull requests, build and test the PR head not a merge of the PR with the destination.
-          ref: ${{ github.event.pull_request.head.sha || github.ref }}
-          # We need to full history for git-restore-mtime to know what modification dates to use.
-          # Otherwise, the Go test cache will fail (due to the modification time of fixtures changing).
-          fetch-depth: "0"
+  integration-p26-pkg:
+    name: Integration tests (P26)
+    uses: ./.github/workflows/integration-tests.yml
+    with:
+      protocol_version: '26'
+      core_deb_version: '26.0.0-3089.8e43a2d3b.jammy~buildtests'
+      core_docker_img: 'stellar/stellar-core:26.0.0-3089.8e43a2d3b.jammy'
+      stellar_rpc_docker_img: 'stellar/stellar-rpc:26.0.0'
 
-      # In order to debug the integration tests, run 'touch continue' once you connect to the ssh session
-      #
-      # - name: Setup upterm session
-      #  uses: lhotari/action-upterm@d23c2722bdab893785c9fbeae314cbf080645bd7
-      #  with:
-      #    ## limits ssh access and adds the ssh public key for the user which triggered the workflow
-      #    limit-access-to-actor: true
-      #    ## limits ssh access and adds the ssh public keys of the listed GitHub users
-      #    limit-access-to-users: <yourGithubUser>
+  integration-p27-pkg:
+    name: Integration tests (P27)
+    uses: ./.github/workflows/integration-tests.yml
+    with:
+      protocol_version: '27'
+      core_deb_version: '27.0.0-3288.7696c069d.jammy~buildtests'
+      core_docker_img: 'stellar/stellar-core:27.0.0-3288.7696c069d.jammy'
+      stellar_rpc_docker_img: 'stellar/stellar-rpc:27.0.0-preview-190'
 
-      - uses: ./.github/actions/setup-go
-        with:
-          go-version: ${{ matrix.go }}
-
-      - name: Pull and set Stellar Core image
-        shell: bash
-        run: |
-          docker pull "$PROTOCOL_${{ matrix.protocol-version }}_CORE_DOCKER_IMG"
-          echo HORIZON_INTEGRATION_TESTS_DOCKER_IMG="$PROTOCOL_${{ matrix.protocol-version }}_CORE_DOCKER_IMG" >> $GITHUB_ENV
-
-      - name: Pull and set Stellar RPC image
-        shell: bash
-        run: |
-          docker pull "$PROTOCOL_${{ matrix.protocol-version }}_STELLAR_RPC_DOCKER_IMG"
-          echo HORIZON_INTEGRATION_TESTS_STELLAR_RPC_DOCKER_IMG="$PROTOCOL_${{ matrix.protocol-version }}_STELLAR_RPC_DOCKER_IMG" >> $GITHUB_ENV
-
-      - name: Install core
-        run: |
-          sudo wget -qO - https://apt.stellar.org/SDF.asc | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=true sudo apt-key add -
-          sudo bash -c 'echo "deb https://apt.stellar.org noble unstable" > /etc/apt/sources.list.d/SDF-unstable.list'
-          # The 27.0.0 core build is only published for jammy, so add the jammy unstable repo as well,
-          # plus the LLVM-20 jammy repo for its libc++1/libc++abi1/libunwind runtime dependencies.
-          sudo bash -c 'echo "deb https://apt.stellar.org jammy unstable" >> /etc/apt/sources.list.d/SDF-unstable.list'
-          sudo wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=true sudo apt-key add -
-          sudo bash -c 'echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-20 main" > /etc/apt/sources.list.d/llvm-jammy.list'
-          sudo apt-get update && sudo apt-get install -y stellar-core="$PROTOCOL_${{ matrix.protocol-version }}_CORE_DEBIAN_PKG_VERSION"
-          echo "Using stellar core version $(stellar-core version)"
-          echo 'HORIZON_INTEGRATION_TESTS_CAPTIVE_CORE_BIN=/usr/bin/stellar-core' >> $GITHUB_ENV
-
-      - name: Build Horizon reproducible build
-        run: |
-          go build -v -trimpath -buildvcs=false .
-          touch empty
-
-      - name: Calculate the source hash
-        id: calculate_source_hash
-        run: |
-          combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-protocol-${{ matrix.protocol-version }}-${{ env.PROTOCOL_27_CORE_DOCKER_IMG }}-${{ env.PROTOCOL_27_STELLAR_RPC_DOCKER_IMG }}-${{ env.PROTOCOL_27_CORE_DEBIAN_PKG_VERSION }}-${{ env.PROTOCOL_26_CORE_DOCKER_IMG }}-${{ env.PREFIX }}" | sha256sum | cut -d ' ' -f 1)
-          echo "COMBINED_SOURCE_HASH=$combined_hash" >> "$GITHUB_ENV"
-
-      - name: Restore Horizon binary and integration tests source hash to cache
-        id: horizon_binary_tests_hash
-        uses: actions/cache/restore@v4
-        with:
-          path: ./empty
-          lookup-only: true
-          key: ${{ env.COMBINED_SOURCE_HASH }}
-
-      - if: ${{ steps.horizon_binary_tests_hash.outputs.cache-hit != 'true' }}
-        run: go test -race -timeout 75m -v ./internal/integration/...
-
-      - name: Save Horizon binary and integration tests source hash to cache
-        if: ${{ success() && steps.horizon_binary_tests_hash.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v4
-        with:
-          path: ./empty
-          key: ${{ env.COMBINED_SOURCE_HASH }}
+  # integration-p27-src:
+  #   name: Integration tests (P27, core from source)
+  #   uses: ./.github/workflows/integration-tests.yml
+  #   with:
+  #     protocol_version: '27'
+  #     core_git_ref: 'master'
+  #     stellar_rpc_docker_img: 'stellar/stellar-rpc:27.0.0-preview-190'
 
   verify-range:
     name: Test (and push) verify-range image
