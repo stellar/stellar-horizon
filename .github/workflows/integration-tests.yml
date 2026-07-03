@@ -72,6 +72,17 @@ jobs:
       PGPASSWORD: postgres
       PGDATABASE: postgres
     steps:
+      - name: Validate Stellar Core inputs
+        run: |
+          if [[ -n "$CORE_GIT_REF" && ( -n "$CORE_DEBIAN_PKG_VERSION" || -n "$CORE_DOCKER_IMG" ) ]]; then
+            echo "::error::core_git_ref is mutually exclusive with core_deb_version/core_docker_img"
+            exit 1
+          fi
+          if [[ -z "$CORE_GIT_REF" && ( -z "$CORE_DEBIAN_PKG_VERSION" || -z "$CORE_DOCKER_IMG" ) ]]; then
+            echo "::error::provide either core_git_ref, or both core_deb_version and core_docker_img"
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
         with:
           # Because this is a callable workflow, we need to explicitly specify the repo, since otherwise
