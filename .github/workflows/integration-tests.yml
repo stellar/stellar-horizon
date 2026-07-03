@@ -123,7 +123,7 @@ jobs:
           # The binary is built on ubuntu:noble with clang-20/libc++, so we need the
           # matching libc++ runtime libraries on the ubuntu-24.04 runner.
           sudo wget -O /etc/apt/trusted.gpg.d/apt.llvm.org.asc https://apt.llvm.org/llvm-snapshot.gpg.key
-          sudo bash -c 'echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" > /etc/apt/sources.list.d/llvm.list'
+          sudo bash -c 'echo "deb https://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" > /etc/apt/sources.list.d/llvm.list'
           sudo apt-get update
           sudo apt-get install -y libc++abi1-20 libc++1-20
 
@@ -151,7 +151,7 @@ jobs:
           # plus the LLVM-20 jammy repo for its libc++1/libc++abi1/libunwind runtime dependencies.
           sudo bash -c 'echo "deb https://apt.stellar.org jammy unstable" >> /etc/apt/sources.list.d/SDF-unstable.list'
           sudo wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=true sudo apt-key add -
-          sudo bash -c 'echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-20 main" > /etc/apt/sources.list.d/llvm-jammy.list'
+          sudo bash -c 'echo "deb https://apt.llvm.org/jammy/ llvm-toolchain-jammy-20 main" > /etc/apt/sources.list.d/llvm-jammy.list'
           sudo apt-get update && sudo apt-get install -y stellar-core="$CORE_DEBIAN_PKG_VERSION"
           echo "Using stellar core version $(stellar-core version)"
 
