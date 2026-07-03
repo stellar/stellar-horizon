@@ -5,6 +5,12 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Added
+- Added Protocol 28 ingestion support for CAP-0084 (Muxed Contract Addresses):
+  SAC transfer/mint events to a muxed-contract destination surface the base
+  contract in the `to` topic and the mux id via `to_muxed_id`, and bumped
+  `MaxSupportedProtocolVersion` to 28 ([#203](https://github.com/stellar/stellar-horizon/pull/203)).
+
 ## 27.0.0
 
 **This release adds support for Protocol 27**
