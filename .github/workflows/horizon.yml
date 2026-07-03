@@ -14,6 +14,7 @@ jobs:
       core_deb_version: '27.1.0-3365.3589a696b.jammy~buildtests'
       core_docker_img: 'stellar/stellar-core:27.1.0-3365.3589a696b.jammy'
       stellar_rpc_docker_img: 'stellar/stellar-rpc:27.1.0'
+      full_matrix: true
 
   integration-p27-pkg:
     name: Integration tests (P27)
@@ -23,6 +24,7 @@ jobs:
       core_deb_version: '27.1.0-3365.3589a696b.jammy~buildtests'
       core_docker_img: 'stellar/stellar-core:27.1.0-3365.3589a696b.jammy'
       stellar_rpc_docker_img: 'stellar/stellar-rpc:27.1.0'
+      full_matrix: true
 
   # integration-p27-src:
   #   name: Integration tests (P27, core from source)

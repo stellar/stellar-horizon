@@ -31,15 +31,17 @@ on:
         description: 'Full docker image reference for Stellar RPC (e.g. stellar/stellar-rpc:27.0.0)'
         required: true
         type: string
+      full_matrix:
+        description: 'Run the full go/postgres version matrix. Defaults to false: a single job on the latest go and postgres, which is what external callers (e.g. stellar-core CI) want.'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   integration:
     name: Integration tests
     strategy:
-      matrix:
-        os: [ubuntu-24.04]
-        go: ["1.25", "1.26"]
-        pg: [14, 16]
+      matrix: ${{ inputs.full_matrix && fromJSON('{"os":["ubuntu-24.04"],"go":["1.25","1.26"],"pg":[14,16]}') || fromJSON('{"os":["ubuntu-24.04"],"go":["1.26"],"pg":[16]}') }}
     runs-on: ${{ matrix.os }}
     services:
       postgres:
@@ -76,7 +78,9 @@ jobs:
           # it will check out the caller's repo.
           repository: stellar/stellar-horizon
           # For pull requests, build and test the PR head not a merge of the PR with the destination.
-          ref: ${{ env.HORIZON_GIT_REF || github.event.pull_request.head.sha || github.ref }}
+          # When invoked from another repo (e.g. stellar/stellar-core) the caller's PR head SHA / ref
+          # doesn't exist in stellar-horizon, so fall back to main unless horizon_git_ref is provided.
+          ref: ${{ env.HORIZON_GIT_REF || (github.repository == 'stellar/stellar-horizon' && (github.event.pull_request.head.sha || github.ref)) || 'refs/heads/main' }}
           # We need to full history for git-restore-mtime to know what modification dates to use.
           # Otherwise, the Go test cache will fail (due to the modification time of fixtures changing).
           fetch-depth: "0"
