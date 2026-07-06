@@ -36,16 +36,11 @@ jobs:
       PROTOCOL_27_CORE_DEBIAN_PKG_VERSION: 27.0.0-3288.7696c069d.jammy~buildtests
       PROTOCOL_27_STELLAR_RPC_DOCKER_IMG: stellar/stellar-rpc:27.0.0-preview-190
       # Protocol 28 (CAP-0084) runs against the vnext (next-protocol-enabled) core build.
-      # Still pinned to the CAP-0083-era vnext build 3367 (3589a696b): no -vnext
-      # image/deb matching CAP-0084 core (stellar-core#5337, HEAD 4cdd2fc9e) is
-      # published yet, and horizon's integration matrix does not exercise
-      # muxed-contract SAC behavior (covered by contractevents/events_test.go and
-      # the captured InvokeHostFunctionTests CAP-0084 test-lcms fixture). 3589a696b
-      # includes stellar-core#5329 — the fix for the QueryServer.cpp:124
-      # contiguous-snapshot assertion that aborted captive-core catchup on builds
-      # 3313..3366. Re-pin once a CAP-0084 -vnext image/deb publishes.
-      PROTOCOL_28_CORE_DOCKER_IMG: stellar/unsafe-stellar-core:27.0.1-3367.3589a696b.jammy-vnext
-      PROTOCOL_28_CORE_DEBIAN_PKG_VERSION: 27.0.1-3367.3589a696b.jammy~vnext~buildtests
+      # Pinned to build 3395 (4cdd2fc9e) — the -vnext image/deb matching CAP-0084
+      # core (stellar-core#5337, HEAD 4cdd2fc9e). Variant preserved from the p27 leg:
+      # plain -vnext docker + ~vnext~buildtests deb.
+      PROTOCOL_28_CORE_DOCKER_IMG: stellar/unsafe-stellar-core:27.1.1-3395.4cdd2fc9e.jammy-vnext
+      PROTOCOL_28_CORE_DEBIAN_PKG_VERSION: 27.1.1-3395.4cdd2fc9e.jammy~vnext~buildtests
       # No Protocol 28 stellar-rpc image is published yet (tracked: stellar-rpc#837).
       # Leave EMPTY on purpose: the P27 RPC image bundles a P27 captive-core that
       # cannot ingest a protocol-28 network, so bringing it up makes every
