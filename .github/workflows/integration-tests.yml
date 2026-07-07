@@ -144,7 +144,14 @@ jobs:
       - name: Set Stellar Core docker image (from source build)
         if: env.CORE_GIT_REF != ''
         run: |
-          echo HORIZON_INTEGRATION_TESTS_DOCKER_IMG="stellar-core:local-build" >> $GITHUB_ENV
+          # Parts of the test suite (e.g. soroban config upgrades via
+          # go-stellar-sdk's GenSorobanConfigUpgradeTxAndKey) unconditionally
+          # `docker pull` the core image, which fails for a local-only image.
+          # Serve the locally built image from a local registry so pulls resolve.
+          docker run -d -p 5000:5000 --name local-registry registry:2
+          docker tag stellar-core:local-build localhost:5000/stellar-core:local-build
+          docker push localhost:5000/stellar-core:local-build
+          echo HORIZON_INTEGRATION_TESTS_DOCKER_IMG="localhost:5000/stellar-core:local-build" >> $GITHUB_ENV
 
       # --- Use pre-built debian package and docker image when core_git_ref is NOT provided ---
       - name: Pull and set Stellar Core image
