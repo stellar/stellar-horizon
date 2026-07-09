@@ -149,7 +149,14 @@ jobs:
           # `docker pull` the core image, which fails for a local-only image.
           # Serve the locally built image from a local registry so pulls resolve.
           docker run -d -p 5000:5000 --name local-registry registry:2
-          docker tag stellar-core:local-build localhost:5000/stellar-core:local-build
+          # Dockerfile.testing sets no ENTRYPOINT (just `CMD stellar-core`), but
+          # the test suite also invokes the image as `docker run <img> <subcommand>`,
+          # which expects the entrypoint to be the stellar-core binary like in the
+          # release image. Overlay one before publishing.
+          docker build -t localhost:5000/stellar-core:local-build - <<'EOF'
+          FROM stellar-core:local-build
+          ENTRYPOINT ["/usr/local/bin/stellar-core"]
+          EOF
           docker push localhost:5000/stellar-core:local-build
           echo HORIZON_INTEGRATION_TESTS_DOCKER_IMG="localhost:5000/stellar-core:local-build" >> $GITHUB_ENV
 
