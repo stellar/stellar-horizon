@@ -5,6 +5,13 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Added
+- Added Protocol 28 ingestion support for CAP-0085 (Externally Managed
+  Contract Executables): decode of the new `ContractExecutable` external-ref
+  variant and `SCV_EXECUTABLE_TAG` `SCVal` arm via the regenerated
+  `go-stellar-sdk` XDR. `MaxSupportedProtocolVersion` is already 28
+  ([#205](https://github.com/stellar/stellar-horizon/pull/205)).
+
 ## 27.0.0
 
 **This release adds support for Protocol 27**
