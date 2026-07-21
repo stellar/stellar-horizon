@@ -204,7 +204,11 @@ jobs:
         if: env.CORE_GIT_REF == ''
         id: calculate_source_hash
         run: |
-          combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-protocol-${{ inputs.protocol_version }}-${{ env.CORE_DOCKER_IMG }}-${{ env.STELLAR_RPC_DOCKER_IMG }}-${{ env.CORE_DEBIAN_PKG_VERSION }}" | sha256sum | cut -d ' ' -f 1)
+          # The prefix uniquely identifies the job instance (what setup-go's PREFIX
+          # captured: workflow, job, OS, go version), plus the full matrix combination
+          # so that a pass on one go/pg combination never skips tests for another.
+          prefix="${{ github.workflow }}-${{ github.job }}-${{ runner.os }}-go${{ matrix.go }}-matrix(${{ join(matrix.*, '|') }})"
+          combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-protocol-${{ inputs.protocol_version }}-${{ env.CORE_DOCKER_IMG }}-${{ env.STELLAR_RPC_DOCKER_IMG }}-${{ env.CORE_DEBIAN_PKG_VERSION }}-${prefix}" | sha256sum | cut -d ' ' -f 1)
           echo "COMBINED_SOURCE_HASH=$combined_hash" >> "$GITHUB_ENV"
 
       - name: Restore Horizon binary and integration tests source hash to cache
