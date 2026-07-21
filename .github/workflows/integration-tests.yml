@@ -164,12 +164,20 @@ jobs:
       - name: Pull and set Stellar Core image
         if: env.CORE_GIT_REF == ''
         run: |
+          if [[ -z "${CORE_DOCKER_IMG}" ]]; then
+            echo "core_docker_img input is required when core_git_ref is not set" >&2
+            exit 1
+          fi
           docker pull "$CORE_DOCKER_IMG"
           echo HORIZON_INTEGRATION_TESTS_DOCKER_IMG="$CORE_DOCKER_IMG" >> $GITHUB_ENV
 
       - name: Install Captive Core from debian package
         if: env.CORE_GIT_REF == ''
         run: |
+          if [[ -z "${CORE_DEBIAN_PKG_VERSION}" ]]; then
+            echo "core_deb_version input is required when core_git_ref is not set" >&2
+            exit 1
+          fi
           sudo wget -qO - https://apt.stellar.org/SDF.asc | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=true sudo apt-key add -
           sudo bash -c 'echo "deb https://apt.stellar.org noble unstable" > /etc/apt/sources.list.d/SDF-unstable.list'
           # The 27.0.0 core build is only published for jammy, so add the jammy unstable repo as well,
