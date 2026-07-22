@@ -48,7 +48,7 @@ require (
 require (
 	github.com/creachadair/jrpc2 v1.2.0
 	github.com/fsouza/fake-gcs-server v1.49.2
-	github.com/stellar/go-stellar-sdk v0.6.1-0.20260616165505-26fec7c0e891
+	github.com/stellar/go-stellar-sdk v0.6.1-0.20260722220414-82df7643786e
 )
 
 require (
@@ -170,10 +170,3 @@ require (
 	google.golang.org/protobuf v1.36.10
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-// SPIKE: Protocol 28 (CAP-0085) — pin go-stellar-sdk to the unmerged fork branch
-// that carries the regenerated XDR (new ContractExecutable external-ref variant +
-// SCV_EXECUTABLE_TAG SCVal arm). Cross-links go-stellar-sdk PR:
-// https://github.com/stellar/go-stellar-sdk/pull/5965
-// Flip back to a version pin once that PR merges.
-replace github.com/stellar/go-stellar-sdk => github.com/sisuresh/go v0.0.0-20260722181103-a44a67183c61
