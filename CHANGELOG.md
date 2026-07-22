@@ -7,6 +7,7 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 - Added Protocol 28 (CAP-0085) ingestion support: decode of the new `ContractExecutable` external-reference variant and the `SCV_EXECUTABLE_TAG` `SCVal` arm, delivered via the regenerated `go-stellar-sdk` XDR ([go-stellar-sdk#5965](https://github.com/stellar/go-stellar-sdk/pull/5965)) ([#207](https://github.com/stellar/stellar-horizon/pull/207)). `MaxSupportedProtocolVersion` is already 28, so no bump is required.
+  - `TestCoreLCMIngestion` now covers CAP-0085 via a captured `LedgerCloseMeta` fixture (`create_and_invoke_external_ref_contract`) from stellar-core's CAP-85 host tests ([stellar-core#5358](https://github.com/stellar/stellar-core/pull/5358)).
 
 ## 27.0.0
 
