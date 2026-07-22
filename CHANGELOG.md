@@ -5,6 +5,9 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Added
+- Added Protocol 28 (CAP-0085) ingestion support: decode of the new `ContractExecutable` external-reference variant and the `SCV_EXECUTABLE_TAG` `SCVal` arm, delivered via the regenerated `go-stellar-sdk` XDR ([go-stellar-sdk#5965](https://github.com/stellar/go-stellar-sdk/pull/5965)) ([#207](https://github.com/stellar/stellar-horizon/pull/207)). `MaxSupportedProtocolVersion` is already 28, so no bump is required.
+
 ## 27.0.0
 
 **This release adds support for Protocol 27**
