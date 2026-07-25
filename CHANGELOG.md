@@ -5,6 +5,9 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Fixed
+- Improved `/assets` endpoint performance by replacing non-sargable pagination over a `FULL OUTER JOIN` with a bounded CTE merge query that restores index-backed filtering and ordering.
+
 ## 27.0.0
 
 **This release adds support for Protocol 27**

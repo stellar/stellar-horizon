@@ -435,32 +435,6 @@ func (q *Q) GetAssetStats(ctx context.Context, assetCode, assetIssuer string, pa
 	//
 	// (3) is stored in the contract_asset_stats table and is derived by ingesting SAC contract balances.
 	//
-	// All 3 tables are joined in the query below to compute the desired list of AssetAndContractStat
-	// entries.
-	sql := sq.Select("COALESCE(exp_asset_stats.asset_type, asset_contracts.asset_type) as asset_type, " +
-		"COALESCE(exp_asset_stats.asset_code, asset_contracts.asset_code) as asset_code, " +
-		"COALESCE(exp_asset_stats.asset_issuer, asset_contracts.asset_issuer) as asset_issuer, " +
-		"exp_asset_stats.accounts, " +
-		"exp_asset_stats.balances, " +
-		"asset_contracts.contract_id as contract_id, contract_asset_stats.stat as contracts").
-		From("exp_asset_stats").
-		JoinClause("FULL OUTER JOIN asset_contracts ON " +
-			"exp_asset_stats.asset_type = asset_contracts.asset_type AND " +
-			"exp_asset_stats.asset_code = asset_contracts.asset_code AND " +
-			"exp_asset_stats.asset_issuer = asset_contracts.asset_issuer").
-		LeftJoin("contract_asset_stats ON asset_contracts.contract_id = contract_asset_stats.contract_id")
-	filters := map[string]interface{}{}
-	if assetCode != "" {
-		filters["COALESCE(exp_asset_stats.asset_code, asset_contracts.asset_code)"] = assetCode
-	}
-	if assetIssuer != "" {
-		filters["COALESCE(exp_asset_stats.asset_issuer, asset_contracts.asset_issuer)"] = assetIssuer
-	}
-
-	if len(filters) > 0 {
-		sql = sql.Where(filters)
-	}
-
 	var cursorComparison, orderBy string
 	switch page.Order {
 	case "asc":
@@ -471,21 +445,119 @@ func (q *Q) GetAssetStats(ctx context.Context, assetCode, assetIssuer string, pa
 		return nil, fmt.Errorf("invalid page order %s", page.Order)
 	}
 
+	cursorCode, cursorIssuer := "", ""
 	if page.Cursor != "" {
-		cursorCode, cursorIssuer, err := parseAssetStatsCursor(page.Cursor)
+		var err error
+		cursorCode, cursorIssuer, err = parseAssetStatsCursor(page.Cursor)
 		if err != nil {
 			return nil, err
 		}
-
-		sql = sql.Where("((COALESCE(exp_asset_stats.asset_code, asset_contracts.asset_code), COALESCE(exp_asset_stats.asset_issuer, asset_contracts.asset_issuer)) "+cursorComparison+" (?,?))", cursorCode, cursorIssuer)
 	}
 
-	sql = sql.OrderBy("(COALESCE(exp_asset_stats.asset_code, asset_contracts.asset_code), COALESCE(exp_asset_stats.asset_issuer, asset_contracts.asset_issuer)) " + orderBy).Limit(page.Limit)
+	expAssetStatsSQL := sq.Select(
+		"exp_asset_stats.asset_type as asset_type",
+		"exp_asset_stats.asset_code as asset_code",
+		"exp_asset_stats.asset_issuer as asset_issuer",
+		"exp_asset_stats.accounts",
+		"exp_asset_stats.balances",
+		"asset_contracts.contract_id as contract_id",
+		"contract_asset_stats.stat as contracts",
+	).
+		From("exp_asset_stats").
+		LeftJoin("asset_contracts ON " +
+			"exp_asset_stats.asset_type = asset_contracts.asset_type AND " +
+			"exp_asset_stats.asset_code = asset_contracts.asset_code AND " +
+			"exp_asset_stats.asset_issuer = asset_contracts.asset_issuer").
+		LeftJoin("contract_asset_stats ON asset_contracts.contract_id = contract_asset_stats.contract_id")
+
+	contractOnlySQL := sq.Select(
+		"asset_contracts.asset_type as asset_type",
+		"asset_contracts.asset_code as asset_code",
+		"asset_contracts.asset_issuer as asset_issuer",
+		`'{"authorized":0,"authorized_to_maintain_liabilities":0,"claimable_balances":0,"liquidity_pools":0,"unauthorized":0}'::jsonb as accounts`,
+		`'{"authorized":"0","authorized_to_maintain_liabilities":"0","claimable_balances":"0","liquidity_pools":"0","unauthorized":"0"}'::jsonb as balances`,
+		"asset_contracts.contract_id as contract_id",
+		"contract_asset_stats.stat as contracts",
+	).
+		From("asset_contracts").
+		LeftJoin("contract_asset_stats ON asset_contracts.contract_id = contract_asset_stats.contract_id").
+		Where(`NOT EXISTS (
+			SELECT 1
+			FROM exp_asset_stats
+			WHERE exp_asset_stats.asset_type = asset_contracts.asset_type
+				AND exp_asset_stats.asset_code = asset_contracts.asset_code
+				AND exp_asset_stats.asset_issuer = asset_contracts.asset_issuer
+		)`)
+
+	if assetCode != "" {
+		expAssetStatsSQL = expAssetStatsSQL.Where("exp_asset_stats.asset_code = ?", assetCode)
+		contractOnlySQL = contractOnlySQL.Where("asset_contracts.asset_code = ?", assetCode)
+	}
+	if assetIssuer != "" {
+		expAssetStatsSQL = expAssetStatsSQL.Where("exp_asset_stats.asset_issuer = ?", assetIssuer)
+		contractOnlySQL = contractOnlySQL.Where("asset_contracts.asset_issuer = ?", assetIssuer)
+	}
+	if page.Cursor != "" {
+		expAssetStatsSQL = expAssetStatsSQL.Where(
+			"((exp_asset_stats.asset_code, exp_asset_stats.asset_issuer) "+cursorComparison+" (?,?))",
+			cursorCode,
+			cursorIssuer,
+		)
+		contractOnlySQL = contractOnlySQL.Where(
+			"((asset_contracts.asset_code, asset_contracts.asset_issuer) "+cursorComparison+" (?,?))",
+			cursorCode,
+			cursorIssuer,
+		)
+	}
+
+	expAssetStatsSQL = expAssetStatsSQL.
+		OrderBy("(exp_asset_stats.asset_code, exp_asset_stats.asset_issuer) " + orderBy).
+		Limit(page.Limit)
+	contractOnlySQL = contractOnlySQL.
+		OrderBy("(asset_contracts.asset_code, asset_contracts.asset_issuer) " + orderBy).
+		Limit(page.Limit)
+
+	expAssetStatsCTE, expAssetStatsArgs, err := expAssetStatsSQL.ToSql()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not build exp_asset_stats select query")
+	}
+	contractOnlyCTE, contractOnlyArgs, err := contractOnlySQL.ToSql()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not build contract-only select query")
+	}
+
+	// fmt.Sprintf is safe here because it only stitches together SQL generated by
+	// Squirrel plus the fixed order keyword chosen from "asc"/"desc". User input
+	// remains in the bound args produced by ToSql().
+	sql := fmt.Sprintf(`
+		WITH exp_rows AS (
+			%s
+		), contract_only_rows AS (
+			%s
+		)
+		SELECT *
+		FROM (
+			SELECT * FROM exp_rows
+			UNION ALL
+			SELECT * FROM contract_only_rows
+		) merged
+		ORDER BY asset_code %s, asset_issuer %s
+		LIMIT ?`,
+		expAssetStatsCTE,
+		contractOnlyCTE,
+		orderBy,
+		orderBy,
+	)
+
+	args := append(expAssetStatsArgs, contractOnlyArgs...)
+	args = append(args, page.Limit)
 
 	var results []AssetAndContractStat
-	if err := q.Select(ctx, &results, sql); err != nil {
-		sqlString, _, _ := sql.ToSql()
-		return nil, errors.Wrapf(err, "could not run select query: %s", sqlString)
+	if err := q.SelectRaw(ctx, &results, sql, args...); err != nil {
+		return nil, errors.Wrapf(err, "could not run select query: %s", sql)
+	}
+	if len(results) == 0 {
+		return nil, nil
 	}
 
 	return results, nil
