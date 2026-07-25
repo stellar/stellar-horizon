@@ -511,10 +511,10 @@ func (q *Q) GetAssetStats(ctx context.Context, assetCode, assetIssuer string, pa
 	}
 
 	expAssetStatsSQL = expAssetStatsSQL.
-		OrderBy("(exp_asset_stats.asset_code, exp_asset_stats.asset_issuer) " + orderBy).
+		OrderBy("exp_asset_stats.asset_code "+orderBy, "exp_asset_stats.asset_issuer "+orderBy).
 		Limit(page.Limit)
 	contractOnlySQL = contractOnlySQL.
-		OrderBy("(asset_contracts.asset_code, asset_contracts.asset_issuer) " + orderBy).
+		OrderBy("asset_contracts.asset_code "+orderBy, "asset_contracts.asset_issuer "+orderBy).
 		Limit(page.Limit)
 
 	expAssetStatsCTE, expAssetStatsArgs, err := expAssetStatsSQL.ToSql()
@@ -553,6 +553,8 @@ func (q *Q) GetAssetStats(ctx context.Context, assetCode, assetIssuer string, pa
 	args = append(args, page.Limit)
 
 	var results []AssetAndContractStat
+	// Add explicit query type for prometheus metrics, since we use raw sql.
+	ctx = context.WithValue(ctx, &db.QueryTypeContextKey, db.SelectQueryType)
 	if err := q.SelectRaw(ctx, &results, sql, args...); err != nil {
 		return nil, errors.Wrapf(err, "could not run select query: %s", sql)
 	}
