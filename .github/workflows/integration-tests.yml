@@ -203,12 +203,19 @@ jobs:
       - name: Calculate the source hash
         if: env.CORE_GIT_REF == ''
         id: calculate_source_hash
+        # Inputs are expanded as shell variables, not ${{ }} expressions, so that
+        # caller-provided values can't inject into the script. hashFiles() has no
+        # shell-variable equivalent, but its output is a fixed-format hash.
+        env:
+          GO_VERSION: ${{ matrix.go }}
+          MATRIX_COMBO: ${{ join(matrix.*, '|') }}
+          PROTOCOL_VERSION: ${{ inputs.protocol_version }}
         run: |
           # The prefix uniquely identifies the job instance (what setup-go's PREFIX
           # captured: workflow, job, OS, go version), plus the full matrix combination
           # so that a pass on one go/pg combination never skips tests for another.
-          prefix="${{ github.workflow }}-${{ github.job }}-${{ runner.os }}-go${{ matrix.go }}-matrix(${{ join(matrix.*, '|') }})"
-          combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-protocol-${{ inputs.protocol_version }}-${{ env.CORE_DOCKER_IMG }}-${{ env.STELLAR_RPC_DOCKER_IMG }}-${{ env.CORE_DEBIAN_PKG_VERSION }}-${prefix}" | sha256sum | cut -d ' ' -f 1)
+          prefix="${GITHUB_WORKFLOW}-${GITHUB_JOB}-${RUNNER_OS}-go${GO_VERSION}-matrix(${MATRIX_COMBO})"
+          combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-protocol-${PROTOCOL_VERSION}-${CORE_DOCKER_IMG}-${STELLAR_RPC_DOCKER_IMG}-${CORE_DEBIAN_PKG_VERSION}-${prefix}" | sha256sum | cut -d ' ' -f 1)
           echo "COMBINED_SOURCE_HASH=$combined_hash" >> "$GITHUB_ENV"
 
       - name: Restore Horizon binary and integration tests source hash to cache
