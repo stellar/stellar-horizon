@@ -11,8 +11,11 @@ jobs:
     uses: ./.github/workflows/integration-tests.yml
     with:
       protocol_version: '27'
-      core_deb_version: '27.1.0-3365.3589a696b.jammy~buildtests'
-      core_docker_img: 'stellar/stellar-core:27.1.0-3365.3589a696b.jammy'
+      # The P27 leg runs the NEW core binary at protocol 27 — the point is
+      # verifying the updated core still serves the previous protocol, not
+      # re-testing the old core against itself.
+      core_deb_version: '28.0.0-3486.2332980a1.jammy~buildtests'
+      core_docker_img: 'stellar/unsafe-stellar-core:28.0.0-3486.2332980a1.jammy'
       stellar_rpc_docker_img: 'stellar/stellar-rpc:27.1.1'
       full_matrix: true
 
