@@ -22,7 +22,7 @@ jobs:
     with:
       protocol_version: '28'
       core_deb_version: '28.0.0-3486.2332980a1.jammy~buildtests'
-      core_docker_img: 'stellar/stellar-core:28.0.0-3486.2332980a1.jammy'
+      core_docker_img: 'stellar/unsafe-stellar-core:28.0.0-3486.2332980a1.jammy'
       stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.0-vnext-unstable-195'
       full_matrix: true
 
