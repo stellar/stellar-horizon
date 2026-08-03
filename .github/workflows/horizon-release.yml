@@ -13,7 +13,7 @@ jobs:
       - name: Run deprecation tests
         shell: bash
         run: |
-          export VERSION=${GITHUB_REF_NAME#horizon-v}
+          export VERSION=${GITHUB_REF_NAME#v}
           echo "Searching for \"Action needed in release ${VERSION}\" tags..."
           # Negate the result so process exits with 1 if anything found
           ! egrep -irn -A 1 --include=*.go "Action.+needed.+in.+release:.+$VERSION" ./
