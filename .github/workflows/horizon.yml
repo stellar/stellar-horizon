@@ -11,9 +11,13 @@ jobs:
     uses: ./.github/workflows/integration-tests.yml
     with:
       protocol_version: '27'
-      core_deb_version: '27.1.0-3365.3589a696b.jammy~buildtests'
-      core_docker_img: 'stellar/stellar-core:27.1.0-3365.3589a696b.jammy'
-      stellar_rpc_docker_img: 'stellar/stellar-rpc:27.1.1'
+      # The P27 leg runs the NEW core and rpc builds at protocol 27 — the point
+      # is verifying the updated binaries still serve the previous protocol
+      # (the real configuration during the upgrade window), not re-testing
+      # already-shipped versions against each other.
+      core_deb_version: '28.0.0-3486.2332980a1.jammy~buildtests'
+      core_docker_img: 'stellar/unsafe-stellar-core:28.0.0-3486.2332980a1.jammy'
+      stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.0-vnext-unstable-195'
       full_matrix: true
 
   integration-p28-pkg:
@@ -22,7 +26,7 @@ jobs:
     with:
       protocol_version: '28'
       core_deb_version: '28.0.0-3486.2332980a1.jammy~buildtests'
-      core_docker_img: 'stellar/stellar-core:28.0.0-3486.2332980a1.jammy'
+      core_docker_img: 'stellar/unsafe-stellar-core:28.0.0-3486.2332980a1.jammy'
       stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.0-vnext-unstable-195'
       full_matrix: true
 
@@ -39,7 +43,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       GO_VERSION: 1.25.0
-      STELLAR_CORE_VERSION: 27.1.0-3365.3589a696b.noble
+      STELLAR_CORE_VERSION: 28.0.0-3486.2332980a1.noble
     steps:
       - uses: actions/checkout@v3
         with:
