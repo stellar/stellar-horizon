@@ -35,7 +35,7 @@ import (
 const (
 	// MaxSupportedProtocolVersion defines the maximum supported version of
 	// the Stellar protocol.
-	MaxSupportedProtocolVersion uint32 = 27
+	MaxSupportedProtocolVersion uint32 = 28
 
 	// CurrentVersion reflects the latest version of the ingestion
 	// algorithm. This value is stored in KV store and is used to decide
@@ -706,7 +706,7 @@ func (s *system) LoadTest(ledgersFilePath, fixturesFilePath string, merge bool, 
 	// 4. Set up loadtest backend and run FSM
 	config := loadtest.LedgerBackendConfig{
 		NetworkPassphrase:   s.config.NetworkPassphrase,
-		LedgersFilePath:     ledgersFilePath,
+		LedgersFilePaths:    []string{ledgersFilePath},
 		LedgerCloseDuration: closeDuration,
 	}
 	if merge {
