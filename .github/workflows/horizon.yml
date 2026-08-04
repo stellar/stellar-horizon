@@ -17,7 +17,7 @@ jobs:
       # already-shipped versions against each other.
       core_deb_version: '28.0.0-3486.2332980a1.jammy~buildtests'
       core_docker_img: 'stellar/unsafe-stellar-core:28.0.0-3486.2332980a1.jammy'
-      stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.0-vnext-unstable-195'
+      stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.0-vnext-200'
       full_matrix: true
 
   integration-p28-pkg:
@@ -27,7 +27,7 @@ jobs:
       protocol_version: '28'
       core_deb_version: '28.0.0-3486.2332980a1.jammy~buildtests'
       core_docker_img: 'stellar/unsafe-stellar-core:28.0.0-3486.2332980a1.jammy'
-      stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.0-vnext-unstable-195'
+      stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.0-vnext-200'
       full_matrix: true
 
   # integration-p28-src:
@@ -36,7 +36,7 @@ jobs:
   #   with:
   #     protocol_version: '28'
   #     core_git_ref: 'master'
-  #     stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.0-vnext-unstable-195'
+  #     stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.0-vnext-200'
 
   verify-range:
     name: Test (and push) verify-range image
