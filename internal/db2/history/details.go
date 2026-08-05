@@ -17,14 +17,39 @@ var jsonNullEscape = []byte{0x5c, 'u', '0', '0', '0', '0'}
 // ScVal strings are arbitrary bytes. A NUL in particular would cause the insert
 // to fail.
 //
-// encoding/json always renders a NUL as the jsonNullEscape sequence and always
-// emits valid UTF-8, so stripping that escape from the already-marshaled bytes
-// is sufficient to guarantee the document is jsonb-storable. Removing the
-// self-contained six-byte escape from a JSON string literal cannot change JSON
-// validity or affect any other value.
+// encoding/json renders a real NUL as the jsonNullEscape sequence, but those
+// same six bytes can also occur as the tail of an escaped backslash followed by
+// the literal text "u0000" (for example a string whose value is the six literal
+// characters marshals with a doubled leading backslash). Only an escape
+// introduced by an unescaped backslash represents an actual NUL, so we walk the
+// document consuming each escape as a unit and drop only genuine NUL escapes; an
+// escaped-backslash pair is copied verbatim. This never alters a legitimate
+// value and always leaves valid JSON.
 func sanitizeJSONBDetails(details []byte) []byte {
 	if !bytes.Contains(details, jsonNullEscape) {
 		return details
 	}
-	return bytes.ReplaceAll(details, jsonNullEscape, nil)
+	out := make([]byte, 0, len(details))
+	for i := 0; i < len(details); {
+		if details[i] != '\\' {
+			out = append(out, details[i])
+			i++
+			continue
+		}
+		// An escape sequence starts here. If it is a genuine NUL escape, drop it.
+		if bytes.HasPrefix(details[i:], jsonNullEscape) {
+			i += len(jsonNullEscape)
+			continue
+		}
+		// Otherwise copy this backslash together with the character it escapes,
+		// so an escaped-backslash pair is consumed as a unit and its second
+		// backslash cannot be mistaken for the start of a NUL escape.
+		out = append(out, details[i])
+		i++
+		if i < len(details) {
+			out = append(out, details[i])
+			i++
+		}
+	}
+	return out
 }
