@@ -5,6 +5,9 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Fixed
+- Reap expired contract-data rows before inserting the ledger's created and restored asset-stat rows, avoiding a possible duplicate key error during ingestion of restored entries ([#215](https://github.com/stellar/stellar-horizon/pull/215)).
+
 ## 27.0.0
 
 **This release adds support for Protocol 27**
