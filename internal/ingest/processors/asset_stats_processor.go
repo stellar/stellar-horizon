@@ -228,14 +228,6 @@ func (p *AssetStatsProcessor) updateDB(
 		return err
 	}
 
-	assetContractRows, err := contractAssetStatSet.GetCreatedAssetContracts()
-	if err != nil {
-		return errors.Wrap(err, "Error getting created asset contracts")
-	}
-	if err = p.assetStatsQ.InsertAssetContracts(ctx, assetContractRows); err != nil {
-		return errors.Wrap(err, "Error inserting asset contracts")
-	}
-
 	if err := p.assetStatsQ.RemoveContractAssetBalances(ctx, contractAssetStatSet.removedBalances); err != nil {
 		return errors.Wrap(err, "Error removing contract asset balances")
 	}
@@ -244,20 +236,33 @@ func (p *AssetStatsProcessor) updateDB(
 		return err
 	}
 
-	if err := p.assetStatsQ.InsertContractAssetBalances(ctx, contractAssetStatSet.createdBalances); err != nil {
-		return errors.Wrap(err, "Error inserting contract asset balances")
-	}
-
 	if err := p.updateContractDataExpirations(ctx); err != nil {
 		return err
 	}
 
+	// Reap expired rows before inserting. An entry archived at ledger E can be restored
+	// in E+1, which stellar-core emits as LEDGER_ENTRY_RESTORED (Change.Pre == nil) and
+	// we ingest as a creation. The stale row is only reaped when currentLedger-1 == E,
+	// i.e. this same ledger, so inserting first would collide with it on the primary key
+	// and abort ingestion of the ledger (see processor_runner.go SuppressRemoveAfterRestoreChange).
 	if err := contractAssetStatSet.ingestExpiredBalances(ctx); err != nil {
 		return err
 	}
 
 	if _, err := p.assetStatsQ.DeleteAssetContractsExpiringAt(ctx, p.currentLedger-1); err != nil {
-		return errors.Wrap(err, "Error fetching contract asset balances")
+		return errors.Wrap(err, "Error deleting expired asset contracts")
+	}
+
+	assetContractRows, err := contractAssetStatSet.GetCreatedAssetContracts()
+	if err != nil {
+		return errors.Wrap(err, "Error getting created asset contracts")
+	}
+	if err = p.assetStatsQ.InsertAssetContracts(ctx, assetContractRows); err != nil {
+		return errors.Wrap(err, "Error inserting asset contracts")
+	}
+
+	if err := p.assetStatsQ.InsertContractAssetBalances(ctx, contractAssetStatSet.createdBalances); err != nil {
+		return errors.Wrap(err, "Error inserting contract asset balances")
 	}
 
 	return p.updateContractAssetStats(ctx, contractAssetStatSet.contractAssetStats)
