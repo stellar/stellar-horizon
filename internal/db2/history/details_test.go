@@ -43,6 +43,14 @@ func nulByteTestDetails(t *testing.T) (marshaled []byte, sanitizedAsset string) 
 }
 
 func TestSanitizeJSONBDetails(t *testing.T) {
+	mustMarshal := func(v map[string]string) []byte {
+		b, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+
 	poisoned, wantAsset := nulByteTestDetails(t)
 
 	got := sanitizeJSONBDetails(poisoned)
@@ -74,10 +82,7 @@ func TestSanitizeJSONBDetails(t *testing.T) {
 	// followed by u0000, not a NUL) marshals with a doubled leading backslash. It
 	// must be preserved, not mistaken for a NUL escape and truncated into invalid
 	// JSON.
-	withLiteral, err := json.Marshal(map[string]string{"asset": literalNulEscape})
-	if err != nil {
-		t.Fatal(err)
-	}
+	withLiteral := mustMarshal(map[string]string{"asset": literalNulEscape})
 	sanitized := sanitizeJSONBDetails(withLiteral)
 	if !json.Valid(sanitized) {
 		t.Errorf("literal-escape input produced invalid JSON: %s", sanitized)
@@ -92,12 +97,9 @@ func TestSanitizeJSONBDetails(t *testing.T) {
 
 	// A value with both a real NUL and the literal escape text: only the NUL is
 	// removed, the literal text survives.
-	mixed, err := json.Marshal(map[string]string{
+	mixed := mustMarshal(map[string]string{
 		"asset": string([]byte{'A', 0x00}) + literalNulEscape,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	sanitizedMixed := sanitizeJSONBDetails(mixed)
 	if !json.Valid(sanitizedMixed) {
 		t.Errorf("mixed input produced invalid JSON: %s", sanitizedMixed)
