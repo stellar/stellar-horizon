@@ -113,64 +113,50 @@ func TestSanitizeJSONBDetails(t *testing.T) {
 	}
 }
 
-// TestAddOperationSanitizesNulByteInDetails checks that a NUL-bearing details
-// document inserts into the real jsonb column instead of failing.
-func TestAddOperationSanitizesNulByteInDetails(t *testing.T) {
+// TestSanitizeJSONBDetailsWritesToDB is the end-to-end regression guard: a
+// NUL-bearing details document must insert into the real jsonb columns
+// (history_operations.details and history_effects.details) instead of failing.
+// Both sinks share one database fixture to keep this DB-backed test cheap.
+func TestSanitizeJSONBDetailsWritesToDB(t *testing.T) {
 	tt := test.Start(t)
 	defer tt.Finish()
 	test.ResetHorizonDB(t, tt.HorizonDB)
 	q := &Q{tt.HorizonSession()}
 
-	tt.Require.NoError(q.Begin(tt.Ctx))
-
 	details, wantAsset := nulByteTestDetails(t)
-
-	builder := q.NewOperationBatchInsertBuilder()
 	sequence := int32(56)
-	opID := toid.New(sequence, 1, 1).ToInt64()
-	sourceAccount := "GAQAA5L65LSYH7CQ3VTJ7F3HHLGCL3DSLAR2Y47263D56MNNGHSQSTVY"
+	account := "GAQAA5L65LSYH7CQ3VTJ7F3HHLGCL3DSLAR2Y47263D56MNNGHSQSTVY"
 
-	// Without sanitizeJSONBDetails this insert fails because jsonb cannot store a NUL.
-	tt.Require.NoError(builder.Add(
+	// history_operations.details: without sanitizeJSONBDetails this insert fails
+	// because jsonb cannot store a NUL.
+	tt.Require.NoError(q.Begin(tt.Ctx))
+	opBuilder := q.NewOperationBatchInsertBuilder()
+	opID := toid.New(sequence, 1, 1).ToInt64()
+	tt.Require.NoError(opBuilder.Add(
 		opID,
 		toid.New(sequence, 1, 0).ToInt64(),
 		1,
 		xdr.OperationTypeInvokeHostFunction,
 		details,
-		sourceAccount,
+		account,
 		null.String{},
 		false,
 	))
-	tt.Require.NoError(builder.Exec(tt.Ctx, q))
+	tt.Require.NoError(opBuilder.Exec(tt.Ctx, q))
 	tt.Require.NoError(q.Commit())
 
-	var stored string
-	tt.Require.NoError(q.GetRaw(tt.Ctx, &stored,
+	var storedOp string
+	tt.Require.NoError(q.GetRaw(tt.Ctx, &storedOp,
 		"SELECT details FROM history_operations WHERE id = $1", opID))
-	tt.Assert.False(strings.ContainsRune(stored, rune(0)), "stored details must not contain a NUL")
-	tt.Assert.Contains(stored, wantAsset)
-}
+	tt.Assert.False(strings.ContainsRune(storedOp, rune(0)), "operation details must not contain a NUL")
+	tt.Assert.Contains(storedOp, wantAsset)
 
-// TestAddEffectSanitizesNulByteInDetails guards the second jsonb sink,
-// history_effects.details.
-func TestAddEffectSanitizesNulByteInDetails(t *testing.T) {
-	tt := test.Start(t)
-	defer tt.Finish()
-	test.ResetHorizonDB(t, tt.HorizonDB)
-	q := &Q{tt.HorizonSession()}
-
+	// history_effects.details: the second jsonb sink.
 	tt.Require.NoError(q.Begin(tt.Ctx))
-
-	details, wantAsset := nulByteTestDetails(t)
-
-	address := "GAQAA5L65LSYH7CQ3VTJ7F3HHLGCL3DSLAR2Y47263D56MNNGHSQSTVY"
 	accountLoader := NewAccountLoader(ConcurrentInserts)
-	builder := q.NewEffectBatchInsertBuilder()
-	sequence := int32(56)
-
-	// Without sanitizeJSONBDetails this insert fails because jsonb cannot store a NUL.
-	tt.Require.NoError(builder.Add(
-		accountLoader.GetFuture(address),
+	effectBuilder := q.NewEffectBatchInsertBuilder()
+	tt.Require.NoError(effectBuilder.Add(
+		accountLoader.GetFuture(account),
 		null.String{},
 		toid.New(sequence, 1, 1).ToInt64(),
 		1,
@@ -178,13 +164,13 @@ func TestAddEffectSanitizesNulByteInDetails(t *testing.T) {
 		details,
 	))
 	tt.Require.NoError(accountLoader.Exec(tt.Ctx, q))
-	tt.Require.NoError(builder.Exec(tt.Ctx, q))
+	tt.Require.NoError(effectBuilder.Exec(tt.Ctx, q))
 	tt.Require.NoError(q.Commit())
 
 	effects, err := q.Effects(tt.Ctx, db2.PageQuery{Cursor: "0-0", Order: "asc", Limit: 200}, 0)
 	tt.Require.NoError(err)
 	tt.Require.Len(effects, 1)
-	stored := effects[0].DetailsString.String
-	tt.Assert.False(strings.ContainsRune(stored, rune(0)), "stored details must not contain a NUL")
-	tt.Assert.Contains(stored, wantAsset)
+	storedEffect := effects[0].DetailsString.String
+	tt.Assert.False(strings.ContainsRune(storedEffect, rune(0)), "effect details must not contain a NUL")
+	tt.Assert.Contains(storedEffect, wantAsset)
 }
