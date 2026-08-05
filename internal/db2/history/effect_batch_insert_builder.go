@@ -51,7 +51,7 @@ func (i *effectBatchInsertBuilder) Add(
 		"history_operation_id": operationID,
 		"order":                order,
 		"type":                 effectType,
-		"details":              string(details),
+		"details":              string(sanitizeJSONBDetails(details)),
 	})
 }
 
