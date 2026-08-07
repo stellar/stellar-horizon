@@ -1,0 +1,106 @@
+# Socket reachability scan for stellar-horizon.
+# For general Socket reachability documentation, see https://docs.socket.dev/docs/full-application-reachability
+# Multi-eco: Go (root go.mod) + Rust (Cargo workspace and/or sub-Cargos).
+#
+# Schedule: Sun 17:36 UTC weekly. Use workflow_dispatch to run on demand.
+#
+# ----------------------------------------------------------------------------
+# Day-one SBOM-only (Coana 15.3.15 regression — pinned to 15.2.7 below):
+#   With the default Coana (15.3.15 at time of writing), this repo's manifest
+#   set causes Socket's `compute-artifacts` endpoint to fail with
+#   "internal error (code=unknown)" during the Tier 1 Fetching-artifacts step
+#   — reproducible, not transient. The scan never starts and exits 1.
+#
+#   Workaround: `--reach-version=15.2.7` in the scan step pins Coana to a version
+#   that doesn't hit the bad API path. The trade-off is that 15.2.7 reports
+#   "Found 0 projects across 0 ecosystems" for this repo (probably the Go
+#   ecosystem support changed in newer Coana). Net effect is SBOM-only
+#   behavior (same as tracy / libsodium / soroban-test-examples) — Socket
+#   still detects CVEs in the SBOM but Coana does no Tier 1 reachability.
+#
+#   File with Socket support; the 15.3.15 backend failure is the real bug
+#   (the 15.2.7 ecosystem-detection gap is a different issue).
+# ----------------------------------------------------------------------------
+#
+# ============================================================================
+# Socket scan — reading the job status. (The scan step below produces this: an
+# exit code + an optional ::warning:: annotation, which GitHub Actions renders
+# as the job's state.)
+# ============================================================================
+# GREEN  (exit 0, no warning): scan completed and every analyzed vulnerability
+#        got full Tier 1 reachability (precise, your-code-aware). Nothing to do.
+# YELLOW (exit 0 + "::warning:: Socket scan completed with Tier 2 fallbacks"):
+#        scan completed, but Tier 1 could NOT be computed for some/all
+#        vulnerabilities, which fell back to Tier 2 (precomputed) reachability.
+#        You still get CVE detection + Tier 2 results, just reduced precision
+#        for the affected CVEs. The job is NOT failing.
+# RED    (non-zero exit): scan did not complete. Do not assume any part
+#        succeeded — could be reachability hard-failing, a missing language
+#        toolchain, the runner out of memory, a network/API error, or even the
+#        underlying CVE/SBOM detection failing. Check the logs and fix before
+#        relying on results.
+# ============================================================================
+#
+# `--reach-version=15.2.7` pins Coana to avoid the 15.3.15 backend regression described in the day-one note above. Remove this flag once Socket fixes it.
+
+name: Socket reachability scan
+
+on:
+  schedule:
+    - cron: '36 17 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Force JS-based GitHub actions (actions/checkout, actions/setup-*, etc.) to
+  # use Node 24 instead of the soon-to-be-deprecated Node 20. Safe to remove
+  # after 2026-06-16 (when Node 24 becomes the default and this becomes a no-op).
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  socket-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: "1.86.0"
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: "1.26.4"
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24.18.0"
+      - name: Enable Corepack (yarn/pnpm per repo packageManager)
+        run: corepack enable
+
+      - name: Install Socket CLI
+        run: npm install -g socket
+
+      - name: Run Socket reachability scan
+        env:
+          SOCKET_SECURITY_API_TOKEN: ${{ secrets.SOCKET_SECURITY_API_TOKEN }}
+        run: |
+          # Stream the scan output through tee so the run log captures it AND
+          # we can grep it for Tier-2-fallback markers; capture the scan's
+          # exit code via ${PIPESTATUS[0]} (tee always exits 0). If the scan
+          # succeeded but logged a Tier 2 fallback, emit a ::warning::
+          # annotation that GitHub Actions renders as a yellow run-level
+          # warning without failing the job.
+          set +e
+          socket scan create --reach \
+            --org=stellar \
+            --no-interactive \
+            --reach-continue-on-no-source-files \
+            --reach-continue-on-analysis-errors \
+            --reach-continue-on-install-errors \
+            --reach-continue-on-missing-lock-files \
+            --reach-version=15.2.7 \
+            . 2>&1 | tee /tmp/scan.log
+          rc=${PIPESTATUS[0]}
+          if [ $rc -eq 0 ] && grep -qE "Reachability falls back to Tier 2|fallback to the results from the pre-computed|Reachability falls back to precomputed" /tmp/scan.log; then
+            echo "::warning::Socket scan completed with Tier 2 fallbacks - some vulnerabilities used precomputed reachability instead of full Tier 1"
+          fi
+          exit $rc
