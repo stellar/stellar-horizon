@@ -68,16 +68,31 @@ func (p *AssetStatsProcessor) ProcessChange(ctx context.Context, change ingest.C
 	case xdr.LedgerEntryTypeTrustline:
 		err = p.assetStatSet.AddTrustline(change)
 	case xdr.LedgerEntryTypeContractData:
-		// only ingest contract data entries which could be relevant to
-		// asset stats
-		ledgerEntry := change.Post
-		if ledgerEntry == nil {
-			ledgerEntry = change.Pre
-		}
-		_, assetFound := sac.AssetFromContractData(*ledgerEntry, p.networkPassphrase)
-		_, _, balanceFound := sac.ContractBalanceFromContractData(*ledgerEntry, p.networkPassphrase)
-		if !assetFound && !balanceFound {
-			return nil
+		// Only ingest contract data entries which could be relevant to
+		// asset stats.
+		//
+		// We care about SAC activity exclusively, but balance provenance cannot
+		// be determined from the entry alone. Thus we propagate balance-looking
+		// changes and validate SACs when possible.
+		if change.Post == nil { // removal
+			if change.Pre == nil { // defensive
+				return nil
+			}
+			// Keys are immutable so we check that over the value on removal.
+			ledgerKey, keyErr := change.Pre.LedgerKey()
+			if keyErr != nil {
+				return errors.Wrap(keyErr, "could not extract ledger key")
+			}
+
+			if !sac.ValidContractBalanceLedgerKey(ledgerKey) {
+				return nil
+			}
+		} else { // create/update
+			_, assetFound := sac.AssetFromContractData(*change.Post, p.networkPassphrase)
+			_, _, balanceFound := sac.ContractBalanceFromContractData(*change.Post, p.networkPassphrase)
+			if !assetFound && !balanceFound { // neither balance nor asset init
+				return nil
+			}
 		}
 		p.contractDataChanges = append(p.contractDataChanges, change)
 	case xdr.LedgerEntryTypeTtl:
@@ -225,6 +240,11 @@ func (p *AssetStatsProcessor) updateDB(
 	assetStatsDeltas := p.assetStatSet.All()
 
 	if err := p.updateAssetStats(ctx, assetStatsDeltas); err != nil {
+		return err
+	}
+
+	// reads the rows RemoveContractAssetBalances is about to delete
+	if err := contractAssetStatSet.ingestRemovedBalances(ctx); err != nil {
 		return err
 	}
 
