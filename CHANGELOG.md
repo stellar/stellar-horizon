@@ -3,10 +3,15 @@
 All notable changes to this project will be documented in this
 file. This project adheres to [Semantic Versioning](http://semver.org/).
 
-## Unreleased
+## 27.0.1
+
+### Updated
+- Updated `go-stellar-sdk` dependency to [v0.6.1](https://github.com/stellar/go-stellar-sdk/releases/tag/v0.6.1).
 
 ### Fixed
 - Reap expired contract-data rows before inserting the ledger's created and restored asset-stat rows, avoiding a possible duplicate key error during ingestion of restored entries ([#215](https://github.com/stellar/stellar-horizon/pull/215)).
+- Sanitize NUL bytes in operation and effect details before inserting into `jsonb` columns, preventing ingestion failures on ledger data containing NUL characters ([#216](https://github.com/stellar/stellar-horizon/pull/216)).
+- Filter contract data removals on the ledger key and reconcile contract asset stats against stored balance rows, handling balance removals whose entry no longer resembles a valid balance ([#219](https://github.com/stellar/stellar-horizon/pull/219)).
 
 ## 27.0.0
 
