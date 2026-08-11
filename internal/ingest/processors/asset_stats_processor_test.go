@@ -1014,6 +1014,10 @@ func (s *AssetStatsProcessorTestSuiteLedger) TestRemoveContractBalance() {
 	usdAssetContractStat.Stat.ActiveHolders = 0
 	usdAssetContractStat.Stat.ActiveBalance = "0"
 	s.mockQ.On("RemoveAssetContractStat", s.ctx, usdID[:]).Return(int64(1), nil).Once()
+	s.mockQ.On("GetContractAssetBalances", s.ctx, []xdr.Hash{keyHash}).
+		Return([]history.ContractAssetBalance{
+			{KeyHash: keyHash[:], ContractID: usdID[:], Amount: "200", ExpirationLedger: 2234},
+		}, nil).Once()
 	s.mockQ.On("RemoveContractAssetBalances", s.ctx, []xdr.Hash{keyHash}).
 		Return(nil).Once()
 	s.mockQ.On("UpdateContractAssetBalanceAmounts", s.ctx, []xdr.Hash{}, []string{}).
