@@ -243,6 +243,11 @@ func (p *AssetStatsProcessor) updateDB(
 		return err
 	}
 
+	// reads the rows RemoveContractAssetBalances is about to delete
+	if err := contractAssetStatSet.ingestRemovedBalances(ctx); err != nil {
+		return err
+	}
+
 	if err := p.assetStatsQ.RemoveContractAssetBalances(ctx, contractAssetStatSet.removedBalances); err != nil {
 		return errors.Wrap(err, "Error removing contract asset balances")
 	}

@@ -30,6 +30,7 @@ func (v assetContractStatValue) ConvertToHistoryObject() history.ContractAssetSt
 }
 
 type contractAssetBalancesQ interface {
+	GetContractAssetBalances(ctx context.Context, keys []xdr.Hash) ([]history.ContractAssetBalance, error)
 	DeleteContractAssetBalancesExpiringAt(ctx context.Context, ledger uint32) ([]history.ContractAssetBalance, error)
 }
 
@@ -208,29 +209,11 @@ func (s *ContractAssetStatSet) ingestContractAssetBalance(change ingest.Change) 
 		if err != nil {
 			return err
 		}
-		// We always include the key hash in s.removedBalances even
-		// if the ledger entry is not a valid balance ledger entry.
-		// It's possible that a contract is able to forge a created
-		// balance ledger entry which matches the Stellar Asset Contract
-		// and later on the ledger entry is updated to an invalid state.
-		// In such a scenario we still want to remove the balance ledger
-		// entry from our db when the entry is removed from the ledger.
+		// The key hash is recorded whether or not the entry still resembles a
+		// balance, since rows are keyed on the ledger key. The stat delta is
+		// applied by ingestRemovedBalances from the stored row, because the
+		// value here is not a reliable record of what was counted.
 		s.removedBalances = append(s.removedBalances, keyHash)
-
-		_, preAmt, ok := sac.ContractBalanceFromContractData(*change.Pre, s.networkPassphrase)
-		if !ok {
-			return nil
-		}
-
-		expirationLedger, ok := s.removedExpirationEntries[keyHash]
-		if !ok || expirationLedger < s.currentLedger {
-			return nil
-		}
-
-		stat := s.getContractAssetStat(*pContractID)
-		stat.activeHolders--
-		stat.activeBalance = new(big.Int).Sub(stat.activeBalance, preAmt)
-		s.maybeAddContractAssetStat(*pContractID, stat)
 	case change.Pre != nil && change.Post != nil: // updated
 		pContractID := change.Pre.Data.MustContractData().Contract.ContractId
 		if pContractID == nil {
@@ -266,6 +249,45 @@ func (s *ContractAssetStatSet) ingestContractAssetBalance(change ingest.Change) 
 	default:
 		return errors.Errorf("unexpected change Pre: %v Post: %v", change.Pre, change.Post)
 	}
+	return nil
+}
+
+// ingestRemovedBalances applies the stat delta for balances whose ledger entry
+// was removed, taking the amount from the stored row rather than from the removed
+// entry. A removed key with no stored row was either never ingested as a balance
+// or was already accounted for when its row was reaped on expiry, and needs no
+// adjustment either way.
+//
+// This must run before RemoveContractAssetBalances, which deletes the rows it
+// reads.
+func (s *ContractAssetStatSet) ingestRemovedBalances(ctx context.Context) error {
+	if len(s.removedBalances) == 0 {
+		return nil
+	}
+
+	rows, err := s.assetStatsQ.GetContractAssetBalances(ctx, s.removedBalances)
+	if err != nil {
+		return errors.Wrap(err, "Error fetching removed contract asset balances")
+	}
+
+	for _, row := range rows {
+		amt, ok := new(big.Int).SetString(row.Amount, 10)
+		if !ok {
+			return errors.Errorf(
+				"contract balance %v has invalid amount: %v",
+				row.KeyHash,
+				row.Amount,
+			)
+		}
+
+		var contractID xdr.ContractId
+		copy(contractID[:], row.ContractID)
+		stat := s.getContractAssetStat(contractID)
+		stat.activeHolders--
+		stat.activeBalance.Sub(stat.activeBalance, amt)
+		s.maybeAddContractAssetStat(contractID, stat)
+	}
+
 	return nil
 }
 
