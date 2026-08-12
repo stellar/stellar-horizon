@@ -15,8 +15,8 @@ jobs:
       # is verifying the updated binaries still serve the previous protocol
       # (the real configuration during the upgrade window), not re-testing
       # already-shipped versions against each other.
-      core_deb_version: '28.0.0-3486.2332980a1.jammy~buildtests'
-      core_docker_img: 'stellar/unsafe-stellar-core:28.0.0-3486.2332980a1.jammy'
+      core_deb_version: '28.0.0-3494.a9b861321.jammy~buildtests'
+      core_docker_img: 'stellar/unsafe-stellar-core:28.0.0-3494.a9b861321.jammy'
       stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.0-vnext-200'
       # The full go/postgres matrix runs only on pushes to main since they're
       # non-blocking and happen in the background. Everyday PRs get the single 
@@ -28,8 +28,8 @@ jobs:
     uses: ./.github/workflows/integration-tests.yml
     with:
       protocol_version: '28'
-      core_deb_version: '28.0.0-3486.2332980a1.jammy~buildtests'
-      core_docker_img: 'stellar/unsafe-stellar-core:28.0.0-3486.2332980a1.jammy'
+      core_deb_version: '28.0.0-3494.a9b861321.jammy~buildtests'
+      core_docker_img: 'stellar/unsafe-stellar-core:28.0.0-3494.a9b861321.jammy'
       stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.0-vnext-200'
       full_matrix: ${{ github.event_name == 'push' }}
 
@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       GO_VERSION: 1.25.0
-      STELLAR_CORE_VERSION: 28.0.0-3486.2332980a1.noble
+      STELLAR_CORE_VERSION: 28.0.0-3494.a9b861321.noble
     steps:
       - uses: actions/checkout@v3
         with:
