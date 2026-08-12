@@ -68,16 +68,31 @@ func (p *AssetStatsProcessor) ProcessChange(ctx context.Context, change ingest.C
 	case xdr.LedgerEntryTypeTrustline:
 		err = p.assetStatSet.AddTrustline(change)
 	case xdr.LedgerEntryTypeContractData:
-		// only ingest contract data entries which could be relevant to
-		// asset stats
-		ledgerEntry := change.Post
-		if ledgerEntry == nil {
-			ledgerEntry = change.Pre
-		}
-		_, assetFound := sac.AssetFromContractData(*ledgerEntry, p.networkPassphrase)
-		_, _, balanceFound := sac.ContractBalanceFromContractData(*ledgerEntry, p.networkPassphrase)
-		if !assetFound && !balanceFound {
-			return nil
+		// Only ingest contract data entries which could be relevant to
+		// asset stats.
+		//
+		// We care about SAC activity exclusively, but balance provenance cannot
+		// be determined from the entry alone. Thus we propagate balance-looking
+		// changes and validate SACs when possible.
+		if change.Post == nil { // removal
+			if change.Pre == nil { // defensive
+				return nil
+			}
+			// Keys are immutable so we check that over the value on removal.
+			ledgerKey, keyErr := change.Pre.LedgerKey()
+			if keyErr != nil {
+				return errors.Wrap(keyErr, "could not extract ledger key")
+			}
+
+			if !sac.ValidContractBalanceLedgerKey(ledgerKey) {
+				return nil
+			}
+		} else { // create/update
+			_, assetFound := sac.AssetFromContractData(*change.Post, p.networkPassphrase)
+			_, _, balanceFound := sac.ContractBalanceFromContractData(*change.Post, p.networkPassphrase)
+			if !assetFound && !balanceFound { // neither balance nor asset init
+				return nil
+			}
 		}
 		p.contractDataChanges = append(p.contractDataChanges, change)
 	case xdr.LedgerEntryTypeTtl:
@@ -228,12 +243,9 @@ func (p *AssetStatsProcessor) updateDB(
 		return err
 	}
 
-	assetContractRows, err := contractAssetStatSet.GetCreatedAssetContracts()
-	if err != nil {
-		return errors.Wrap(err, "Error getting created asset contracts")
-	}
-	if err = p.assetStatsQ.InsertAssetContracts(ctx, assetContractRows); err != nil {
-		return errors.Wrap(err, "Error inserting asset contracts")
+	// reads the rows RemoveContractAssetBalances is about to delete
+	if err := contractAssetStatSet.ingestRemovedBalances(ctx); err != nil {
+		return err
 	}
 
 	if err := p.assetStatsQ.RemoveContractAssetBalances(ctx, contractAssetStatSet.removedBalances); err != nil {
@@ -244,20 +256,33 @@ func (p *AssetStatsProcessor) updateDB(
 		return err
 	}
 
-	if err := p.assetStatsQ.InsertContractAssetBalances(ctx, contractAssetStatSet.createdBalances); err != nil {
-		return errors.Wrap(err, "Error inserting contract asset balances")
-	}
-
 	if err := p.updateContractDataExpirations(ctx); err != nil {
 		return err
 	}
 
+	// Reap expired rows before inserting. An entry archived at ledger E can be restored
+	// in E+1, which stellar-core emits as LEDGER_ENTRY_RESTORED (Change.Pre == nil) and
+	// we ingest as a creation. The stale row is only reaped when currentLedger-1 == E,
+	// i.e. this same ledger, so inserting first would collide with it on the primary key
+	// and abort ingestion of the ledger (see processor_runner.go SuppressRemoveAfterRestoreChange).
 	if err := contractAssetStatSet.ingestExpiredBalances(ctx); err != nil {
 		return err
 	}
 
 	if _, err := p.assetStatsQ.DeleteAssetContractsExpiringAt(ctx, p.currentLedger-1); err != nil {
-		return errors.Wrap(err, "Error fetching contract asset balances")
+		return errors.Wrap(err, "Error deleting expired asset contracts")
+	}
+
+	assetContractRows, err := contractAssetStatSet.GetCreatedAssetContracts()
+	if err != nil {
+		return errors.Wrap(err, "Error getting created asset contracts")
+	}
+	if err = p.assetStatsQ.InsertAssetContracts(ctx, assetContractRows); err != nil {
+		return errors.Wrap(err, "Error inserting asset contracts")
+	}
+
+	if err := p.assetStatsQ.InsertContractAssetBalances(ctx, contractAssetStatSet.createdBalances); err != nil {
+		return errors.Wrap(err, "Error inserting contract asset balances")
 	}
 
 	return p.updateContractAssetStats(ctx, contractAssetStatSet.contractAssetStats)

@@ -416,8 +416,9 @@ func TestRemoveContractData(t *testing.T) {
 	usdcID, err := usdcAsset.ContractID("passphrase")
 	assert.NoError(t, err)
 
+	mockQ := &history.MockQAssetStats{}
 	set := NewContractAssetStatSet(
-		&history.MockQAssetStats{},
+		mockQ,
 		"passphrase",
 		map[xdr.Hash]uint32{},
 		map[xdr.Hash]uint32{},
@@ -426,7 +427,6 @@ func TestRemoveContractData(t *testing.T) {
 	)
 
 	keyHash := getKeyHashForBalance(t, usdcID, [32]byte{})
-	set.removedExpirationEntries[keyHash] = 170
 	err = set.AddContractData(ingest.Change{
 		Type: xdr.LedgerEntryTypeContractData,
 		Pre: &xdr.LedgerEntry{
@@ -436,7 +436,6 @@ func TestRemoveContractData(t *testing.T) {
 	assert.NoError(t, err)
 
 	keyHash1 := getKeyHashForBalance(t, usdcID, [32]byte{1})
-	set.removedExpirationEntries[keyHash1] = 100
 	err = set.AddContractData(ingest.Change{
 		Type: xdr.LedgerEntryTypeContractData,
 		Pre: &xdr.LedgerEntry{
@@ -457,15 +456,25 @@ func TestRemoveContractData(t *testing.T) {
 	assert.Equal(t, []xdr.Hash{keyHash, keyHash1, keyHash2}, set.removedBalances)
 	assert.Empty(t, set.createdAssetContracts)
 
+	// keyHash1 has no stored row, so it contributes nothing to the stats
+	ctx := context.Background()
+	mockQ.On("GetContractAssetBalances", ctx, []xdr.Hash{keyHash, keyHash1, keyHash2}).
+		Return([]history.ContractAssetBalance{
+			{KeyHash: keyHash[:], ContractID: usdcID[:], Amount: "50", ExpirationLedger: 170},
+			{KeyHash: keyHash2[:], ContractID: usdcID[:], Amount: "34", ExpirationLedger: 170},
+		}, nil).Once()
+	assert.NoError(t, set.ingestRemovedBalances(ctx))
+
 	assert.ElementsMatch(t, set.GetContractStats(), []history.ContractAssetStatRow{
 		{
 			ContractID: usdcID[:],
 			Stat: history.ContractStat{
-				ActiveBalance: "-50",
-				ActiveHolders: -1,
+				ActiveBalance: "-84",
+				ActiveHolders: -2,
 			},
 		},
 	})
+	mockQ.AssertExpectations(t)
 }
 
 func TestIngestExpiredBalances(t *testing.T) {
