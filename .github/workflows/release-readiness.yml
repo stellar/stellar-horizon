@@ -14,7 +14,7 @@ on:
 
 jobs:
   no-empty-rpc-image-pins:
-    name: No empty PROTOCOL_*_STELLAR_RPC_DOCKER_IMG values
+    name: No empty stellar_rpc_docker_img values
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -30,14 +30,15 @@ jobs:
         run: |
           set -e
 
-          # Match `PROTOCOL_<N>_STELLAR_RPC_DOCKER_IMG:` followed by either an
-          # empty quoted string or nothing-then-end-of-line. The leading
-          # whitespace anchor avoids matching the var name inside a comment.
-          empty=$(grep -nE '^[[:space:]]+PROTOCOL_[0-9]+_STELLAR_RPC_DOCKER_IMG:[[:space:]]*("[[:space:]]*"|$)' \
+          # Match the `stellar_rpc_docker_img:` input each integration leg passes
+          # to integration-tests.yml, followed by an empty string in either quote
+          # style or nothing-then-end-of-line. The leading whitespace anchor
+          # avoids matching the key inside a comment.
+          empty=$(grep -nE "^[[:space:]]+stellar_rpc_docker_img:[[:space:]]*(''|\"[[:space:]]*\"|$)" \
                     .github/workflows/horizon.yml || true)
 
           if [ -z "$empty" ]; then
-            echo "All PROTOCOL_*_STELLAR_RPC_DOCKER_IMG values in horizon.yml are set."
+            echo "All stellar_rpc_docker_img values in horizon.yml are set."
             exit 0
           fi
 
@@ -46,17 +47,17 @@ jobs:
           # - On a push: github.ref_name is the branch being pushed
           target="${{ github.base_ref || github.ref_name }}"
 
-          echo "Empty PROTOCOL_*_STELLAR_RPC_DOCKER_IMG entries found:"
+          echo "Empty stellar_rpc_docker_img entries found:"
           echo "$empty"
           echo
 
           if echo "$STABLE_BRANCHES" | grep -qw "$target"; then
-            echo "::error::Empty PROTOCOL_*_STELLAR_RPC_DOCKER_IMG values are not allowed when targeting '$target'."
-            echo "Every matrix leg must point at a real stellar-rpc image before merging to a stable branch."
+            echo "::error::Empty stellar_rpc_docker_img values are not allowed when targeting '$target'."
+            echo "Every integration leg must point at a real stellar-rpc image before merging to a stable branch."
             echo "If a P{N} stellar-rpc image is not published yet, the protocol-next branch is not ready to merge."
             exit 1
           else
-            echo "::warning::Empty PROTOCOL_*_STELLAR_RPC_DOCKER_IMG entries on '$target' are expected during a protocol-next transition."
+            echo "::warning::Empty stellar_rpc_docker_img entries on '$target' are expected during a protocol-next transition."
             echo "Flip these to real image refs before opening a PR to a stable branch (main/master)."
             exit 0
           fi
