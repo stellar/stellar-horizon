@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this
 file. This project adheres to [Semantic Versioning](http://semver.org/).
 
+## Unreleased
+
+### Fixed
+- Fixed the history lookup-table reaper deleting rows (e.g. `history_accounts`) that live ingestion was concurrently inserting references to, which left dangling references and could make an account's history endpoints return 404 or silently omit records until a reingest ([#222](https://github.com/stellar/stellar-horizon/pull/222)).
+
 ## 28.0.0
 
 **This release adds support for Protocol 28.**
