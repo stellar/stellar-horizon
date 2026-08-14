@@ -11,6 +11,9 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 - Added Protocol 28 (CAP-0085) ingestion support: decode of the new `ContractExecutable` external-reference variant and the `SCV_EXECUTABLE_TAG` `SCVal` arm, delivered via the regenerated `go-stellar-sdk` XDR ([go-stellar-sdk#5965](https://github.com/stellar/go-stellar-sdk/pull/5965)) ([#207](https://github.com/stellar/stellar-horizon/pull/207)), and bumped `MaxSupportedProtocolVersion` to 28.
   - `TestCoreLCMIngestion` now covers CAP-0085 via a captured `LedgerCloseMeta` fixture (`create_and_invoke_external_ref_contract`) from stellar-core's CAP-85 host tests ([stellar-core#5358](https://github.com/stellar/stellar-core/pull/5358)).
 
+### Updated
+- Updated `go-stellar-sdk` dependency to [v0.7.2](https://github.com/stellar/go-stellar-sdk/releases/tag/v0.7.2) ([#214](https://github.com/stellar/stellar-horizon/pull/214)). Strkey decoding now validates payload lengths per [SEP-23](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0023.md), so addresses and other strkeys whose checksum is valid but whose payload length is wrong are rejected instead of accepted ([go-stellar-sdk#5977](https://github.com/stellar/go-stellar-sdk/pull/5977)), and assets are ordered by their raw issuer key rather than their base32 text ([go-stellar-sdk#5974](https://github.com/stellar/go-stellar-sdk/pull/5974)).
+
 ### Fixed
 - Reap expired contract-data rows before inserting the ledger's created and restored asset-stat rows, avoiding a possible duplicate key error during ingestion of restored entries ([#215](https://github.com/stellar/stellar-horizon/pull/215)).
 
