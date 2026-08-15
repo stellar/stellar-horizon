@@ -1106,6 +1106,15 @@ var historyLookupTables = map[string][]tableObjectFieldPair{
 }
 
 func (q *Q) deleteLookupTableRows(ctx context.Context, table string, ids []int64) (int64, error) {
+	// The two statements below must share a transaction: the FOR UPDATE lock taken
+	// by the first is only held until the transaction ends, and the DELETE relies
+	// on it still being held. Enforce it rather than fail silently — outside a
+	// transaction the lock would be released immediately and the orphan check could
+	// race concurrent ingestion. ReapLookupTable opens the transaction.
+	if q.GetTx() == nil {
+		return 0, errors.New("deleteLookupTableRows must be called within a transaction")
+	}
+
 	// Lock the candidate rows in a statement that is separate from the DELETE
 	// below. Live ingestion takes a FOR KEY SHARE lock on these rows before it
 	// inserts references to them, so this SELECT ... FOR UPDATE blocks until any
@@ -1119,15 +1128,9 @@ func (q *Q) deleteLookupTableRows(ctx context.Context, table string, ids []int64
 	// is taken before the lock wait, so blocking on FOR UPDATE does not refresh the
 	// snapshot used by the NOT EXISTS sub-queries. The row would then be judged
 	// orphaned against a stale view and deleted while it is in fact referenced.
-	//
-	// This relies on the caller having opened a transaction (see ReapLookupTable):
-	// the FOR UPDATE lock is only held until that transaction ends, so both
-	// statements must run within it.
 	lockQuery := constructLockLookupTableRowsQuery(table, ids)
-	if _, err := q.ExecRaw(
-		context.WithValue(ctx, &db.QueryTypeContextKey, db.SelectQueryType),
-		lockQuery,
-	); err != nil {
+	var lockedIDs []int64
+	if err := q.SelectRaw(ctx, &lockedIDs, lockQuery); err != nil {
 		return 0, fmt.Errorf("error running query %s : %w", lockQuery, err)
 	}
 
