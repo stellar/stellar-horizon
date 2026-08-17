@@ -69,6 +69,16 @@ func TestElderLedger(t *testing.T) {
 	}
 }
 
+func TestConstructLockLookupTableRowsQuery(t *testing.T) {
+	query := constructLockLookupTableRowsQuery(
+		"history_accounts",
+		[]int64{100, 20, 30},
+	)
+
+	assert.Equal(t,
+		"SELECT id FROM history_accounts WHERE id IN (100, 20, 30) ORDER BY id ASC FOR UPDATE", query)
+}
+
 func TestConstructDeleteLookupTableRowsQuery(t *testing.T) {
 	query := constructDeleteLookupTableRowsQuery(
 		"history_accounts",
@@ -76,13 +86,12 @@ func TestConstructDeleteLookupTableRowsQuery(t *testing.T) {
 	)
 
 	assert.Equal(t,
-		"WITH ha_batch AS (SELECT id FROM history_accounts WHERE id IN (100, 20, 30) ORDER BY id asc FOR UPDATE) "+
-			"DELETE FROM history_accounts WHERE id IN (SELECT e1.id as id FROM ha_batch e1 "+
-			"WHERE NOT EXISTS ( SELECT 1 as row FROM history_transaction_participants WHERE history_transaction_participants.history_account_id = id LIMIT 1) "+
-			"AND NOT EXISTS ( SELECT 1 as row FROM history_effects WHERE history_effects.history_account_id = id LIMIT 1) "+
-			"AND NOT EXISTS ( SELECT 1 as row FROM history_operation_participants WHERE history_operation_participants.history_account_id = id LIMIT 1) "+
-			"AND NOT EXISTS ( SELECT 1 as row FROM history_trades WHERE history_trades.base_account_id = id LIMIT 1) "+
-			"AND NOT EXISTS ( SELECT 1 as row FROM history_trades WHERE history_trades.counter_account_id = id LIMIT 1))", query)
+		"DELETE FROM history_accounts WHERE id IN (100, 20, 30) "+
+			"AND NOT EXISTS ( SELECT 1 as row FROM history_transaction_participants WHERE history_transaction_participants.history_account_id = history_accounts.id LIMIT 1) "+
+			"AND NOT EXISTS ( SELECT 1 as row FROM history_effects WHERE history_effects.history_account_id = history_accounts.id LIMIT 1) "+
+			"AND NOT EXISTS ( SELECT 1 as row FROM history_operation_participants WHERE history_operation_participants.history_account_id = history_accounts.id LIMIT 1) "+
+			"AND NOT EXISTS ( SELECT 1 as row FROM history_trades WHERE history_trades.base_account_id = history_accounts.id LIMIT 1) "+
+			"AND NOT EXISTS ( SELECT 1 as row FROM history_trades WHERE history_trades.counter_account_id = history_accounts.id LIMIT 1)", query)
 }
 
 func TestConstructReapLookupTablesQuery(t *testing.T) {
