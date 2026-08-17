@@ -5,9 +5,6 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-### Fixed
-- Fixed the history lookup-table reaper deleting rows (e.g. `history_accounts`) that live ingestion was concurrently inserting references to, which left dangling references and could make an account's history endpoints return 404 or silently omit records until a reingest ([#222](https://github.com/stellar/stellar-horizon/pull/222)).
-
 ## 28.0.0
 
 **This release adds support for Protocol 28.**
@@ -21,6 +18,7 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 - Reap expired contract-data rows before inserting the ledger's created and restored asset-stat rows, avoiding a possible duplicate key error during ingestion of restored entries ([#215](https://github.com/stellar/stellar-horizon/pull/215)).
+- Fixed the history lookup-table reaper deleting rows (e.g. `history_accounts`) that live ingestion was concurrently inserting references to, which left dangling references and could make an account's history endpoints return 404 or silently omit records until a reingest ([#222](https://github.com/stellar/stellar-horizon/pull/222)).
 
 ## 27.0.0
 
