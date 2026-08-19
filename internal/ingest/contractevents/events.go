@@ -321,14 +321,16 @@ func parseSacEventFromTxMetaV4(event *xdr.ContractEvent, networkPassphrase strin
 // MuxedAddressObject - which is always a uint64. ScvBytes and ScvString are NOT
 // valid for SAC events (those are only used for classic transaction memo mappings
 // per CAP-67, which are processed through a different code path).
+//
+// Only amount is required. A to_muxed_id holding None arrives either bound to
+// Void or, for a CAP-86 sparse map, with no key at all, and both mean the
+// transfer has no muxed destination. Unrecognized keys are ignored for the same
+// reason: callers discard an event whose parse fails rather than surfacing an
+// error, so rejecting one silently drops its effects and participants.
 func parseSacEventMap(mapData xdr.ScMap) (xdr.Int128Parts, xdr.Memo, error) {
-	var foundAmount, foundMuxedId bool
+	var foundAmount bool
 	var amount xdr.Int128Parts
 	var memo xdr.Memo
-
-	if len(mapData) != 2 {
-		return amount, memo, fmt.Errorf("expected exactly 2 elements in map data, but found %d", len(mapData))
-	}
 
 	for _, entry := range mapData {
 		key, ok := entry.Key.GetSym()
@@ -345,7 +347,6 @@ func parseSacEventMap(mapData xdr.ScMap) (xdr.Int128Parts, xdr.Memo, error) {
 			foundAmount = true
 
 		case "to_muxed_id":
-			foundMuxedId = true
 			// SAC events only emit uint64 for to_muxed_id (muxed account ID).
 			// ScvBytes/ScvString are NOT valid here - those are only for classic
 			// transaction memo mappings which use a different code path.
@@ -354,6 +355,8 @@ func parseSacEventMap(mapData xdr.ScMap) (xdr.Int128Parts, xdr.Memo, error) {
 				if val, ok := entry.Val.GetU64(); ok {
 					memo = xdr.MemoID(uint64(val))
 				}
+			case xdr.ScValTypeScvVoid:
+				// No muxed destination, leaving memo as MemoNone.
 			default:
 				return amount, memo, fmt.Errorf("invalid to_muxed_id type in SAC event: expected ScvU64, got %s", entry.Val.Type)
 			}
@@ -362,8 +365,6 @@ func parseSacEventMap(mapData xdr.ScMap) (xdr.Int128Parts, xdr.Memo, error) {
 
 	if !foundAmount {
 		return amount, memo, errors.New("amount field not found in map")
-	} else if !foundMuxedId {
-		return amount, memo, errors.New("to_muxed_id field not found in map")
 	}
 
 	return amount, memo, nil

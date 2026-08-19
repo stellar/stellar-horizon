@@ -161,39 +161,28 @@ func makeAsset(asset xdr.Asset) xdr.ScVal {
 	}
 }
 
+// makeV4MapData builds the V4 event data map for the given amount and memo,
+// omitting to_muxed_id entirely for a MemoNone memo the way a CAP-86 sparse map
+// does.
 func makeV4MapData(amount *big.Int, memo xdr.Memo) xdr.ScVal {
-	mapEntries := xdr.ScMap{}
-
-	// Add amount entry
-	amountEntry := xdr.ScMapEntry{
-		Key: xdr.ScVal{
-			Type: xdr.ScValTypeScvSymbol,
-			Sym:  &[]xdr.ScSymbol{"amount"}[0],
-		},
-		Val: makeBigAmount(amount),
-	}
-	mapEntries = append(mapEntries, amountEntry)
-
-	// Add to_muxed_id entry based on memo type
-	var muxedIdVal xdr.ScVal
+	var muxedIdVal *xdr.ScVal
 	switch memo.Type {
+	case xdr.MemoTypeMemoNone:
 	case xdr.MemoTypeMemoId:
-		id := memo.Id
-		val := *id
-		muxedIdVal = xdr.ScVal{
+		val := *memo.Id
+		muxedIdVal = &xdr.ScVal{
 			Type: xdr.ScValTypeScvU64,
 			U64:  &val,
 		}
 	case xdr.MemoTypeMemoText:
-		str := memo.Text
-		val := xdr.ScString(*str)
-		muxedIdVal = xdr.ScVal{
+		val := xdr.ScString(*memo.Text)
+		muxedIdVal = &xdr.ScVal{
 			Type: xdr.ScValTypeScvString,
 			Str:  &val,
 		}
 	case xdr.MemoTypeMemoHash:
 		bytes := xdr.ScBytes(memo.Hash[:])
-		muxedIdVal = xdr.ScVal{
+		muxedIdVal = &xdr.ScVal{
 			Type:  xdr.ScValTypeScvBytes,
 			Bytes: &bytes,
 		}
@@ -201,14 +190,22 @@ func makeV4MapData(amount *big.Int, memo xdr.Memo) xdr.ScVal {
 		panic(fmt.Errorf("unsupported memo type: %v", memo.Type))
 	}
 
-	muxedIdEntry := xdr.ScMapEntry{
-		Key: xdr.ScVal{
-			Type: xdr.ScValTypeScvSymbol,
-			Sym:  &[]xdr.ScSymbol{"to_muxed_id"}[0],
-		},
-		Val: muxedIdVal,
+	return makeV4MapDataWithMuxedID(amount, muxedIdVal)
+}
+
+// makeV4MapDataWithMuxedID builds the V4 event data map with to_muxed_id bound
+// to the given value, or without the key at all when muxedID is nil.
+func makeV4MapDataWithMuxedID(amount *big.Int, muxedID *xdr.ScVal) xdr.ScVal {
+	mapEntries := xdr.ScMap{{
+		Key: makeSymbol("amount"),
+		Val: makeBigAmount(amount),
+	}}
+	if muxedID != nil {
+		mapEntries = append(mapEntries, xdr.ScMapEntry{
+			Key: makeSymbol("to_muxed_id"),
+			Val: *muxedID,
+		})
 	}
-	mapEntries = append(mapEntries, muxedIdEntry)
 	mapPtr := &mapEntries
 
 	// Need to use double pointer for Map field

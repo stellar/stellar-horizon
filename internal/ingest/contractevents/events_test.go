@@ -243,6 +243,55 @@ func TestStellarAssetContractEventParsing(t *testing.T) {
 			},
 		},
 		{
+			// CAP-86 sparse maps omit a field holding None, so the map carries
+			// nothing but the amount.
+			name:          "Valid V4 transfer with to_muxed_id omitted",
+			txMetaVersion: 4,
+			eventType:     EventTypeTransfer,
+			topics: []xdr.ScVal{
+				makeSymbol("transfer"),
+				makeAddress(randomAccount),
+				makeAddress(zeroContract),
+				makeAsset(randomAsset),
+			},
+			data:       makeV4MapData(big.NewInt(1000), xdr.Memo{}),
+			asset:      randomAsset,
+			contractID: mustGetContractID(randomAsset),
+			expectedResult: &StellarAssetContractEvent{
+				Type:   EventTypeTransfer,
+				Asset:  randomAsset,
+				From:   randomAccount,
+				To:     zeroContract,
+				Amount: xdr.Int128Parts{Lo: 1000, Hi: 0},
+			},
+		},
+		{
+			// The encoding a contract built before CAP-86 produces for the same
+			// None field: the key is present, bound to Void.
+			name:          "Valid V4 transfer with void to_muxed_id",
+			txMetaVersion: 4,
+			eventType:     EventTypeTransfer,
+			topics: []xdr.ScVal{
+				makeSymbol("transfer"),
+				makeAddress(randomAccount),
+				makeAddress(zeroContract),
+				makeAsset(randomAsset),
+			},
+			data: makeV4MapDataWithMuxedID(
+				big.NewInt(1000),
+				&xdr.ScVal{Type: xdr.ScValTypeScvVoid},
+			),
+			asset:      randomAsset,
+			contractID: mustGetContractID(randomAsset),
+			expectedResult: &StellarAssetContractEvent{
+				Type:   EventTypeTransfer,
+				Asset:  randomAsset,
+				From:   randomAccount,
+				To:     zeroContract,
+				Amount: xdr.Int128Parts{Lo: 1000, Hi: 0},
+			},
+		},
+		{
 			name:          "V4 SAC event rejects ScvString for to_muxed_id",
 			txMetaVersion: 4,
 			eventType:     EventTypeTransfer,
@@ -362,7 +411,7 @@ func TestStellarAssetContractEventParsing(t *testing.T) {
 			expectedError: "invalid from address",
 		},
 		{
-			name:          "V4 map data insufficient elements",
+			name:          "V4 map data with no entries",
 			txMetaVersion: 4,
 			eventType:     EventTypeTransfer,
 			topics: []xdr.ScVal{
@@ -380,7 +429,7 @@ func TestStellarAssetContractEventParsing(t *testing.T) {
 			}(),
 			asset:         randomAsset,
 			contractID:    mustGetContractID(randomAsset),
-			expectedError: "failed to parse V4 map data: expected exactly 2 elements in map data",
+			expectedError: "failed to parse V4 map data: amount field not found in map",
 		},
 		{
 			name:          "V4 map data - missing amount",
@@ -413,7 +462,10 @@ func TestStellarAssetContractEventParsing(t *testing.T) {
 			expectedError: "amount field not found in map",
 		},
 		{
-			name:          "V4 map data - missing muxed id",
+			// A key the parser does not recognize is ignored rather than
+			// rejected, so that a future field added to the event data does not
+			// take payment effects down with it.
+			name:          "V4 map data with an unrecognized key",
 			txMetaVersion: 4,
 			eventType:     EventTypeTransfer,
 			topics: []xdr.ScVal{
@@ -438,9 +490,15 @@ func TestStellarAssetContractEventParsing(t *testing.T) {
 					Map:  &mapData,
 				}
 			}(),
-			asset:         randomAsset,
-			contractID:    mustGetContractID(randomAsset),
-			expectedError: "failed to parse V4 map data: to_muxed_id field not found in map",
+			asset:      randomAsset,
+			contractID: mustGetContractID(randomAsset),
+			expectedResult: &StellarAssetContractEvent{
+				Type:   EventTypeTransfer,
+				Asset:  randomAsset,
+				From:   randomAccount,
+				To:     zeroContract,
+				Amount: xdr.Int128Parts{Lo: 1000, Hi: 0},
+			},
 		},
 		{
 			name:          "V3 Invalid amount data type",
