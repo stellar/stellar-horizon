@@ -55,7 +55,33 @@ func genAccount(tt *test.T, gen randxdr.Generator) xdr.LedgerEntryChange {
 	)
 
 	tt.Assert.NoError(gxdr.Convert(shape, &change))
+	fillEmptySignedPayloads(change.Created.Data.Account.Signers)
 	return change
+}
+
+// maxSignedPayloadLen is the SIGNER_KEY_ED25519_SIGNED_PAYLOAD payload bound,
+// opaque<64> in the XDR.
+const maxSignedPayloadLen = 64
+
+// fillEmptySignedPayloads gives every ed25519 signed payload signer a payload,
+// because randxdr generates the payload with an arbitrary length and an empty
+// one is not a signer the protocol permits: CAP-40 has stellar-core reject it
+// with SET_OPTIONS_BAD_SIGNER, and strkey decoding enforces the same 1-64 byte
+// bound. Such a signer still encodes to an address, so the accounts_signers
+// processor stores it, but reading it back through xdr.MustSigner in
+// addAccountsToStateVerifier then panics with "invalid signed payload".
+func fillEmptySignedPayloads(signers []xdr.Signer) {
+	for _, signer := range signers {
+		signedPayload := signer.Key.Ed25519SignedPayload
+		if signedPayload == nil || len(signedPayload.Payload) > 0 {
+			continue
+		}
+		payload := make([]byte, 1+rand.Intn(maxSignedPayloadLen))
+		for i := range payload {
+			payload[i] = byte(rand.Intn(256))
+		}
+		signedPayload.Payload = payload
+	}
 }
 
 func genAccountData(tt *test.T, gen randxdr.Generator) xdr.LedgerEntryChange {
