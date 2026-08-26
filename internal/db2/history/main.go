@@ -1106,6 +1106,34 @@ var historyLookupTables = map[string][]tableObjectFieldPair{
 }
 
 func (q *Q) deleteLookupTableRows(ctx context.Context, table string, ids []int64) (int64, error) {
+	// The two statements below must share a transaction: the FOR UPDATE lock taken
+	// by the first is only held until the transaction ends, and the DELETE relies
+	// on it still being held. Enforce it rather than fail silently — outside a
+	// transaction the lock would be released immediately and the orphan check could
+	// race concurrent ingestion. ReapLookupTable opens the transaction.
+	if q.GetTx() == nil {
+		return 0, errors.New("deleteLookupTableRows must be called within a transaction")
+	}
+
+	// Lock the candidate rows in a statement that is separate from the DELETE
+	// below. Live ingestion takes a FOR KEY SHARE lock on these rows before it
+	// inserts references to them, so this SELECT ... FOR UPDATE blocks until any
+	// such in-flight ingestion transaction commits. Crucially, because the DELETE
+	// is issued as a separate statement, it runs under a fresh READ COMMITTED
+	// snapshot taken *after* the lock wait resolves, so its NOT EXISTS checks
+	// observe the references committed by the ingestion transaction we blocked on.
+	//
+	// Combining the lock and the check into a single WITH ... FOR UPDATE ... DELETE
+	// statement (as this code previously did) is unsafe: that statement's snapshot
+	// is taken before the lock wait, so blocking on FOR UPDATE does not refresh the
+	// snapshot used by the NOT EXISTS sub-queries. The row would then be judged
+	// orphaned against a stale view and deleted while it is in fact referenced.
+	lockQuery := constructLockLookupTableRowsQuery(table, ids)
+	var lockedIDs []int64
+	if err := q.SelectRaw(ctx, &lockedIDs, lockQuery); err != nil {
+		return 0, fmt.Errorf("error running query %s : %w", lockQuery, err)
+	}
+
 	deleteQuery := constructDeleteLookupTableRowsQuery(table, ids)
 	result, err := q.ExecRaw(
 		context.WithValue(ctx, &db.QueryTypeContextKey, db.DeleteQueryType),
@@ -1122,83 +1150,82 @@ func (q *Q) deleteLookupTableRows(ctx context.Context, table string, ids []int64
 	return deletedCount, nil
 }
 
-// constructDeleteLookupTableRowsQuery creates a query like (using history_claimable_balances
-// as an example):
-//
-//	WITH ha_batch AS (
-//		SELECT   id
-//		FROM     history_claimable_balances
-//		WHERE IN ($1, $2, ...) ORDER BY id asc FOR UPDATE
-//	) DELETE FROM history_claimable_balances WHERE id IN (
-//		SELECT e1.id as id FROM ha_batch e1
-//		WHERE NOT EXISTS (SELECT 1 FROM history_transaction_claimable_balances WHERE history_transaction_claimable_balances.history_claimable_balance_id = id limit 1)
-//		AND NOT EXISTS (SELECT 1 FROM history_operation_claimable_balances WHERE history_operation_claimable_balances.history_claimable_balance_id = id limit 1)
-//	 )
-//
-// It checks each of the candidate rows provided in the top level IN clause
-// and counts occurrences of each row in corresponding history tables.
-// If there are no history rows for a given id, the row in
-// history_claimable_balances is removed.
-//
-// Note that the rows are locked using via SELECT FOR UPDATE. The reason
-// for that is to maintain safety when ingestion is running concurrently.
-// The ingestion loaders will also lock rows from the history lookup tables
-// via SELECT FOR KEY SHARE. This will ensure that the reaping transaction
-// will block until the ingestion transaction commits (or vice-versa).
-func constructDeleteLookupTableRowsQuery(table string, ids []int64) string {
-	var conditions []string
-	for _, referencedTable := range historyLookupTables[table] {
-		conditions = append(
-			conditions,
-			fmt.Sprintf(
-				"NOT EXISTS ( SELECT 1 as row FROM %s WHERE %s.%s = id LIMIT 1)",
-				referencedTable.name,
-				referencedTable.name, referencedTable.objectField,
-			),
-		)
-	}
-
+// joinInt64s renders ids as a comma-separated list for inlining into an IN clause.
+func joinInt64s(ids []int64) string {
 	stringIds := make([]string, len(ids))
 	for i, id := range ids {
 		stringIds[i] = strconv.FormatInt(id, 10)
 	}
-	innerQuery := fmt.Sprintf(
-		"SELECT id FROM %s WHERE id IN (%s) ORDER BY id asc FOR UPDATE",
-		table,
-		strings.Join(stringIds, ", "),
-	)
-
-	deleteQuery := fmt.Sprintf(
-		"WITH ha_batch AS (%s) DELETE FROM %s WHERE id IN ("+
-			"SELECT e1.id as id FROM ha_batch e1 WHERE %s)",
-		innerQuery,
-		table,
-		strings.Join(conditions, " AND "),
-	)
-	return deleteQuery
+	return strings.Join(stringIds, ", ")
 }
 
-func constructFindReapLookupTablesQuery(table string, batchSize int, offset int64) string {
+// constructReapOrphanConditions returns the AND-joined NOT EXISTS clauses that
+// hold only when a lookup table row is referenced by none of the history tables
+// that can reference it. idColumn is the SQL expression that names the candidate
+// row's id in the surrounding query. It is shared by the find and delete reap
+// queries so both agree on what "orphaned" means.
+func constructReapOrphanConditions(table, idColumn string) string {
 	var conditions []string
-
 	for _, referencedTable := range historyLookupTables[table] {
 		conditions = append(
 			conditions,
 			fmt.Sprintf(
-				"NOT EXISTS ( SELECT 1 as row FROM %s WHERE %s.%s = id LIMIT 1)",
+				"NOT EXISTS ( SELECT 1 as row FROM %s WHERE %s.%s = %s LIMIT 1)",
 				referencedTable.name,
 				referencedTable.name, referencedTable.objectField,
+				idColumn,
 			),
 		)
 	}
+	return strings.Join(conditions, " AND ")
+}
 
+// constructLockLookupTableRowsQuery creates a query which locks the candidate
+// lookup table rows via SELECT ... FOR UPDATE, for example:
+//
+//	SELECT id FROM history_claimable_balances WHERE id IN ($1, $2, ...) ORDER BY id ASC FOR UPDATE
+//
+// It must run as its own statement, before the DELETE built by
+// constructDeleteLookupTableRowsQuery; see deleteLookupTableRows for why. The
+// rows are ordered by id to match the lock ordering used by the ingestion loaders
+// (SELECT ... FOR KEY SHARE) and avoid deadlocks.
+func constructLockLookupTableRowsQuery(table string, ids []int64) string {
+	return fmt.Sprintf(
+		"SELECT id FROM %s WHERE id IN (%s) ORDER BY id ASC FOR UPDATE",
+		table,
+		joinInt64s(ids),
+	)
+}
+
+// constructDeleteLookupTableRowsQuery creates a query like (using history_claimable_balances
+// as an example):
+//
+//	DELETE FROM history_claimable_balances WHERE id IN ($1, $2, ...)
+//		AND NOT EXISTS (SELECT 1 FROM history_transaction_claimable_balances WHERE history_transaction_claimable_balances.history_claimable_balance_id = history_claimable_balances.id LIMIT 1)
+//		AND NOT EXISTS (SELECT 1 FROM history_operation_claimable_balances WHERE history_operation_claimable_balances.history_claimable_balance_id = history_claimable_balances.id LIMIT 1)
+//
+// It removes each candidate row from the top level IN clause that no history
+// table references. The candidates must already be locked by
+// constructLockLookupTableRowsQuery in the same transaction; see
+// deleteLookupTableRows.
+func constructDeleteLookupTableRowsQuery(table string, ids []int64) string {
+	return fmt.Sprintf(
+		"DELETE FROM %s WHERE id IN (%s) AND %s",
+		table,
+		joinInt64s(ids),
+		constructReapOrphanConditions(table, table+".id"),
+	)
+}
+
+func constructFindReapLookupTablesQuery(table string, batchSize int, offset int64) string {
 	return fmt.Sprintf(
 		"WITH ha_batch AS (SELECT id FROM %s WHERE id >= %d ORDER BY id ASC limit %d) "+
-			"SELECT e1.id as id FROM ha_batch e1 WHERE ",
+			"SELECT e1.id as id FROM ha_batch e1 WHERE %s",
 		table,
 		offset,
 		batchSize,
-	) + strings.Join(conditions, " AND ")
+		constructReapOrphanConditions(table, "id"),
+	)
 }
 
 // DeleteRangeAll deletes a range of rows from all history tables between

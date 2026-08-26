@@ -771,6 +771,76 @@ func (s *AssetStatsProcessorTestSuiteLedger) TestInsertExpiredAssetContract() {
 	s.Assert().NoError(s.processor.Commit(s.ctx))
 }
 
+// TestRestoreReapsBeforeInsert checks the ordering of reaps and inserts in the asset stats
+// processor. An entry archived at ledger E can be restored in E+1, which stellar-core emits as
+// LEDGER_ENTRY_RESTORED (Change.Pre == nil) and this processor ingests as a creation. The stale
+// asset_contracts / contract_asset_balances rows are only reaped in this same ledger, so the
+// reaps must run before the inserts; otherwise the inserts would collide on the primary key and
+// abort the ledger transaction. The balance reap returns the stale row so folding it cancels the
+// restored balance's stat contribution (net zero).
+func (s *AssetStatsProcessorTestSuiteLedger) TestRestoreReapsBeforeInsert() {
+	lastModifiedLedgerSeq := xdr.Uint32(s.processor.currentLedger - 1)
+	restoredTTL := xdr.Uint32(s.processor.currentLedger + 100)
+	reapLedger := s.processor.currentLedger - 1
+
+	usdID, err := xdr.MustNewCreditAsset("USD", trustLineIssuer.Address()).ContractID("")
+	s.Assert().NoError(err)
+	usdContractData, err := sac.AssetToContractData(false, "USD", trustLineIssuer.Address(), usdID)
+	s.Assert().NoError(err)
+	usdKeyHash := s.assetContractKeyHash(usdID)
+	balanceKeyHash := getKeyHashForBalance(s.T(), usdID, [32]byte{1})
+
+	// Restore a SAC instance and a SAC balance: a Pre == nil contract data change plus a
+	// Pre == nil TTL bumped past the current ledger, as the SDK maps LEDGER_ENTRY_RESTORED.
+	restore := func(data xdr.LedgerEntryData, keyHash xdr.Hash) {
+		s.Assert().NoError(s.processor.ProcessChange(s.ctx, ingest.Change{
+			Type: xdr.LedgerEntryTypeContractData,
+			Post: &xdr.LedgerEntry{LastModifiedLedgerSeq: lastModifiedLedgerSeq, Data: data},
+		}))
+		s.Assert().NoError(s.processor.ProcessChange(s.ctx, ingest.Change{
+			Type: xdr.LedgerEntryTypeTtl,
+			Post: &xdr.LedgerEntry{
+				LastModifiedLedgerSeq: lastModifiedLedgerSeq,
+				Data: xdr.LedgerEntryData{
+					Type: xdr.LedgerEntryTypeTtl,
+					Ttl:  &xdr.TtlEntry{KeyHash: keyHash, LiveUntilLedgerSeq: restoredTTL},
+				},
+			},
+		}))
+	}
+	restore(usdContractData, usdKeyHash)
+	restore(sac.BalanceToContractData(usdID, [32]byte{1}, 200), balanceKeyHash)
+
+	staleBalance := history.ContractAssetBalance{
+		KeyHash: balanceKeyHash[:], ContractID: usdID[:], Amount: "200", ExpirationLedger: reapLedger,
+	}
+
+	var inserted bool
+	reapFirst := func(mock.Arguments) {
+		s.Assert().False(inserted, "rows must be reaped before restores are inserted")
+	}
+	markInsert := func(mock.Arguments) { inserted = true }
+
+	s.mockQ.On("RemoveContractAssetBalances", s.ctx, []xdr.Hash(nil)).Return(nil).Once()
+	s.mockQ.On("UpdateContractAssetBalanceAmounts", s.ctx, []xdr.Hash{}, []string{}).Return(nil).Once()
+	s.mockQ.On("UpdateContractAssetBalanceExpirations", s.ctx, []xdr.Hash{}, []uint32{}).Return(nil).Once()
+	s.mockQ.On("UpdateAssetContractExpirations", s.ctx, []xdr.Hash{}, []uint32{}).Return(nil).Once()
+	s.mockQ.On("DeleteContractAssetBalancesExpiringAt", s.ctx, reapLedger).Run(reapFirst).
+		Return([]history.ContractAssetBalance{staleBalance}, nil).Once()
+	s.mockQ.On("DeleteAssetContractsExpiringAt", s.ctx, reapLedger).Run(reapFirst).
+		Return(int64(1), nil).Once()
+	s.mockQ.On("InsertAssetContracts", s.ctx, mock.MatchedBy(func(rows []history.AssetContract) bool {
+		return len(rows) == 1 && bytes.Equal(rows[0].KeyHash, usdKeyHash[:]) &&
+			rows[0].ExpirationLedger == uint32(restoredTTL)
+	})).Run(markInsert).Return(nil).Once()
+	s.mockQ.On("InsertContractAssetBalances", s.ctx, mock.MatchedBy(func(rows []history.ContractAssetBalance) bool {
+		return len(rows) == 1 && bytes.Equal(rows[0].KeyHash, balanceKeyHash[:]) &&
+			rows[0].ExpirationLedger == uint32(restoredTTL)
+	})).Run(markInsert).Return(nil).Once()
+
+	s.Assert().NoError(s.processor.Commit(s.ctx))
+}
+
 func (s *AssetStatsProcessorTestSuiteLedger) TestInsertContractBalance() {
 	lastModifiedLedgerSeq := xdr.Uint32(1234)
 	usdID, err := xdr.MustNewCreditAsset("USD", trustLineIssuer.Address()).ContractID("")
@@ -944,6 +1014,10 @@ func (s *AssetStatsProcessorTestSuiteLedger) TestRemoveContractBalance() {
 	usdAssetContractStat.Stat.ActiveHolders = 0
 	usdAssetContractStat.Stat.ActiveBalance = "0"
 	s.mockQ.On("RemoveAssetContractStat", s.ctx, usdID[:]).Return(int64(1), nil).Once()
+	s.mockQ.On("GetContractAssetBalances", s.ctx, []xdr.Hash{keyHash}).
+		Return([]history.ContractAssetBalance{
+			{KeyHash: keyHash[:], ContractID: usdID[:], Amount: "200", ExpirationLedger: 2234},
+		}, nil).Once()
 	s.mockQ.On("RemoveContractAssetBalances", s.ctx, []xdr.Hash{keyHash}).
 		Return(nil).Once()
 	s.mockQ.On("UpdateContractAssetBalanceAmounts", s.ctx, []xdr.Hash{}, []string{}).

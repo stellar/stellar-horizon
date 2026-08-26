@@ -1,0 +1,63 @@
+name: Release readiness
+
+# Validates that empty placeholder pins in `horizon.yml` get flipped to real
+# values before a protocol-next branch is merged to a stable branch. Pairs
+# with the AMBER-skip in `internal/test/integration/integration.go`: tests
+# skip silently when their image env-var is empty (acceptable on
+# protocol-next while waiting for the new-protocol image to publish), and
+# this check makes sure that temporary state can't reach `main` undetected.
+
+on:
+  pull_request:
+  push:
+    branches: [main, master, protocol-next]
+
+jobs:
+  no-empty-rpc-image-pins:
+    name: No empty stellar_rpc_docker_img values
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+
+      - name: Check horizon.yml for empty RPC image pins
+        env:
+          # Branches where empty pins are a hard failure. Any other target
+          # (typically protocol-next) gets a yellow-warning annotation but
+          # still passes the check.
+          STABLE_BRANCHES: 'main master'
+        run: |
+          set -e
+
+          # Match the `stellar_rpc_docker_img:` input each integration leg passes
+          # to integration-tests.yml, followed by an empty string in either quote
+          # style or nothing-then-end-of-line. The leading whitespace anchor
+          # avoids matching the key inside a comment.
+          empty=$(grep -nE "^[[:space:]]+stellar_rpc_docker_img:[[:space:]]*(''|\"[[:space:]]*\"|$)" \
+                    .github/workflows/horizon.yml || true)
+
+          if [ -z "$empty" ]; then
+            echo "All stellar_rpc_docker_img values in horizon.yml are set."
+            exit 0
+          fi
+
+          # Resolve the effective target branch:
+          # - On a PR: github.base_ref is the destination branch ("main"/etc.)
+          # - On a push: github.ref_name is the branch being pushed
+          target="${{ github.base_ref || github.ref_name }}"
+
+          echo "Empty stellar_rpc_docker_img entries found:"
+          echo "$empty"
+          echo
+
+          if echo "$STABLE_BRANCHES" | grep -qw "$target"; then
+            echo "::error::Empty stellar_rpc_docker_img values are not allowed when targeting '$target'."
+            echo "Every integration leg must point at a real stellar-rpc image before merging to a stable branch."
+            echo "If a P{N} stellar-rpc image is not published yet, the protocol-next branch is not ready to merge."
+            exit 1
+          else
+            echo "::warning::Empty stellar_rpc_docker_img entries on '$target' are expected during a protocol-next transition."
+            echo "Flip these to real image refs before opening a PR to a stable branch (main/master)."
+            exit 0
+          fi

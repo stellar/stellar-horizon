@@ -10,15 +10,17 @@ jobs:
     runs-on: ubuntu-24.04
     name: Upload artifacts to GitHub release
     steps:
+      - uses: actions/checkout@v4
+
+      # Must run after the checkout: on a fresh runner the workspace is empty,
+      # so the egrep below would find nothing and always succeed.
       - name: Run deprecation tests
         shell: bash
         run: |
-          export VERSION=${GITHUB_REF_NAME#horizon-v}
+          export VERSION=${GITHUB_REF_NAME#v}
           echo "Searching for \"Action needed in release ${VERSION}\" tags..."
           # Negate the result so process exits with 1 if anything found
           ! egrep -irn -A 1 --include=*.go "Action.+needed.+in.+release:.+$VERSION" ./
-
-      - uses: actions/checkout@v2
 
       - uses: ./.github/actions/setup-go
         with:

@@ -55,7 +55,7 @@ func (i *operationBatchInsertBuilder) Add(
 		"transaction_id":       transactionID,
 		"application_order":    applicationOrder,
 		"type":                 operationType,
-		"details":              string(details),
+		"details":              string(sanitizeJSONBDetails(details)),
 		"source_account":       sourceAccount,
 		"source_account_muxed": sourceAccountMuxed,
 		"is_payment":           nil,

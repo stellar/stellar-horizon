@@ -101,4 +101,9 @@ jobs:
     - uses: ./.github/actions/setup-go
       with:
         go-version: ${{ matrix.go }}
-    - run: go test -race -cover ./...
+      # Go's default is 10m per package, which internal/ingest and
+      # internal/db2/history now exceed under -race: TestCoreLCMIngestion alone
+      # runs ~856 LedgerCloseMeta fixtures, each provisioning its own database
+      # and running the full migration suite. The corpus grows every protocol,
+      # so the budget is per-package headroom rather than a tight fit.
+    - run: go test -race -cover -timeout 45m ./...
