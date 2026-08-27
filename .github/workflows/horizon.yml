@@ -17,7 +17,7 @@ jobs:
       # already-shipped versions against each other.
       core_deb_version: '28.0.1-3508.947aad841.jammy~buildtests'
       core_docker_img: 'stellar/stellar-core:28.0.1-3508.947aad841.jammy'
-      stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.1'
+      stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.1-207'
       # The full go/postgres matrix runs only on pushes to main since they're
       # non-blocking and happen in the background. Everyday PRs get the single 
       # latest-go/latest-pg job.
@@ -30,7 +30,7 @@ jobs:
       protocol_version: '28'
       core_deb_version: '28.0.1-3508.947aad841.jammy~buildtests'
       core_docker_img: 'stellar/stellar-core:28.0.1-3508.947aad841.jammy'
-      stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.1'
+      stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.1-207'
       full_matrix: ${{ github.event_name == 'push' }}
 
   # integration-p28-src:
@@ -39,7 +39,7 @@ jobs:
   #   with:
   #     protocol_version: '28'
   #     core_git_ref: 'master'
-  #     stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.1'
+  #     stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.1-207'
 
   verify-range:
     name: Test (and push) verify-range image
