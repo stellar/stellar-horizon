@@ -5,6 +5,11 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## 28.0.1
+
+### Fixed
+- Integration tests and images now use the stellar-core 28.0.1 stable release (`28.0.1-3508.947aad841`) and stellar-rpc 28.0.1.
+
 ## 28.0.0
 
 **This release adds support for Protocol 28.**
