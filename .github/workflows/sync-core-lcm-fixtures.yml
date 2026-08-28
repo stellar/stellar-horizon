@@ -1,0 +1,160 @@
+name: Sync Core LCM Fixtures
+
+# Mirrors stellar-core's LedgerCloseMeta test fixtures into
+# internal/ingest/testdata/test-lcms/, runs TestCoreLCMIngestion against them,
+# and opens a PR if anything changed. Weekly.
+#
+# Run it by hand: Actions -> Sync Core LCM Fixtures -> Run workflow.
+#
+# IF THE JOB FAILS: core most likely added a protocol version that Horizon's
+# pinned go-stellar-sdk cannot decode. Horizon needs a protocol bump. Do not
+# skip the fixture -- that failure is the whole point of this job.
+#
+# IF THE PR SAYS "required checks have not run": expected, not broken. PRs
+# opened with GITHUB_TOKEN do not trigger workflows. Close and reopen the PR,
+# or push an empty commit to its branch. The fixtures were already tested by
+# this job before the PR opened. To skip that nudge permanently, add a
+# FIXTURE_SYNC_TOKEN secret (PAT or App token, contents+pull-requests write);
+# the workflow picks it up with no code change.
+#
+# ONLY test-lcm-current is synced, deliberately. Core also has test-lcm-next
+# (unreleased protocol), but the <hash>.xdr name comes from the core test name,
+# not the contents -- so ~770 names appear in both with different metadata
+# inside. They cannot share a directory, and Horizon ingests the released
+# protocol from the network. Do not add next here.
+
+on:
+  schedule:
+    # Mondays, 06:17 UTC. Off the hour to avoid the top-of-hour queue.
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      core_ref:
+        description: 'stellar-core ref to sync fixtures from'
+        required: false
+        default: master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-core-lcm-fixtures
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      CORE_REF: ${{ github.event.inputs.core_ref || 'master' }}
+      FIXTURE_DIR: internal/ingest/testdata/test-lcms
+      CORE_LCM_DIR: test-lcm-current
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+        - 5432:5432
+
+    steps:
+    - name: Check out Horizon
+      uses: actions/checkout@v4
+
+    - name: Check out stellar-core fixtures
+      uses: actions/checkout@v4
+      with:
+        repository: stellar/stellar-core
+        ref: ${{ env.CORE_REF }}
+        path: core
+        # Fixtures only. sparse-checkout alone still fetches every blob in the
+        # commit (16MB of core we never read); blob:none makes checkout pull
+        # only the paths it materialises, ~5MB.
+        filter: blob:none
+        sparse-checkout: ${{ env.CORE_LCM_DIR }}
+
+    - name: Mirror fixtures into testdata
+      run: |
+        src="core/$CORE_LCM_DIR"
+        echo "CORE_SHA=$(git -C core rev-parse HEAD)" >> "$GITHUB_ENV"
+
+        # Floor guard: an upstream rename should fail here, not quietly empty
+        # the corpus and leave a green, vacuous test run behind it.
+        count=$(find "$src" -name '*.xdr' | wc -l)
+        echo "found $count fixtures in $src"
+        if [ "$count" -lt 500 ]; then
+          echo "error: expected at least 500; did stellar-core move them?" >&2
+          exit 1
+        fi
+
+        # Replace wholesale rather than copying over the top, so fixtures core
+        # deleted disappear here too. Not rsync: its default quick check skips
+        # files whose size and mtime both match, and two checkouts made seconds
+        # apart give every file the same mtime -- it silently missed 666 of 678
+        # changed fixtures in testing.
+        #
+        # Each <Group>/ carries its .xdr files plus an index.json mapping
+        # hash -> core test name, which is what makes a failing fixture
+        # traceable back to the core test that produced it.
+        rm -rf "$FIXTURE_DIR"
+        cp -r "$src" "$FIXTURE_DIR"
+
+    - name: Detect changes
+      id: diff
+      run: |
+        # --porcelain catches both edits to tracked fixtures and brand-new
+        # ones; git diff alone would miss the untracked adds.
+        if [ -n "$(git status --porcelain -- "$FIXTURE_DIR")" ]; then
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+          echo "Already up to date with stellar-core@$CORE_SHA."
+        fi
+
+    - uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+
+    # No -race: nothing here is checking for data races, only that the new
+    # metadata decodes and ingests. go.yml already covers -race on every PR,
+    # and dropping it is most of the wall clock on a corpus this size.
+    - name: Run ingestion against the refreshed fixtures
+      run: go test -run '^TestCoreLCMIngestion$' -timeout 60m ./internal/ingest/
+
+    - name: Drop the core checkout
+      run: rm -rf core
+
+    - name: Open a pull request
+      if: steps.diff.outputs.changed == 'true'
+      uses: peter-evans/create-pull-request@v7
+      with:
+        token: ${{ secrets.FIXTURE_SYNC_TOKEN || secrets.GITHUB_TOKEN }}
+        branch: sync/core-lcm-fixtures
+        delete-branch: true
+        add-paths: ${{ env.FIXTURE_DIR }}
+        commit-message: |
+          ingest: refresh core LedgerCloseMeta fixtures
+
+          Mirrors stellar-core's ${{ env.CORE_LCM_DIR }} LedgerCloseMeta corpus
+          from stellar-core@${{ env.CORE_SHA }}.
+
+          TestCoreLCMIngestion passed against them in the sync job.
+        title: 'ingest: refresh core LedgerCloseMeta fixtures'
+        body: |
+          Mirrors stellar-core's `${{ env.CORE_LCM_DIR }}` LedgerCloseMeta corpus
+          from stellar-core@${{ env.CORE_SHA }}.
+
+          `TestCoreLCMIngestion` passed against these fixtures in the sync job.
