@@ -1,8 +1,8 @@
 name: Sync Core LCM Fixtures
 
-# Mirrors stellar-core's LedgerCloseMeta test fixtures into
-# internal/ingest/testdata/test-lcms/, runs TestCoreLCMIngestion against them,
-# and opens a PR if anything changed.
+# Mirrors stellar-core's test-lcm-next LedgerCloseMeta fixtures into
+# internal/ingest/testdata/test-lcms/ on protocol-next, runs
+# TestCoreLCMIngestion against them, and opens a PR if anything changed.
 #
 # Run it by hand: Actions -> Sync Core LCM Fixtures -> Run workflow.
 #
@@ -10,12 +10,8 @@ name: Sync Core LCM Fixtures
 # pinned go-stellar-sdk cannot decode. Horizon needs a protocol bump. Do not
 # skip the fixture -- that failure is the whole point of this job.
 #
-# IF THE PR SAYS "required checks have not run": expected, not broken. PRs
-# opened with GITHUB_TOKEN do not trigger workflows. Close and reopen the PR
-# to work around that.
-#
-# ONLY test-lcm-current is synced, deliberately. Core also has test-lcm-next
-# (unreleased protocol), it's unclear whether we want or should mirror that.
+# test-lcm-next is core's corpus for the unreleased protocol, which is what
+# protocol-next is built against.
 
 on:
   schedule:
@@ -41,9 +37,10 @@ jobs:
       contents: write
       pull-requests: write
     env:
+      BASE_BRANCH: protocol-next
       CORE_REF: ${{ github.event.inputs.core_ref || 'master' }}
       FIXTURE_DIR: internal/ingest/testdata/test-lcms
-      CORE_LCM_DIR: test-lcm-current
+      CORE_LCM_DIR: test-lcm-next
       PGHOST: localhost
       PGPORT: 5432
       PGUSER: postgres
@@ -67,6 +64,8 @@ jobs:
     steps:
     - name: Check out Horizon
       uses: actions/checkout@v4
+      with:
+        ref: ${{ env.BASE_BRANCH }}
 
     - name: Check out stellar-core fixtures
       uses: actions/checkout@v4
@@ -113,6 +112,7 @@ jobs:
       uses: peter-evans/create-pull-request@v7
       with:
         token: ${{ secrets.FIXTURE_SYNC_TOKEN || secrets.GITHUB_TOKEN }}
+        base: ${{ env.BASE_BRANCH }}
         branch: sync/core-lcm-fixtures
         delete-branch: true
         add-paths: ${{ env.FIXTURE_DIR }}
