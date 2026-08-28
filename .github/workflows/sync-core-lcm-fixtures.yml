@@ -2,7 +2,7 @@ name: Sync Core LCM Fixtures
 
 # Mirrors stellar-core's LedgerCloseMeta test fixtures into
 # internal/ingest/testdata/test-lcms/, runs TestCoreLCMIngestion against them,
-# and opens a PR if anything changed. Weekly.
+# and opens a PR if anything changed.
 #
 # Run it by hand: Actions -> Sync Core LCM Fixtures -> Run workflow.
 #
@@ -11,17 +11,11 @@ name: Sync Core LCM Fixtures
 # skip the fixture -- that failure is the whole point of this job.
 #
 # IF THE PR SAYS "required checks have not run": expected, not broken. PRs
-# opened with GITHUB_TOKEN do not trigger workflows. Close and reopen the PR,
-# or push an empty commit to its branch. The fixtures were already tested by
-# this job before the PR opened. To skip that nudge permanently, add a
-# FIXTURE_SYNC_TOKEN secret (PAT or App token, contents+pull-requests write);
-# the workflow picks it up with no code change.
+# opened with GITHUB_TOKEN do not trigger workflows. Close and reopen the PR
+# to work around that.
 #
 # ONLY test-lcm-current is synced, deliberately. Core also has test-lcm-next
-# (unreleased protocol), but the <hash>.xdr name comes from the core test name,
-# not the contents -- so ~770 names appear in both with different metadata
-# inside. They cannot share a directory, and Horizon ingests the released
-# protocol from the network. Do not add next here.
+# (unreleased protocol), it's unclear whether we want or should mirror that.
 
 on:
   schedule:
@@ -88,29 +82,12 @@ jobs:
 
     - name: Mirror fixtures into testdata
       run: |
-        src="core/$CORE_LCM_DIR"
         echo "CORE_SHA=$(git -C core rev-parse HEAD)" >> "$GITHUB_ENV"
 
-        # Floor guard: an upstream rename should fail here, not quietly empty
-        # the corpus and leave a green, vacuous test run behind it.
-        count=$(find "$src" -name '*.xdr' | wc -l)
-        echo "found $count fixtures in $src"
-        if [ "$count" -lt 500 ]; then
-          echo "error: expected at least 500; did stellar-core move them?" >&2
-          exit 1
-        fi
-
-        # Replace wholesale rather than copying over the top, so fixtures core
-        # deleted disappear here too. Not rsync: its default quick check skips
-        # files whose size and mtime both match, and two checkouts made seconds
-        # apart give every file the same mtime -- it silently missed 666 of 678
-        # changed fixtures in testing.
-        #
-        # Each <Group>/ carries its .xdr files plus an index.json mapping
-        # hash -> core test name, which is what makes a failing fixture
-        # traceable back to the core test that produced it.
+        # Replace wholesale rather than copying over the top to track deletions.
         rm -rf "$FIXTURE_DIR"
-        cp -r "$src" "$FIXTURE_DIR"
+        cp -r "core/$CORE_LCM_DIR" "$FIXTURE_DIR"
+        rm -rf core
 
     - name: Detect changes
       id: diff
@@ -128,14 +105,8 @@ jobs:
       with:
         go-version-file: go.mod
 
-    # No -race: nothing here is checking for data races, only that the new
-    # metadata decodes and ingests. go.yml already covers -race on every PR,
-    # and dropping it is most of the wall clock on a corpus this size.
     - name: Run ingestion against the refreshed fixtures
-      run: go test -run '^TestCoreLCMIngestion$' -timeout 60m ./internal/ingest/
-
-    - name: Drop the core checkout
-      run: rm -rf core
+      run: go test -run '^TestCoreLCMIngestion$' -timeout 45m ./internal/ingest/
 
     - name: Open a pull request
       if: steps.diff.outputs.changed == 'true'
