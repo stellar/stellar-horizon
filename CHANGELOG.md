@@ -5,6 +5,10 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Added
+- Added Protocol 29 (CAP-0088, millisecond-resolution close times) ingestion support and bumped `MaxSupportedProtocolVersion` to 29. Decoding of the new `STELLAR_VALUE_SIGNED_MS` / `STELLAR_VALUE_EMPTY_TX_SET_MS` `StellarValue.ext` arms comes from the regenerated `go-stellar-sdk` XDR ([go-stellar-sdk#5998](https://github.com/stellar/go-stellar-sdk/pull/5998)). Horizon keeps reporting whole-second close times from `StellarValue.closeTime`; `closeTimeMs` is not exposed.
+  - `TestCoreLCMIngestion` fixtures re-baselined from stellar-core's `test-lcm-next` ([stellar-core#5423](https://github.com/stellar/stellar-core/pull/5423)), adding `BumpSequenceTests`, `ClaimableBalanceTests` and `HerderTests`.
+
 ## 28.0.0
 
 **This release adds support for Protocol 28.**
