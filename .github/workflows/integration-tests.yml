@@ -190,6 +190,13 @@ jobs:
 
       - name: Pull and set Stellar RPC image
         run: |
+          # Leave the env var unset when no image is configured so NewTest()'s
+          # AMBER skip fires instead of the compose default silently supplying a
+          # previous-protocol RPC.
+          if [[ -z "$STELLAR_RPC_DOCKER_IMG" ]]; then
+            echo "::warning::no stellar-rpc image configured; EnableStellarRPC suites will skip"
+            exit 0
+          fi
           docker pull "$STELLAR_RPC_DOCKER_IMG"
           echo HORIZON_INTEGRATION_TESTS_STELLAR_RPC_DOCKER_IMG="$STELLAR_RPC_DOCKER_IMG" >> $GITHUB_ENV
 

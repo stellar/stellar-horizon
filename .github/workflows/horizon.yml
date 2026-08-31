@@ -6,23 +6,6 @@ on:
   pull_request:
 
 jobs:
-  integration-p27-pkg:
-    name: Integration tests (P27)
-    uses: ./.github/workflows/integration-tests.yml
-    with:
-      protocol_version: '27'
-      # The P27 leg runs the NEW core and rpc builds at protocol 27 — the point
-      # is verifying the updated binaries still serve the previous protocol
-      # (the real configuration during the upgrade window), not re-testing
-      # already-shipped versions against each other.
-      core_deb_version: '28.0.0-3494.a9b861321.jammy~buildtests'
-      core_docker_img: 'stellar/stellar-core:28.0.0-3494.a9b861321.jammy'
-      stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.0'
-      # The full go/postgres matrix runs only on pushes to main since they're
-      # non-blocking and happen in the background. Everyday PRs get the single 
-      # latest-go/latest-pg job.
-      full_matrix: ${{ github.event_name == 'push' }}
-
   integration-p28-pkg:
     name: Integration tests (P28)
     uses: ./.github/workflows/integration-tests.yml
@@ -31,6 +14,25 @@ jobs:
       core_deb_version: '28.0.0-3494.a9b861321.jammy~buildtests'
       core_docker_img: 'stellar/stellar-core:28.0.0-3494.a9b861321.jammy'
       stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.0'
+      # The full go/postgres matrix runs only on pushes to main since they're
+      # non-blocking and happen in the background. Everyday PRs get the single
+      # latest-go/latest-pg job.
+      full_matrix: ${{ github.event_name == 'push' }}
+
+  integration-p29-src:
+    name: Integration tests (P29, core from source)
+    uses: ./.github/workflows/integration-tests.yml
+    with:
+      protocol_version: '29'
+      # CAP-0088 is unmerged (stellar-core#5423) and no -vnext image or deb is
+      # built from it, so build core from the PR head. Dockerfile.testing
+      # configures --enable-next-protocol-version-unsafe-for-production, which
+      # is what makes protocol 29 reachable.
+      core_git_ref: 'refs/pull/5423/head'
+      # No protocol-29 stellar-rpc image exists. Empty keeps the EnableStellarRPC
+      # suites AMBER; a P28 RPC bundles a captive-core that cannot ingest P29 and
+      # would hang every such test until the 75m suite timeout.
+      stellar_rpc_docker_img: ''
       full_matrix: ${{ github.event_name == 'push' }}
 
   # integration-p28-src:
