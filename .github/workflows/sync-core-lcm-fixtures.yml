@@ -1,0 +1,131 @@
+name: Sync Core LCM Fixtures
+
+# Mirrors stellar-core's test-lcm-next LedgerCloseMeta fixtures into
+# internal/ingest/testdata/test-lcms/ on protocol-next, runs
+# TestCoreLCMIngestion against them, and opens a PR if anything changed.
+#
+# Run it by hand: Actions -> Sync Core LCM Fixtures -> Run workflow.
+#
+# IF THE JOB FAILS: core most likely added a protocol version that Horizon's
+# pinned go-stellar-sdk cannot decode. Horizon needs a protocol bump. Do not
+# skip the fixture -- that failure is the whole point of this job.
+#
+# test-lcm-next is core's corpus for the unreleased protocol, which is what
+# protocol-next is built against.
+
+on:
+  schedule:
+    # Mondays, 06:17 UTC. Off the hour to avoid the top-of-hour queue.
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      core_ref:
+        description: 'stellar-core ref to sync fixtures from'
+        required: false
+        default: master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-core-lcm-fixtures
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      BASE_BRANCH: protocol-next
+      CORE_REF: ${{ github.event.inputs.core_ref || 'master' }}
+      FIXTURE_DIR: internal/ingest/testdata/test-lcms
+      CORE_LCM_DIR: test-lcm-next
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+        - 5432:5432
+
+    steps:
+    - name: Check out Horizon
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ env.BASE_BRANCH }}
+
+    - name: Check out stellar-core fixtures
+      uses: actions/checkout@v4
+      with:
+        repository: stellar/stellar-core
+        ref: ${{ env.CORE_REF }}
+        path: core
+        # Fixtures only. sparse-checkout alone still fetches every blob in the
+        # commit (16MB of core we never read); blob:none makes checkout pull
+        # only the paths it materialises, ~5MB.
+        filter: blob:none
+        sparse-checkout: ${{ env.CORE_LCM_DIR }}
+
+    - name: Mirror fixtures into testdata
+      run: |
+        echo "CORE_SHA=$(git -C core rev-parse HEAD)" >> "$GITHUB_ENV"
+
+        # Replace wholesale rather than copying over the top to track deletions.
+        rm -rf "$FIXTURE_DIR"
+        cp -r "core/$CORE_LCM_DIR" "$FIXTURE_DIR"
+        rm -rf core
+
+    - name: Detect changes
+      id: diff
+      run: |
+        # --porcelain catches both edits to tracked fixtures and brand-new
+        # ones; git diff alone would miss the untracked adds.
+        if [ -n "$(git status --porcelain -- "$FIXTURE_DIR")" ]; then
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+          echo "Already up to date with stellar-core@$CORE_SHA."
+        fi
+
+    - uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+
+    - name: Run ingestion against the refreshed fixtures
+      run: go test -run '^TestCoreLCMIngestion$' -timeout 45m ./internal/ingest/
+
+    - name: Open a pull request
+      if: steps.diff.outputs.changed == 'true'
+      uses: peter-evans/create-pull-request@v7
+      with:
+        token: ${{ secrets.FIXTURE_SYNC_TOKEN || secrets.GITHUB_TOKEN }}
+        base: ${{ env.BASE_BRANCH }}
+        branch: sync/core-lcm-fixtures
+        delete-branch: true
+        add-paths: ${{ env.FIXTURE_DIR }}
+        commit-message: |
+          ingest: refresh core LedgerCloseMeta fixtures
+
+          Mirrors stellar-core's ${{ env.CORE_LCM_DIR }} LedgerCloseMeta corpus
+          from stellar-core@${{ env.CORE_SHA }}.
+
+          TestCoreLCMIngestion passed against them in the sync job.
+        title: 'ingest: refresh core LedgerCloseMeta fixtures'
+        body: |
+          Mirrors stellar-core's `${{ env.CORE_LCM_DIR }}` LedgerCloseMeta corpus
+          from stellar-core@${{ env.CORE_SHA }}.
+
+          `TestCoreLCMIngestion` passed against these fixtures in the sync job.
