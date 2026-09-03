@@ -4,28 +4,6 @@
 #
 # Schedule: Sun 17:36 UTC weekly. Use workflow_dispatch to run on demand.
 #
-# ----------------------------------------------------------------------------
-# RESOLVED (2026-09-03) — this repo gets full Go Tier 1 reachability.
-#   History: the scan previously carried `--reach-version=15.2.7`. Coana
-#   15.3.15 had made Socket's `compute-artifacts` endpoint fail with
-#   "internal error (code=unknown)" during the Tier 1 Fetching-artifacts step,
-#   so the scan exited 1; pinning to 15.2.7 avoided the bad API path, but
-#   15.2.7 then reported "Found 0 projects across 0 ecosystems", leaving the
-#   repo SBOM-only while still exiting 0 (i.e. a misleading green run).
-#
-#   Both problems are gone. Verified by two dispatch runs on 2026-09-03 with
-#   CLI v1.1.167: pinned 15.2.7 and unpinned (which resolved to Coana
-#   15.10.36) each found the Go project and ran code-aware analysis, with
-#   identical results — 18 vulnerabilities, 1 reachable, 16 unreachable,
-#   1 unsupported, 89% noise reduction. The pin has been removed. Unpinned was
-#   also ~2x faster (17.1s vs 33.7s) and additionally ran the import-graph
-#   pre-filter and the `coana-finalized` backend step, neither of which 15.2.7
-#   emitted.
-#
-#   The "0 analyzable projects" check in the scan step below guards against a
-#   silent recurrence: that failure mode previously looked green.
-# ----------------------------------------------------------------------------
-#
 # ============================================================================
 # Socket scan — reading the job status. (The scan step below produces this: an
 # exit code + an optional ::warning:: annotation, which GitHub Actions renders
@@ -36,7 +14,7 @@
 # YELLOW (exit 0 + a "::warning::" annotation) — two distinct cases:
 #        (a) "Socket found 0 analyzable projects": Coana analyzed nothing at
 #        all, so there is no Tier 1 reachability. CVE detection from the SBOM
-#        still applies. Not expected for this repo — see the note above.
+#        still applies.
 #        (b) "Socket scan completed with Tier 2 fallbacks":
 #        scan completed, but Tier 1 could NOT be computed for some/all
 #        vulnerabilities, which fell back to Tier 2 (precomputed) reachability.
@@ -48,8 +26,6 @@
 #        underlying CVE/SBOM detection failing. Check the logs and fix before
 #        relying on results.
 # ============================================================================
-#
-# `--reach-version=15.2.7` pins Coana to avoid the 15.3.15 backend regression described in the day-one note above. Remove this flag once Socket fixes it.
 
 name: Socket reachability scan
 
