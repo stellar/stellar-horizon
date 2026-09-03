@@ -12,9 +12,11 @@
 # GREEN  (exit 0, no warning): scan completed and every analyzed vulnerability
 #        got full Tier 1 reachability (precise, your-code-aware). Nothing to do.
 # YELLOW (exit 0 + a "::warning::" annotation) — two distinct cases:
-#        (a) "Socket found 0 analyzable projects": Coana analyzed nothing at
-#        all, so there is no Tier 1 reachability. CVE detection from the SBOM
-#        still applies.
+#        (a) "0 reachability components" / "no .socket.facts.json" / "could not
+#        be parsed": Coana analyzed nothing, so there is no Tier 1 reachability.
+#        Determined from the retained .socket.facts.json, whose "components"
+#        array is empty when no analysis ran. CVE detection from the SBOM still
+#        applies.
 #        (b) "Socket scan completed with Tier 2 fallbacks":
 #        scan completed, but Tier 1 could NOT be computed for some/all
 #        vulnerabilities, which fell back to Tier 2 (precomputed) reachability.
@@ -64,6 +66,11 @@ jobs:
           # annotation that GitHub Actions renders as a yellow run-level
           # warning without failing the job.
           set +e
+          # A stale .socket.facts.json is picked up as a pre-generated input and
+          # silently overrides fresh analysis, so clear any before scanning. A CI
+          # checkout is clean, but --reach-retain-facts-file makes this worth doing
+          # defensively.
+          rm -f .socket.facts.json
           socket scan create --reach \
             --org=stellar \
             --no-interactive \
@@ -71,15 +78,25 @@ jobs:
             --reach-continue-on-analysis-errors \
             --reach-continue-on-install-errors \
             --reach-continue-on-missing-lock-files \
+            --reach-retain-facts-file \
             . 2>&1 | tee /tmp/scan.log
           rc=${PIPESTATUS[0]}
-          # If Coana reports "Found 0 projects across 0 ecosystems" it analyzed
-          # nothing at all, so there is NO Tier 1 reachability — yet the scan still
-          # exits 0, which would render as a clean green run. That is misleading, so
-          # surface it as a yellow warning. CVE/SBOM detection is unaffected and
-          # still happens on the uploaded manifests.
-          if [ $rc -eq 0 ] && grep -qE "Found 0 projects( across 0 ecosystems)?" /tmp/scan.log; then
-            echo "::warning::Socket found 0 analyzable projects - no Tier 1 reachability ran. CVE detection from the SBOM still applies."
+          # Establish whether Tier 1 reachability actually ran by inspecting the
+          # retained .socket.facts.json. When Coana cannot analyze anything the
+          # report is still written but "components" is an empty array; a successful
+          # Tier 1 run populates it. Either way the scan exits 0 and CVE/SBOM
+          # detection still happens.
+          if [ $rc -eq 0 ]; then
+            if [ ! -f .socket.facts.json ]; then
+              echo "::warning::Socket scan completed but produced no .socket.facts.json - cannot confirm Tier 1 reachability ran. CVE detection from the SBOM still applies."
+            else
+              components=$(jq '(.components // []) | length' .socket.facts.json 2>/dev/null)
+              if ! [ "$components" -ge 0 ] 2>/dev/null; then
+                echo "::warning::Socket scan completed but .socket.facts.json could not be parsed - cannot confirm Tier 1 reachability ran. CVE detection from the SBOM still applies."
+              elif [ "$components" -eq 0 ]; then
+                echo "::warning::Socket reported 0 reachability components - no Tier 1 reachability ran. CVE detection from the SBOM still applies."
+              fi
+            fi
           fi
           if [ $rc -eq 0 ] && grep -qE "Reachability falls back to Tier 2|fallback to the results from the pre-computed|Reachability falls back to precomputed" /tmp/scan.log; then
             echo "::warning::Socket scan completed with Tier 2 fallbacks - some vulnerabilities used precomputed reachability instead of full Tier 1"
