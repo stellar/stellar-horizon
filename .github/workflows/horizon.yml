@@ -15,12 +15,9 @@ jobs:
       # is verifying the updated binaries still serve the previous protocol
       # (the real configuration during the upgrade window), not re-testing
       # already-shipped versions against each other.
-      #
-      # No stellar/stellar-core 29.0.0 image yet; both legs use unsafe-stellar-core
-      # (jammy). Switch back to stellar/stellar-core when published.
       core_deb_version: '29.0.0-3589.4eb833373.jammy~buildtests'
-      core_docker_img: 'stellar/unsafe-stellar-core:29.0.0-3589.4eb833373.jammy'
-      stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0-vnext-209'
+      core_docker_img: 'stellar/stellar-core:29.0.0-3589.4eb833373.jammy'
+      stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0'
       # The full go/postgres matrix runs only on pushes to main since they're
       # non-blocking and happen in the background. Everyday PRs get the single 
       # latest-go/latest-pg job.
@@ -32,8 +29,8 @@ jobs:
     with:
       protocol_version: '29'
       core_deb_version: '29.0.0-3589.4eb833373.jammy~buildtests'
-      core_docker_img: 'stellar/unsafe-stellar-core:29.0.0-3589.4eb833373.jammy'
-      stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0-vnext-209'
+      core_docker_img: 'stellar/stellar-core:29.0.0-3589.4eb833373.jammy'
+      stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0'
       full_matrix: ${{ github.event_name == 'push' }}
 
   # integration-p29-src:
@@ -42,7 +39,7 @@ jobs:
   #   with:
   #     protocol_version: '29'
   #     core_git_ref: 'master'
-  #     stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0-vnext-209'
+  #     stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0'
 
   verify-range:
     name: Test (and push) verify-range image
