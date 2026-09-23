@@ -523,6 +523,25 @@ func TestStellarAssetContractEventParsing(t *testing.T) {
 	}
 }
 
+func TestParseAddressMuxedContract(t *testing.T) {
+	address := xdr.ScAddress{
+		Type: xdr.ScAddressTypeScAddressTypeMuxedContract,
+		MuxedContract: &xdr.MuxedContract{
+			Id:         12345,
+			ContractId: xdr.ContractId(zeroContractHash),
+		},
+	}
+	parsed, err := parseAddress(xdr.ScVal{Type: xdr.ScValTypeScvAddress, Address: &address})
+	require.NoError(t, err)
+
+	muxed, err := strkey.DecodeMuxedContract(parsed)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(12345), muxed.ID())
+	contractID, err := muxed.ContractID()
+	require.NoError(t, err)
+	assert.Equal(t, zeroContract, contractID)
+}
+
 // Test helper functions
 func someLedgerTransaction(version int32) ingest.LedgerTransaction {
 	return ingest.LedgerTransaction{
