@@ -6,47 +6,47 @@ on:
   pull_request:
 
 jobs:
-  integration-p27-pkg:
-    name: Integration tests (P27)
-    uses: ./.github/workflows/integration-tests.yml
-    with:
-      protocol_version: '27'
-      # The P27 leg runs the NEW core and rpc builds at protocol 27 — the point
-      # is verifying the updated binaries still serve the previous protocol
-      # (the real configuration during the upgrade window), not re-testing
-      # already-shipped versions against each other.
-      core_deb_version: '28.0.1-3508.947aad841.jammy~buildtests'
-      core_docker_img: 'stellar/stellar-core:28.0.1-3508.947aad841.jammy'
-      stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.1-207'
-      # The full go/postgres matrix runs only on pushes to main since they're
-      # non-blocking and happen in the background. Everyday PRs get the single 
-      # latest-go/latest-pg job.
-      full_matrix: ${{ github.event_name == 'push' }}
-
   integration-p28-pkg:
     name: Integration tests (P28)
     uses: ./.github/workflows/integration-tests.yml
     with:
       protocol_version: '28'
-      core_deb_version: '28.0.1-3508.947aad841.jammy~buildtests'
-      core_docker_img: 'stellar/stellar-core:28.0.1-3508.947aad841.jammy'
-      stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.1-207'
+      # The P28 leg runs the NEW core and rpc builds at protocol 28 — the point
+      # is verifying the updated binaries still serve the previous protocol
+      # (the real configuration during the upgrade window), not re-testing
+      # already-shipped versions against each other.
+      core_deb_version: '29.0.0-3589.4eb833373.jammy~buildtests'
+      core_docker_img: 'stellar/stellar-core:29.0.0-3589.4eb833373.jammy'
+      stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0'
+      # The full go/postgres matrix runs only on pushes to main since they're
+      # non-blocking and happen in the background. Everyday PRs get the single 
+      # latest-go/latest-pg job.
       full_matrix: ${{ github.event_name == 'push' }}
 
-  # integration-p28-src:
-  #   name: Integration tests (P28, core from source)
+  integration-p29-pkg:
+    name: Integration tests (P29)
+    uses: ./.github/workflows/integration-tests.yml
+    with:
+      protocol_version: '29'
+      core_deb_version: '29.0.0-3589.4eb833373.jammy~buildtests'
+      core_docker_img: 'stellar/stellar-core:29.0.0-3589.4eb833373.jammy'
+      stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0'
+      full_matrix: ${{ github.event_name == 'push' }}
+
+  # integration-p29-src:
+  #   name: Integration tests (P29, core from source)
   #   uses: ./.github/workflows/integration-tests.yml
   #   with:
-  #     protocol_version: '28'
+  #     protocol_version: '29'
   #     core_git_ref: 'master'
-  #     stellar_rpc_docker_img: 'stellar/stellar-rpc:28.0.1-207'
+  #     stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0'
 
   verify-range:
     name: Test (and push) verify-range image
     runs-on: ubuntu-24.04
     env:
       GO_VERSION: 1.25.0
-      STELLAR_CORE_VERSION: 28.0.1-3508.947aad841.noble
+      STELLAR_CORE_VERSION: 29.0.0-3589.4eb833373.noble
     steps:
       - uses: actions/checkout@v3
         with:
