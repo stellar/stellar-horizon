@@ -22,6 +22,10 @@ const (
 	// coreTestLCMDir is the parent directory whose child directories each
 	// contain XDR-encoded LedgerCloseMeta files produced by stellar-core's
 	// tests. Each child directory becomes its own top-level sub-test.
+	//
+	// Do not hand-edit its contents. .github/workflows/sync-core-lcm-fixtures.yml
+	// replaces the whole directory from stellar-core every week; anything added
+	// by hand disappears on the next sync.
 	coreTestLCMDir = "./testdata/test-lcms/"
 	// coreTestNetworkPassphrase is the network passphrase used by
 	// stellar-core's unit tests.
