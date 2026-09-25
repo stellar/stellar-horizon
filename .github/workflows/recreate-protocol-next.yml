@@ -1,0 +1,30 @@
+name: Recreate protocol-next
+
+# protocol-next is deleted when it is merged into main. Recreate it from main
+# so the branch always exists.
+on:
+  delete:
+  schedule:
+    - cron: "0 12 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  recreate:
+    if: github.event_name != 'delete' || (github.event.ref_type == 'branch' && github.event.ref == 'protocol-next')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create protocol-next from main if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          if gh api "repos/$REPO/git/ref/heads/protocol-next" --silent 2>/dev/null; then
+            echo "protocol-next already exists"
+            exit 0
+          fi
+          sha=$(gh api "repos/$REPO/git/ref/heads/main" --jq .object.sha)
+          gh api "repos/$REPO/git/refs" -f ref=refs/heads/protocol-next -f sha="$sha"
+          echo "Created protocol-next at $sha"
