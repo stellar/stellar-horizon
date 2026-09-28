@@ -8,7 +8,7 @@ on:
   workflow_call:
     inputs:
       horizon_git_ref:
-        description: 'Git ref (branch, tag, or SHA) of stellar/stellar-horizon to run tests on. Required when running from separate repo, branch tip otherwise.'
+        description: 'Git ref (branch, tag, or SHA) of stellar/stellar-horizon to run tests on, or a comma-separated list of refs where the first one that exists is used (e.g. protocol-next,main). Required when running from separate repo, branch tip otherwise.'
         required: false
         type: string
       protocol_version:
@@ -83,6 +83,34 @@ jobs:
             exit 1
           fi
 
+      # Temporary branches like protocol-next are deleted once development returns to main, so
+      # horizon_git_ref may list fallbacks. Resolve it to the first ref that exists.
+      - name: Resolve Horizon ref
+        id: horizon_ref
+        if: env.HORIZON_GIT_REF != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          IFS=',' read -ra refs <<< "$HORIZON_GIT_REF"
+          for ref in "${refs[@]}"; do
+            ref="${ref#"${ref%%[![:space:]]*}"}"
+            ref="${ref%"${ref##*[![:space:]]}"}"
+            [[ -z "$ref" ]] && continue
+            if sha="$(gh api "repos/stellar/stellar-horizon/commits/$ref" --jq .sha 2>"$RUNNER_TEMP/err.txt")"; then
+              echo "Using Horizon ref $ref ($sha)"
+              echo "sha=$sha" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            # GitHub responds 422 (or 404) when no commit matches the ref.
+            if ! grep -qE '\(HTTP (404|422)\)' "$RUNNER_TEMP/err.txt"; then
+              cat "$RUNNER_TEMP/err.txt" >&2
+              exit 1
+            fi
+            echo "Horizon ref $ref not found"
+          done
+          echo "::error::none of the refs in horizon_git_ref ($HORIZON_GIT_REF) exist in stellar/stellar-horizon"
+          exit 1
+
       - uses: actions/checkout@v4
         with:
           # Because this is a callable workflow, we need to explicitly specify the repo, since otherwise
@@ -91,7 +119,7 @@ jobs:
           # For pull requests, build and test the PR head not a merge of the PR with the destination.
           # When invoked from another repo (e.g. stellar/stellar-core) the caller's PR head SHA / ref
           # doesn't exist in stellar-horizon, so fall back to main unless horizon_git_ref is provided.
-          ref: ${{ env.HORIZON_GIT_REF || (github.repository == 'stellar/stellar-horizon' && (github.event.pull_request.head.sha || github.ref)) || 'refs/heads/main' }}
+          ref: ${{ steps.horizon_ref.outputs.sha || (github.repository == 'stellar/stellar-horizon' && (github.event.pull_request.head.sha || github.ref)) || 'refs/heads/main' }}
           # We need to full history for git-restore-mtime to know what modification dates to use.
           # Otherwise, the Go test cache will fail (due to the modification time of fixtures changing).
           fetch-depth: "0"
