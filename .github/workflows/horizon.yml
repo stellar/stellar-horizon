@@ -19,13 +19,15 @@ jobs:
       # latest-go/latest-pg job.
       full_matrix: ${{ github.event_name == 'push' }}
 
-  integration-p30-src:
-    name: Integration tests (P30, core from source)
+  integration-p30-pkg:
+    name: Integration tests (P30)
     uses: ./.github/workflows/integration-tests.yml
     with:
       protocol_version: '30'
-      # stellar/stellar-core#5472 head; no -vnext artifact is published for it.
-      core_git_ref: '387990e9cbe9c3d4234d02ff8df09e635dfe5f93'
+      # stellar-core master with stellar/stellar-core#5472 merged (73f2bdd1),
+      # vnext build.
+      core_deb_version: '29.0.1-3626.73f2bdd1a.noble~vnext~buildtests'
+      core_docker_img: 'stellar/unsafe-stellar-core:29.0.1-3626.73f2bdd1a.noble-vnext'
       # No protocol-30 stellar-rpc image yet: NewTest() AMBER-skips RPC tests.
       stellar_rpc_docker_img: ''
 
