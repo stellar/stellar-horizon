@@ -2,7 +2,6 @@ package ingest
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"reflect"
 	"testing"
@@ -98,43 +97,6 @@ func TestProcessorRunnerRunHistoryArchiveIngestionHistoryArchive(t *testing.T) {
 
 	_, err := runner.RunHistoryArchiveIngestion(63, false, MaxSupportedProtocolVersion, bucketListHash)
 	assert.NoError(t, err)
-}
-
-func TestProcessorRunnerRunHistoryArchiveIngestionProtocolVersionNotSupported(t *testing.T) {
-	ctx := context.Background()
-
-	config := Config{
-		NetworkPassphrase: network.PublicNetworkPassphrase,
-	}
-
-	mockSession := &db.MockSession{}
-	q := &mockDBQ{}
-	defer mock.AssertExpectationsForObjects(t, q)
-	historyAdapter := &mockHistoryArchiveAdapter{}
-	defer mock.AssertExpectationsForObjects(t, historyAdapter)
-
-	// Batches
-	defer mock.AssertExpectationsForObjects(t, mockChangeProcessorBatchBuilders(q, ctx, false)...)
-
-	q.MockQAssetStats.On("InsertAssetStats", ctx, []history.ExpAssetStat{}, 100000).
-		Return(nil)
-
-	runner := ProcessorRunner{
-		ctx:            ctx,
-		config:         config,
-		historyQ:       q,
-		historyAdapter: historyAdapter,
-		filters:        &MockFilters{},
-		session:        mockSession,
-	}
-
-	_, err := runner.RunHistoryArchiveIngestion(100, false, 200, xdr.Hash{})
-	assert.EqualError(t, err,
-		fmt.Sprintf(
-			"Error while checking for supported protocol version: This Horizon version does not support protocol version 200. The latest supported protocol version is %d. Please upgrade to the latest Horizon version.",
-			MaxSupportedProtocolVersion,
-		),
-	)
 }
 
 func TestProcessorRunnerBuildChangeProcessor(t *testing.T) {
@@ -396,68 +358,11 @@ func TestProcessorRunnerRunTransactionsProcessorsOnLedgers(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestProcessorRunnerRunAllProcessorsOnLedgerProtocolVersionNotSupported(t *testing.T) {
-	ctx := context.Background()
-	maxBatchSize := 100000
-
-	config := Config{
-		NetworkPassphrase:        network.PublicNetworkPassphrase,
-		SkipProtocolVersionCheck: false,
-	}
-
-	q := &mockDBQ{}
-	defer mock.AssertExpectationsForObjects(t, q)
-
-	ledger := xdr.LedgerCloseMeta{
-		V0: &xdr.LedgerCloseMetaV0{
-			LedgerHeader: xdr.LedgerHeaderHistoryEntry{
-				Header: xdr.LedgerHeader{
-					LedgerVersion: xdr.Uint32(MaxSupportedProtocolVersion + 1),
-				},
-			},
-		},
-	}
-
-	// Batches
-	mockTransactionsBatchInsertBuilder := &history.MockTransactionsBatchInsertBuilder{}
-	q.MockQTransactions.On("NewTransactionBatchInsertBuilder", maxBatchSize).
-		Return(mockTransactionsBatchInsertBuilder).Twice()
-
-	mockAccountSignersBatchInsertBuilder := &history.MockAccountSignersBatchInsertBuilder{}
-	q.MockQSigners.On("NewAccountSignersBatchInsertBuilder").
-		Return(mockAccountSignersBatchInsertBuilder).Twice()
-
-	mockOperationsBatchInsertBuilder := &history.MockOperationsBatchInsertBuilder{}
-	q.MockQOperations.On("NewOperationBatchInsertBuilder").
-		Return(mockOperationsBatchInsertBuilder).Twice()
-
-	defer mock.AssertExpectationsForObjects(t, mockTransactionsBatchInsertBuilder,
-		mockAccountSignersBatchInsertBuilder,
-		mockOperationsBatchInsertBuilder)
-
-	runner := ProcessorRunner{
-		ctx:      ctx,
-		config:   config,
-		historyQ: q,
-		filters:  &MockFilters{},
-	}
-
-	_, err := runner.RunAllProcessorsOnLedger(ledger)
-	assert.EqualError(t, err,
-		fmt.Sprintf(
-			"Error while checking for supported protocol version: This Horizon version does not support protocol version %d. The latest supported protocol version is %d. Please upgrade to the latest Horizon version.",
-			MaxSupportedProtocolVersion+1,
-			MaxSupportedProtocolVersion,
-		),
-	)
-}
-
-func TestProcessorRunnerRunAllProcessorsOnLedgerProtocolVersionNotSupportedButAllowed(t *testing.T) {
+func TestProcessorRunnerRunAllProcessorsOnLedgerNewerProtocolVersion(t *testing.T) {
 	ctx := context.Background()
 
 	config := Config{
-		NetworkPassphrase:        network.PublicNetworkPassphrase,
-		SkipProtocolVersionCheck: true,
+		NetworkPassphrase: network.PublicNetworkPassphrase,
 	}
 
 	mockSession := &db.MockSession{}

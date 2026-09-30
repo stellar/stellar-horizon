@@ -49,7 +49,7 @@ var ingestBuildStateCmdOpts = []*support.ConfigOption{
 		OptType:     types.Bool,
 		Required:    false,
 		FlagDefault: false,
-		Usage:       "[optional] set to skip protocol version and bucket list hash verification, can speed up the process because does not require a running Stellar-Core",
+		Usage:       "[optional] set to skip bucket list hash verification, can speed up the process because does not require a running Stellar-Core",
 	},
 }
 

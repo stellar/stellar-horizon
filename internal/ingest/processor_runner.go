@@ -189,24 +189,6 @@ func (s *ProcessorRunner) buildFilteredOutProcessor() *groupTransactionProcessor
 	return newGroupTransactionProcessors(p, nil, nil)
 }
 
-// checkIfProtocolVersionSupported checks if this Horizon version supports the
-// protocol version of a ledger with the given sequence number.
-func (s *ProcessorRunner) checkIfProtocolVersionSupported(ledgerProtocolVersion uint32) error {
-	if s.config.SkipProtocolVersionCheck {
-		return nil
-	}
-	if ledgerProtocolVersion > MaxSupportedProtocolVersion {
-		return fmt.Errorf(
-			"This Horizon version does not support protocol version %d. "+
-				"The latest supported protocol version is %d. Please upgrade to the latest Horizon version.",
-			ledgerProtocolVersion,
-			MaxSupportedProtocolVersion,
-		)
-	}
-
-	return nil
-}
-
 func (s *ProcessorRunner) RunHistoryArchiveIngestion(
 	checkpointLedger uint32,
 	skipChecks bool,
@@ -227,12 +209,6 @@ func (s *ProcessorRunner) RunHistoryArchiveIngestion(
 		changeProcessor,
 	); err != nil {
 		return processors.StatsChangeProcessorResults{}, err
-	}
-
-	if !skipChecks {
-		if err := s.checkIfProtocolVersionSupported(ledgerProtocolVersion); err != nil {
-			return changeStats.GetResults(), errors.Wrap(err, "Error while checking for supported protocol version")
-		}
 	}
 
 	changeReader, err := s.historyAdapter.GetState(s.ctx, checkpointLedger)
@@ -338,11 +314,6 @@ func (s *ProcessorRunner) streamLedger(ledger xdr.LedgerCloseMeta,
 	var (
 		transactionReader *ingest.LedgerTransactionReader
 	)
-
-	if err := s.checkIfProtocolVersionSupported(ledger.ProtocolVersion()); err != nil {
-		err = errors.Wrap(err, "Error while checking for supported protocol version")
-		return err
-	}
 
 	startTime := time.Now()
 	transactionReader, err := ingest.NewLedgerTransactionReaderFromLedgerCloseMeta(s.config.NetworkPassphrase, ledger)
@@ -598,11 +569,6 @@ func (s *ProcessorRunner) RunAllProcessorsOnLedger(ledger xdr.LedgerCloseMeta) (
 	err error,
 ) {
 	changeStatsProcessor := processors.StatsChangeProcessor{}
-
-	if err = s.checkIfProtocolVersionSupported(ledger.ProtocolVersion()); err != nil {
-		err = errors.Wrap(err, "Error while checking for supported protocol version")
-		return
-	}
 
 	var evictedLedgerKeys []xdr.LedgerKey
 	if evictedLedgerKeys, err = ledger.EvictedLedgerKeys(); err != nil {

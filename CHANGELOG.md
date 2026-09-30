@@ -5,6 +5,10 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Breaking Changes
+- Removed the protocol version check. Horizon no longer stops when it sees a ledger with a protocol newer than `MaxSupportedProtocolVersion`.
+- Removed the `--ingest-skip-protocol-version-check` flag (`INGEST_SKIP_PROTOCOL_VERSION_CHECK`). It is no longer needed. Remove it from your config: Horizon will not start if you pass it as a command-line flag.
+
 ## 29.0.0
 
 **This release adds support for Protocol 29.**
