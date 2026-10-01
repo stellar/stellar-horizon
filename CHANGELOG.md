@@ -10,7 +10,7 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 **This release adds support for Protocol 29.**
 
 ### Added
-- Added Protocol 29 support and bumped `MaxSupportedProtocolVersion` to 29.
+- Added Protocol 29 support and bumped `MaxSupportedProtocolVersion` to stable 29.
 
 ## 28.0.1
 
