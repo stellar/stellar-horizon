@@ -6,23 +6,6 @@ on:
   pull_request:
 
 jobs:
-  integration-p28-pkg:
-    name: Integration tests (P28)
-    uses: ./.github/workflows/integration-tests.yml
-    with:
-      protocol_version: '28'
-      # The P28 leg runs the NEW core and rpc builds at protocol 28 — the point
-      # is verifying the updated binaries still serve the previous protocol
-      # (the real configuration during the upgrade window), not re-testing
-      # already-shipped versions against each other.
-      core_deb_version: '29.0.0-3589.4eb833373.jammy~buildtests'
-      core_docker_img: 'stellar/stellar-core:29.0.0-3589.4eb833373.jammy'
-      stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0'
-      # The full go/postgres matrix runs only on pushes to main since they're
-      # non-blocking and happen in the background. Everyday PRs get the single 
-      # latest-go/latest-pg job.
-      full_matrix: ${{ github.event_name == 'push' }}
-
   integration-p29-pkg:
     name: Integration tests (P29)
     uses: ./.github/workflows/integration-tests.yml
@@ -31,15 +14,22 @@ jobs:
       core_deb_version: '29.0.0-3589.4eb833373.jammy~buildtests'
       core_docker_img: 'stellar/stellar-core:29.0.0-3589.4eb833373.jammy'
       stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0'
+      # The full go/postgres matrix runs only on pushes to main since they're
+      # non-blocking and happen in the background. Everyday PRs get the single 
+      # latest-go/latest-pg job.
       full_matrix: ${{ github.event_name == 'push' }}
 
-  # integration-p29-src:
-  #   name: Integration tests (P29, core from source)
-  #   uses: ./.github/workflows/integration-tests.yml
-  #   with:
-  #     protocol_version: '29'
-  #     core_git_ref: 'master'
-  #     stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0'
+  integration-p30-pkg:
+    name: Integration tests (P30)
+    uses: ./.github/workflows/integration-tests.yml
+    with:
+      protocol_version: '30'
+      # stellar-core master with stellar/stellar-core#5472 merged (73f2bdd1),
+      # vnext build.
+      core_deb_version: '29.0.1-3626.73f2bdd1a.noble~vnext~buildtests'
+      core_docker_img: 'stellar/unsafe-stellar-core:29.0.1-3626.73f2bdd1a.noble-vnext'
+      # No protocol-30 stellar-rpc image yet: NewTest() AMBER-skips RPC tests.
+      stellar_rpc_docker_img: ''
 
   verify-range:
     name: Test (and push) verify-range image

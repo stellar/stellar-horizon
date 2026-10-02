@@ -317,8 +317,8 @@ func parseSacEventFromTxMetaV4(event *xdr.ContractEvent, networkPassphrase strin
 }
 
 // parseSacEventMap parses the ScMap data format used in V4 SAC events.
-// For SAC events, to_muxed_id represents the muxed account ID from
-// MuxedAddressObject - which is always a uint64. ScvBytes and ScvString are NOT
+// For SAC events, to_muxed_id represents the muxed account or muxed contract
+// ID from MuxedAddressObject - which is always a uint64. ScvBytes and ScvString are NOT
 // valid for SAC events (those are only used for classic transaction memo mappings
 // per CAP-67, which are processed through a different code path).
 func parseSacEventMap(mapData xdr.ScMap) (xdr.Int128Parts, xdr.Memo, error) {
@@ -346,7 +346,7 @@ func parseSacEventMap(mapData xdr.ScMap) (xdr.Int128Parts, xdr.Memo, error) {
 
 		case "to_muxed_id":
 			foundMuxedId = true
-			// SAC events only emit uint64 for to_muxed_id (muxed account ID).
+			// SAC events only emit uint64 for to_muxed_id (muxed account or contract ID).
 			// ScvBytes/ScvString are NOT valid here - those are only for classic
 			// transaction memo mappings which use a different code path.
 			switch entry.Val.Type {

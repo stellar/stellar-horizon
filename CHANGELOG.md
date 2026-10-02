@@ -5,6 +5,9 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Added
+- Added Protocol 30 (CAP-0084, muxed contract addresses) ingestion support and bumped `MaxSupportedProtocolVersion` to 30.
+
 ## 29.0.0
 
 **This release adds support for Protocol 29.**

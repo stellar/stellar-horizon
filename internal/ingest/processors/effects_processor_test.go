@@ -3754,6 +3754,110 @@ func TestInvokeHostFunctionEffects(t *testing.T) {
 	}
 }
 
+func TestInvokeHostFunctionEffectsWithMuxedDestination(t *testing.T) {
+	admin := keypair.MustRandom().Address()
+	from := keypair.MustRandom().Address()
+	to := keypair.MustRandom().Address()
+	asset := xdr.MustNewCreditAsset("TESTER", admin)
+	toContractBytes := xdr.Hash{1}
+	toContract := strkey.MustEncode(strkey.VersionByteContract, toContractBytes[:])
+	muxedID := xdr.MemoID(123456)
+
+	muxedTo, err := xdr.MuxedAccountFromAccountId(to, 123456)
+	assert.NoError(t, err)
+
+	assetDetails := map[string]interface{}{
+		"amount":       "0.0012345",
+		"asset_code":   strings.Trim(asset.GetCode(), "\x00"),
+		"asset_issuer": asset.GetIssuer(),
+		"asset_type":   "credit_alphanum12",
+	}
+	withContract := func(contract string) map[string]interface{} {
+		details := map[string]interface{}{"contract": contract}
+		for k, v := range assetDetails {
+			details[k] = v
+		}
+		return details
+	}
+
+	testCases := []struct {
+		desc     string
+		to       string
+		expected []effect
+	}{
+		{
+			desc: "transfer to muxed account",
+			to:   to,
+			expected: []effect{
+				{
+					order:       1,
+					address:     from,
+					effectType:  history.EffectAccountDebited,
+					operationID: toid.New(1, 0, 1).ToInt64(),
+					details:     assetDetails,
+				}, {
+					order:        2,
+					address:      to,
+					addressMuxed: null.StringFrom(muxedTo.Address()),
+					effectType:   history.EffectAccountCredited,
+					operationID:  toid.New(1, 0, 1).ToInt64(),
+					details:      assetDetails,
+				},
+			},
+		}, {
+			desc: "transfer to muxed contract",
+			to:   toContract,
+			expected: []effect{
+				{
+					order:       1,
+					address:     from,
+					effectType:  history.EffectAccountDebited,
+					operationID: toid.New(1, 0, 1).ToInt64(),
+					details:     assetDetails,
+				}, {
+					order:       2,
+					address:     admin,
+					effectType:  history.EffectContractCredited,
+					operationID: toid.New(1, 0, 1).ToInt64(),
+					details:     withContract(toContract),
+				},
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.desc, func(t *testing.T) {
+			event := contractevents.GenerateEvent(
+				contractevents.EventTypeTransfer,
+				from, testCase.to, admin,
+				asset,
+				big.NewInt(12345),
+				networkPassphrase,
+				&muxedID,
+			)
+			tx, _ := makeInvocationTransactionWithChanges(admin, nil, nil)
+			tx.UnsafeMeta = xdr.TransactionMeta{
+				V: 4,
+				V4: &xdr.TransactionMetaV4{
+					Operations: []xdr.OperationMetaV2{
+						{Events: []xdr.ContractEvent{event}},
+					},
+				},
+			}
+
+			operation := transactionOperationWrapper{
+				index:          0,
+				transaction:    tx,
+				operation:      tx.Envelope.Operations()[0],
+				ledgerSequence: 1,
+				network:        networkPassphrase,
+			}
+
+			assertIngestEffects(t, operation, testCase.expected)
+		})
+	}
+}
+
 // makeInvocationTransaction returns a single transaction containing a single
 // invokeHostFunction operation that generates the specified Stellar Asset
 // Contract events in its txmeta.
