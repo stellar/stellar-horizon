@@ -104,9 +104,6 @@ type Config struct {
 	// IngestEnableExtendedLogLedgerStats enables extended ledger stats in
 	// logging.
 	IngestEnableExtendedLogLedgerStats bool
-	// IngestSkipProtocolVersionCheck skips protocol version verification during
-	// ingestion.
-	IngestSkipProtocolVersionCheck bool
 	// ApplyMigrations will apply pending migrations to the horizon database
 	// before starting the horizon service
 	ApplyMigrations bool

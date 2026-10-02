@@ -112,8 +112,7 @@ func TestCoreLCMIngestion(t *testing.T) {
 					runner := ProcessorRunner{
 						ctx: ctx,
 						config: Config{
-							NetworkPassphrase:        coreTestNetworkPassphrase,
-							SkipProtocolVersionCheck: true,
+							NetworkPassphrase: coreTestNetworkPassphrase,
 						},
 						historyQ: historyQ,
 						session:  historyQ,

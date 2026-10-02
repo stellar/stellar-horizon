@@ -136,7 +136,6 @@ type Config struct {
 	DisableStateVerification     bool
 	ReapLookupTables             bool
 	EnableExtendedLogLedgerStats bool
-	SkipProtocolVersionCheck     bool
 
 	MaxReingestRetries          int
 	ReingestRetryBackoffSeconds int
@@ -640,7 +639,7 @@ func (s *system) VerifyRange(fromLedger, toLedger uint32, verifyState bool) erro
 }
 
 // BuildState runs the state ingestion on selected checkpoint ledger then exits.
-// When skipChecks is true it skips bucket list hash verification and protocol version check.
+// When skipChecks is true it skips bucket list hash verification.
 func (s *system) BuildState(sequence uint32, skipChecks bool) error {
 	return s.runStateMachine(buildState{
 		checkpointLedger: sequence,

@@ -732,14 +732,6 @@ func Flags() (*Config, support.ConfigOptions) {
 			UsedInCommands: IngestionCommands,
 		},
 		&support.ConfigOption{
-			Name:           "ingest-skip-protocol-version-check",
-			ConfigKey:      &config.IngestSkipProtocolVersionCheck,
-			OptType:        types.Bool,
-			FlagDefault:    false,
-			Usage:          "skip protocol version verification during ingestion",
-			UsedInCommands: IngestionCommands,
-		},
-		&support.ConfigOption{
 			Name:           "apply-migrations",
 			ConfigKey:      &config.ApplyMigrations,
 			OptType:        types.Bool,
