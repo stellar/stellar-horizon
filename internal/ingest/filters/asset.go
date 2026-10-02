@@ -56,17 +56,7 @@ func (f *assetFilter) FilterTransaction(ctx context.Context, transaction ingest.
 		return false, true, nil
 	}
 
-	var operations []xdr.Operation
-
-	if txv1, v1Exists := transaction.Envelope.GetV1(); v1Exists {
-		operations = txv1.Tx.Operations
-	}
-
-	if txv0, v0Exists := transaction.Envelope.GetV0(); v0Exists {
-		operations = txv0.Tx.Operations
-	}
-
-	if f.filterOperationsMatchedOnRules(operations) {
+	if f.filterOperationsMatchedOnRules(transaction.Envelope.Operations()) {
 		return true, true, nil
 	}
 

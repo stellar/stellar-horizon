@@ -5,6 +5,9 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Fixed
+- The asset ingestion filter now matches rules on the inner operations of fee-bump transactions. Earlier versions collected operations only from TxV0 and Tx envelopes, so a fee-bump transaction was not ingested even when its inner operations referenced a whitelisted asset. Operators running with an asset filter can re-run historical range ingestion to back-fill fee-bump transactions skipped by earlier versions.
+
 ## 29.0.0
 
 **This release adds support for Protocol 29.**
