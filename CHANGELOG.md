@@ -6,7 +6,14 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 ## Unreleased
 
 ### Fixed
-- The asset ingestion filter now matches rules on ledger entry changes in addition to operation bodies. Path payments routed through a whitelisted asset, claims and clawbacks of claimable balances, liquidity pool deposits and withdrawals, trustline flag changes, sponsorship revocations and Stellar Asset Contract transfers of a whitelisted asset are now ingested. The admin API rejects malformed asset whitelist entries. Operators running with an asset filter can re-run historical range ingestion to back-fill transactions skipped by earlier versions.
+- The asset ingestion filter now matches rules on ledger entry changes in addition to operation bodies. These transactions are now ingested when they involve a whitelisted asset:
+  - path payments routed through the asset
+  - claims and clawbacks of claimable balances
+  - liquidity pool deposits and withdrawals
+  - trustline flag changes and sponsorship revocations of trustlines
+  - Stellar Asset Contract transfers, including the contract for native lumens
+- The admin API rejects malformed asset whitelist entries. It stores each valid entry in canonical form.
+- Operators running with an asset filter can re-run historical range ingestion. This back-fills transactions that earlier versions skipped.
 - The asset ingestion filter now matches rules on the inner operations of fee-bump transactions. Earlier versions collected operations only from TxV0 and Tx envelopes, so a fee-bump transaction was not ingested even when its inner operations referenced a whitelisted asset.
 
 ## 29.0.0

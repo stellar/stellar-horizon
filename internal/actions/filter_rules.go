@@ -7,9 +7,9 @@ import (
 
 	hProtocol "github.com/stellar/go-stellar-sdk/protocols/horizon"
 	"github.com/stellar/go-stellar-sdk/support/render/problem"
-	"github.com/stellar/go-stellar-sdk/xdr"
 	horizonContext "github.com/stellar/stellar-horizon/internal/context"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
+	"github.com/stellar/stellar-horizon/internal/ingest/filters"
 )
 
 // these admin HTTP endpoints are documented in internal/httpx/static/admin_oapi.yml
@@ -128,15 +128,15 @@ func (handler FilterConfigHandler) UpdateAssetConfig(w http.ResponseWriter, r *h
 func canonicalAssetWhitelist(entries []string) ([]string, error) {
 	whitelist := make([]string, 0, len(entries))
 	for _, entry := range entries {
-		assets, err := xdr.BuildAssets(entry)
-		if err != nil || len(assets) != 1 {
+		asset, err := filters.ParseWhitelistAsset(entry)
+		if err != nil {
 			return nil, problem.NewProblemWithInvalidField(
 				problem.BadRequest,
 				"whitelist",
 				fmt.Errorf("%q is not a valid asset, expected CODE:ISSUER or native", entry),
 			)
 		}
-		whitelist = append(whitelist, assets[0].StringCanonical())
+		whitelist = append(whitelist, asset.StringCanonical())
 	}
 	return whitelist, nil
 }

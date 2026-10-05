@@ -292,6 +292,26 @@ func TestAssetFilterMatchesPathPaymentIntermediateAsset(t *testing.T) {
 		tt.True(isEnabled)
 		tt.True(include, "operation type %s", op.Body.Type)
 	}
+
+	unrelated := ingest.LedgerTransaction{
+		Envelope: xdr.TransactionEnvelope{
+			Type: xdr.EnvelopeTypeEnvelopeTypeTx,
+			V1: &xdr.TransactionV1Envelope{Tx: xdr.Transaction{Operations: []xdr.Operation{{Body: xdr.OperationBody{
+				Type: xdr.OperationTypePathPaymentStrictSend,
+				PathPaymentStrictSendOp: &xdr.PathPaymentStrictSendOp{
+					SendAsset:   other1,
+					SendAmount:  100,
+					Destination: xdr.MustMuxedAddress(issuer),
+					DestAsset:   other2,
+					DestMin:     1,
+					Path:        []xdr.Asset{xdr.MustNewNativeAsset()},
+				},
+			}}}}},
+		},
+	}
+	_, include, err := filter.FilterTransaction(ctx, unrelated)
+	tt.NoError(err)
+	tt.False(include)
 }
 
 const (
@@ -363,19 +383,25 @@ func TestAssetFilterMatchesSetTrustLineFlags(t *testing.T) {
 	whitelisted := xdr.MustNewCreditAsset("USDC", issuer)
 	filter := newTestAssetFilter(t, whitelisted)
 
-	tx := successfulTxWithMetaV3(issuer, []xdr.Operation{{Body: xdr.OperationBody{
-		Type: xdr.OperationTypeSetTrustLineFlags,
-		SetTrustLineFlagsOp: &xdr.SetTrustLineFlagsOp{
-			Trustor:  xdr.MustAddress(issuer),
-			Asset:    whitelisted,
-			SetFlags: xdr.Uint32(xdr.TrustLineFlagsAuthorizedFlag),
-		},
-	}}}, nil)
+	setFlags := func(asset xdr.Asset) ingest.LedgerTransaction {
+		return successfulTxWithMetaV3(issuer, []xdr.Operation{{Body: xdr.OperationBody{
+			Type: xdr.OperationTypeSetTrustLineFlags,
+			SetTrustLineFlagsOp: &xdr.SetTrustLineFlagsOp{
+				Trustor:  xdr.MustAddress(issuer),
+				Asset:    asset,
+				SetFlags: xdr.Uint32(xdr.TrustLineFlagsAuthorizedFlag),
+			},
+		}}}, nil)
+	}
 
-	isEnabled, include, err := filter.FilterTransaction(context.Background(), tx)
+	isEnabled, include, err := filter.FilterTransaction(context.Background(), setFlags(whitelisted))
 	tt.NoError(err)
 	tt.True(isEnabled)
 	tt.True(include)
+
+	_, include, err = filter.FilterTransaction(context.Background(), setFlags(xdr.MustNewCreditAsset("EURC", issuer)))
+	tt.NoError(err)
+	tt.False(include)
 }
 
 func TestAssetFilterMatchesAllowTrustUsingIssuerAsSource(t *testing.T) {
@@ -425,25 +451,31 @@ func TestAssetFilterMatchesRevokeSponsorshipOfTrustline(t *testing.T) {
 	whitelisted := xdr.MustNewCreditAsset("USDC", issuer)
 	filter := newTestAssetFilter(t, whitelisted)
 
-	key := xdr.LedgerKey{
-		Type: xdr.LedgerEntryTypeTrustline,
-		TrustLine: &xdr.LedgerKeyTrustLine{
-			AccountId: xdr.MustAddress(other),
-			Asset:     whitelisted.ToTrustLineAsset(),
-		},
+	revoke := func(asset xdr.Asset) ingest.LedgerTransaction {
+		key := xdr.LedgerKey{
+			Type: xdr.LedgerEntryTypeTrustline,
+			TrustLine: &xdr.LedgerKeyTrustLine{
+				AccountId: xdr.MustAddress(other),
+				Asset:     asset.ToTrustLineAsset(),
+			},
+		}
+		return successfulTxWithMetaV3(issuer, []xdr.Operation{{Body: xdr.OperationBody{
+			Type: xdr.OperationTypeRevokeSponsorship,
+			RevokeSponsorshipOp: &xdr.RevokeSponsorshipOp{
+				Type:      xdr.RevokeSponsorshipTypeRevokeSponsorshipLedgerEntry,
+				LedgerKey: &key,
+			},
+		}}}, nil)
 	}
-	tx := successfulTxWithMetaV3(issuer, []xdr.Operation{{Body: xdr.OperationBody{
-		Type: xdr.OperationTypeRevokeSponsorship,
-		RevokeSponsorshipOp: &xdr.RevokeSponsorshipOp{
-			Type:      xdr.RevokeSponsorshipTypeRevokeSponsorshipLedgerEntry,
-			LedgerKey: &key,
-		},
-	}}}, nil)
 
-	isEnabled, include, err := filter.FilterTransaction(context.Background(), tx)
+	isEnabled, include, err := filter.FilterTransaction(context.Background(), revoke(whitelisted))
 	tt.NoError(err)
 	tt.True(isEnabled)
 	tt.True(include)
+
+	_, include, err = filter.FilterTransaction(context.Background(), revoke(xdr.MustNewCreditAsset("EURC", issuer)))
+	tt.NoError(err)
+	tt.False(include)
 }
 
 func claimableBalanceEntry(asset xdr.Asset) xdr.LedgerEntry {
@@ -510,6 +542,11 @@ func TestAssetFilterMatchesClaimableBalanceClawback(t *testing.T) {
 		successfulTxWithMetaV3(issuer, clawback, stateAndRemoved(claimableBalanceEntry(whitelisted))))
 	tt.NoError(err)
 	tt.True(include)
+
+	_, include, err = filter.FilterTransaction(context.Background(),
+		successfulTxWithMetaV3(issuer, clawback, stateAndRemoved(claimableBalanceEntry(xdr.MustNewCreditAsset("EURC", issuer)))))
+	tt.NoError(err)
+	tt.False(include)
 }
 
 func liquidityPoolEntry(assetA, assetB xdr.Asset, reserveA xdr.Int64) xdr.LedgerEntry {
@@ -693,4 +730,112 @@ func TestAssetFilterMatchesSACContractDeployment(t *testing.T) {
 		successfulTxWithMetaV3(testIssuer, nil, metadataCreated("EURC")))
 	tt.NoError(err)
 	tt.False(include)
+}
+
+func TestAssetFilterMatchesNativeSACContractBalanceChange(t *testing.T) {
+	tt := assert.New(t)
+	native := xdr.MustNewNativeAsset()
+	nativeContractID, err := native.ContractID(testNetworkPassphrase)
+	tt.NoError(err)
+	usdcContractID, err := xdr.MustNewCreditAsset("USDC", testIssuer).ContractID(testNetworkPassphrase)
+	tt.NoError(err)
+	holder := [32]byte{7}
+
+	balanceCreated := func(assetContractID [32]byte) xdr.LedgerEntryChanges {
+		entry := xdr.LedgerEntry{Data: sac.BalanceToContractData(assetContractID, holder, 100)}
+		return xdr.LedgerEntryChanges{
+			{Type: xdr.LedgerEntryChangeTypeLedgerEntryCreated, Created: &entry},
+		}
+	}
+
+	filter := newTestAssetFilter(t, native)
+
+	_, include, err := filter.FilterTransaction(context.Background(),
+		successfulTxWithMetaV3(testIssuer, nil, balanceCreated(nativeContractID)))
+	tt.NoError(err)
+	tt.True(include)
+
+	_, include, err = filter.FilterTransaction(context.Background(),
+		successfulTxWithMetaV3(testIssuer, nil, balanceCreated(usdcContractID)))
+	tt.NoError(err)
+	tt.False(include)
+}
+
+func TestAssetFilterMatchesWhitelistEntryStoredInNonCanonicalForm(t *testing.T) {
+	tt := assert.New(t)
+	filter := NewAssetFilter(testNetworkPassphrase)
+	tt.NoError(filter.RefreshAssetFilter(&history.AssetFilterConfig{
+		Whitelist:    []string{"NATIVE"},
+		Enabled:      true,
+		LastModified: 1,
+	}))
+
+	payment := func(asset xdr.Asset) ingest.LedgerTransaction {
+		return successfulTxWithMetaV3(testIssuer, []xdr.Operation{{Body: xdr.OperationBody{
+			Type: xdr.OperationTypePayment,
+			PaymentOp: &xdr.PaymentOp{
+				Destination: xdr.MustMuxedAddress(testHolder),
+				Asset:       asset,
+				Amount:      100,
+			},
+		}}}, nil)
+	}
+
+	_, include, err := filter.FilterTransaction(context.Background(), payment(xdr.MustNewNativeAsset()))
+	tt.NoError(err)
+	tt.True(include)
+
+	_, include, err = filter.FilterTransaction(context.Background(), payment(xdr.MustNewCreditAsset("USDC", testIssuer)))
+	tt.NoError(err)
+	tt.False(include)
+}
+
+func TestAssetFilterKeepsMalformedWhitelistEntryEnabled(t *testing.T) {
+	tt := assert.New(t)
+	filter := NewAssetFilter(testNetworkPassphrase)
+	tt.NoError(filter.RefreshAssetFilter(&history.AssetFilterConfig{
+		Whitelist:    []string{"not-an-asset"},
+		Enabled:      true,
+		LastModified: 1,
+	}))
+
+	isEnabled, include, err := filter.FilterTransaction(context.Background(),
+		successfulTxWithMetaV3(testIssuer, nil, nil))
+	tt.NoError(err)
+	tt.True(isEnabled)
+	tt.False(include)
+}
+
+func TestAssetFilterMatchesChangesInEveryMetaVersion(t *testing.T) {
+	tt := assert.New(t)
+	whitelisted := xdr.MustNewCreditAsset("USDC", testIssuer)
+	other := xdr.MustNewCreditAsset("EURC", testIssuer)
+	filter := newTestAssetFilter(t, whitelisted)
+
+	metas := func(asset xdr.Asset) map[string]xdr.TransactionMeta {
+		changes := stateAndUpdated(holderTrustLineEntry(asset, 100), holderTrustLineEntry(asset, 200))
+		v0Operations := []xdr.OperationMeta{{Changes: changes}}
+		return map[string]xdr.TransactionMeta{
+			"v0":        {V: 0, Operations: &v0Operations},
+			"v1":        {V: 1, V1: &xdr.TransactionMetaV1{Operations: []xdr.OperationMeta{{Changes: changes}}}},
+			"v2 before": {V: 2, V2: &xdr.TransactionMetaV2{TxChangesBefore: changes}},
+			"v3 after":  {V: 3, V3: &xdr.TransactionMetaV3{TxChangesAfter: changes}},
+			"v4":        {V: 4, V4: &xdr.TransactionMetaV4{Operations: []xdr.OperationMetaV2{{Changes: changes}}}},
+		}
+	}
+
+	for name, meta := range metas(whitelisted) {
+		tx := successfulTxWithMetaV3(testHolder, nil, nil)
+		tx.UnsafeMeta = meta
+		_, include, err := filter.FilterTransaction(context.Background(), tx)
+		tt.NoError(err, name)
+		tt.True(include, name)
+	}
+	for name, meta := range metas(other) {
+		tx := successfulTxWithMetaV3(testHolder, nil, nil)
+		tx.UnsafeMeta = meta
+		_, include, err := filter.FilterTransaction(context.Background(), tx)
+		tt.NoError(err, name)
+		tt.False(include, name)
+	}
 }
