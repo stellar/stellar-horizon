@@ -34,6 +34,39 @@ type ServerConfig struct {
 	Port      uint16
 	TLSConfig *TLSConfig
 	AdminPort uint16
+
+	WriteTimeout time.Duration
+	IdleTimeout  time.Duration
+}
+
+const (
+	defaultReadTimeout  = 5 * time.Second
+	defaultWriteTimeout = 60 * time.Second
+	defaultIdleTimeout  = 120 * time.Second
+)
+
+// newHTTPServer builds a listener bounded on read, write, and idle timeouts.
+// WriteTimeout and IdleTimeout fall back to defaults when the config leaves
+// them zero, so every listener is bounded on all three sides even when the
+// caller sets neither. Streaming handlers push the write deadline forward on
+// each write (via http.ResponseController), so a healthy long-lived stream is
+// not cut off at WriteTimeout.
+func newHTTPServer(addr string, handler http.Handler, cfg ServerConfig) *http.Server {
+	writeTimeout := cfg.WriteTimeout
+	if writeTimeout <= 0 {
+		writeTimeout = defaultWriteTimeout
+	}
+	idleTimeout := cfg.IdleTimeout
+	if idleTimeout <= 0 {
+		idleTimeout = defaultIdleTimeout
+	}
+	return &http.Server{
+		Addr:         addr,
+		Handler:      handler,
+		ReadTimeout:  defaultReadTimeout,
+		WriteTimeout: writeTimeout,
+		IdleTimeout:  idleTimeout,
+	}
 }
 
 // Server contains the http server related fields for horizon: the Router,
@@ -102,20 +135,12 @@ func NewServer(serverConfig ServerConfig, routerConfig RouterConfig, ledgerState
 		Router:  router,
 		Metrics: sm,
 		config:  serverConfig,
-		server: &http.Server{
-			Addr:        addr,
-			Handler:     router,
-			ReadTimeout: 5 * time.Second,
-		},
+		server:  newHTTPServer(addr, router, serverConfig),
 	}
 
 	if serverConfig.AdminPort != 0 {
 		adminAddr := fmt.Sprintf(":%d", serverConfig.AdminPort)
-		result.internalServer = &http.Server{
-			Addr:        adminAddr,
-			Handler:     result.Router.Internal,
-			ReadTimeout: 5 * time.Second,
-		}
+		result.internalServer = newHTTPServer(adminAddr, result.Router.Internal, serverConfig)
 	}
 	return result, nil
 }
