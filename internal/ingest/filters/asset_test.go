@@ -839,3 +839,27 @@ func TestAssetFilterMatchesChangesInEveryMetaVersion(t *testing.T) {
 		tt.False(include, name)
 	}
 }
+
+func TestAssetKeyAgreesWithCanonicalString(t *testing.T) {
+	tt := assert.New(t)
+	var usdc12Code [12]byte
+	copy(usdc12Code[:], "USDC")
+	issuer := xdr.MustAddress(testIssuer)
+	assets := []xdr.Asset{
+		xdr.MustNewNativeAsset(),
+		xdr.MustNewCreditAsset("USDC", testIssuer),
+		xdr.MustNewCreditAsset("USDC", testHolder),
+		xdr.MustNewCreditAsset("USD", testIssuer),
+		xdr.MustNewCreditAsset("USDCOIN", testIssuer),
+		{
+			Type:       xdr.AssetTypeAssetTypeCreditAlphanum12,
+			AlphaNum12: &xdr.AlphaNum12{AssetCode: usdc12Code, Issuer: issuer},
+		},
+	}
+	for _, a := range assets {
+		for _, b := range assets {
+			tt.Equal(a.StringCanonical() == b.StringCanonical(), newAssetKey(a) == newAssetKey(b),
+				"%s vs %s", a.StringCanonical(), b.StringCanonical())
+		}
+	}
+}

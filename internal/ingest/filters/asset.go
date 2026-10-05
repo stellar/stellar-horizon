@@ -19,13 +19,46 @@ var (
 )
 
 type assetFilter struct {
-	networkPassphrase     string
-	canonicalAssetsLookup set.Set[string]
+	networkPassphrase string
+	whitelistedAssets map[assetKey]struct{}
 	// Whitelisted assets keyed by their Stellar Asset Contract id. Rebuilt in
 	// RefreshAssetFilter so FilterTransaction never hashes per transaction.
 	assetsByContractID map[xdr.ContractId]xdr.Asset
-	lastModified       int64
-	enabled            bool
+	// Number of entries in the stored whitelist, including entries that do not
+	// parse. The filter is enabled only when the stored whitelist is not empty.
+	whitelistLen int
+	lastModified int64
+	enabled      bool
+}
+
+// assetKey identifies an asset with plain values, so it can be a map key.
+// xdr.Asset holds pointers and cannot be compared. Building an assetKey
+// copies a few bytes. Building the canonical string, as
+// xdr.Asset.StringCanonical does, encodes the issuer to strkey and allocates.
+// The filter builds a key for every asset in every transaction, so the key
+// keeps that cost low.
+//
+// The key matches the canonical string rules:
+//   - A native asset is the zero key. A credit asset always has an issuer.
+//   - The code is padded with zero bytes to 12 bytes. So "USDC" stored as a
+//     4-byte code and "USDC" stored as a 12-byte code give the same key, the
+//     same way both give the string "USDC:<issuer>".
+type assetKey struct {
+	code   [12]byte
+	issuer xdr.Uint256
+}
+
+func newAssetKey(asset xdr.Asset) assetKey {
+	var key assetKey
+	switch asset.Type {
+	case xdr.AssetTypeAssetTypeCreditAlphanum4:
+		copy(key.code[:], asset.AlphaNum4.AssetCode[:])
+		key.issuer = *asset.AlphaNum4.Issuer.Ed25519
+	case xdr.AssetTypeAssetTypeCreditAlphanum12:
+		copy(key.code[:], asset.AlphaNum12.AssetCode[:])
+		key.issuer = *asset.AlphaNum12.Issuer.Ed25519
+	}
+	return key
 }
 
 type AssetFilter interface {
@@ -35,9 +68,9 @@ type AssetFilter interface {
 
 func NewAssetFilter(networkPassphrase string) AssetFilter {
 	return &assetFilter{
-		networkPassphrase:     networkPassphrase,
-		canonicalAssetsLookup: set.Set[string]{},
-		assetsByContractID:    map[xdr.ContractId]xdr.Asset{},
+		networkPassphrase:  networkPassphrase,
+		whitelistedAssets:  map[assetKey]struct{}{},
+		assetsByContractID: map[xdr.ContractId]xdr.Asset{},
 	}
 }
 
@@ -64,28 +97,28 @@ func (f *assetFilter) RefreshAssetFilter(filterConfig *history.AssetFilterConfig
 	if filterConfig.LastModified > f.lastModified {
 		logger.Infof("New Asset Filter config detected, reloading new config %v ", *filterConfig)
 		f.enabled = filterConfig.Enabled
-		f.canonicalAssetsLookup, f.assetsByContractID = f.lookupsForWhitelist(filterConfig.Whitelist)
+		f.whitelistedAssets, f.assetsByContractID = f.lookupsForWhitelist(filterConfig.Whitelist)
+		f.whitelistLen = len(filterConfig.Whitelist)
 		f.lastModified = filterConfig.LastModified
 	}
 
 	return nil
 }
 
-// lookupsForWhitelist stores each entry in canonical form, so an entry such as
-// "NATIVE", saved before the admin API validated entries, still matches. An
-// entry that does not parse is kept as it is. It never matches, but the filter
+// lookupsForWhitelist parses each entry, so an entry such as "NATIVE", saved
+// before the admin API validated entries, still matches. An entry that does
+// not parse never matches. It still counts in whitelistLen, so the filter
 // stays enabled and keeps dropping unmatched transactions, as before.
-func (f *assetFilter) lookupsForWhitelist(whitelist []string) (set.Set[string], map[xdr.ContractId]xdr.Asset) {
-	canonical := set.NewSet[string](len(whitelist))
+func (f *assetFilter) lookupsForWhitelist(whitelist []string) (map[assetKey]struct{}, map[xdr.ContractId]xdr.Asset) {
+	assets := make(map[assetKey]struct{}, len(whitelist))
 	byContractID := make(map[xdr.ContractId]xdr.Asset, len(whitelist))
 	for _, entry := range whitelist {
 		asset, err := ParseWhitelistAsset(entry)
 		if err != nil {
 			logger.Warnf("asset filter whitelist entry %q is not a canonical asset, it will never match", entry)
-			canonical.Add(entry)
 			continue
 		}
-		canonical.Add(asset.StringCanonical())
+		assets[newAssetKey(asset)] = struct{}{}
 		id, err := asset.ContractID(f.networkPassphrase)
 		if err != nil {
 			logger.Warnf("could not derive contract id for asset filter whitelist entry %q: %v", entry, err)
@@ -93,7 +126,7 @@ func (f *assetFilter) lookupsForWhitelist(whitelist []string) (set.Set[string], 
 		}
 		byContractID[xdr.ContractId(id)] = asset
 	}
-	return canonical, byContractID
+	return assets, byContractID
 }
 
 // FilterTransaction keeps a transaction when a whitelisted asset is named by
@@ -300,7 +333,8 @@ func (f *assetFilter) anyAssetMatchedFilter(assets []xdr.Asset) bool {
 }
 
 func (f *assetFilter) assetMatchedFilter(asset *xdr.Asset) bool {
-	return f.canonicalAssetsLookup.Contains(asset.StringCanonical())
+	_, ok := f.whitelistedAssets[newAssetKey(*asset)]
+	return ok
 }
 
 func listToSet(list []string) set.Set[string] {
@@ -313,5 +347,5 @@ func listToSet(list []string) set.Set[string] {
 
 func (f *assetFilter) isEnabled() bool {
 	// filtering is disabled if the whitelist is empty for now as that is the only filter rule
-	return len(f.canonicalAssetsLookup) >= 1 && f.enabled
+	return f.whitelistLen >= 1 && f.enabled
 }
