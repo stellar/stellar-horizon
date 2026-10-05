@@ -46,9 +46,9 @@ type Filters interface {
 	GetFilters(filterQ history.QFilter, ctx context.Context) []processors.LedgerTransactionFilterer
 }
 
-func NewFilters() Filters {
+func NewFilters(networkPassphrase string) Filters {
 	return &filtersCache{
-		assetFilter:   NewAssetFilter(),
+		assetFilter:   NewAssetFilter(networkPassphrase),
 		accountFilter: NewAccountFilter(),
 	}
 }

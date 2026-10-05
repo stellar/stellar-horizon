@@ -354,7 +354,7 @@ func NewSystem(config Config) (System, error) {
 
 	historyQ := &history.Q{config.HistorySession.Clone()}
 	historyAdapter := newHistoryArchiveAdapter(archive, config.NetworkPassphrase)
-	filters := filters.NewFilters()
+	filters := filters.NewFilters(config.NetworkPassphrase)
 	loadtestSnapshot := &loadTestSnapshot{HistoryQ: historyQ}
 
 	maxLedgersPerFlush := config.MaxLedgerPerFlush

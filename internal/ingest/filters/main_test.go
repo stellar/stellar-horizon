@@ -13,7 +13,7 @@ func TestItGetsFilters(t *testing.T) {
 	test.ResetHorizonDB(t, tt.HorizonDB)
 	q := &history.Q{tt.HorizonSession()}
 
-	filtersService := NewFilters()
+	filtersService := NewFilters(testNetworkPassphrase)
 
 	ingestFilters := filtersService.GetFilters(q, tt.Ctx)
 

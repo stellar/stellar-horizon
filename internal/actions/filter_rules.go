@@ -7,6 +7,7 @@ import (
 
 	hProtocol "github.com/stellar/go-stellar-sdk/protocols/horizon"
 	"github.com/stellar/go-stellar-sdk/support/render/problem"
+	"github.com/stellar/go-stellar-sdk/xdr"
 	horizonContext "github.com/stellar/stellar-horizon/internal/context"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 )
@@ -98,9 +99,15 @@ func (handler FilterConfigHandler) UpdateAssetConfig(w http.ResponseWriter, r *h
 		return
 	}
 
+	whitelist, err := canonicalAssetWhitelist(filterRequest.Whitelist)
+	if err != nil {
+		problem.Render(r.Context(), w, err)
+		return
+	}
+
 	filterConfig := history.AssetFilterConfig{}
 	filterConfig.Enabled = *filterRequest.Enabled
-	filterConfig.Whitelist = filterRequest.Whitelist
+	filterConfig.Whitelist = whitelist
 
 	config, err := historyQ.UpdateAssetFilterConfig(r.Context(), filterConfig)
 	if err != nil {
@@ -112,6 +119,26 @@ func (handler FilterConfigHandler) UpdateAssetConfig(w http.ResponseWriter, r *h
 	if err = enc.Encode(responsePayload); err != nil {
 		problem.Render(r.Context(), w, err)
 	}
+}
+
+// canonicalAssetWhitelist parses each whitelist entry as a SEP-11 asset
+// ("CODE:ISSUER" or "native") and returns the canonical form the ingestion
+// filter compares against. Entries that do not parse are rejected so an entry
+// that could never match is not stored.
+func canonicalAssetWhitelist(entries []string) ([]string, error) {
+	whitelist := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		assets, err := xdr.BuildAssets(entry)
+		if err != nil || len(assets) != 1 {
+			return nil, problem.NewProblemWithInvalidField(
+				problem.BadRequest,
+				"whitelist",
+				fmt.Errorf("%q is not a valid asset, expected CODE:ISSUER or native", entry),
+			)
+		}
+		whitelist = append(whitelist, assets[0].StringCanonical())
+	}
+	return whitelist, nil
 }
 
 func (handler FilterConfigHandler) assetFilterResource(r *http.Request) (hProtocol.AssetFilterConfig, error) {

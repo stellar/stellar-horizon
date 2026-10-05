@@ -143,11 +143,11 @@ components:
           items:
             type: string
           description: |-
-            a list of canonical asset ids which the asset filter will inspect ledger transactions, if any transaction operations reference the asset id, then the transaction is ingested to local horizon history database, otherwise it will be skipped.
+            a list of canonical asset ids, each in the form CODE:ISSUER or the string native. A transaction is ingested to the local horizon history database when a listed asset is named by one of its operations or touched by one of its ledger entry changes. Otherwise it is skipped. An entry that is not a valid asset id is rejected with a 400 response.
           example: 
-            - 'usdc:1234'
-            - 'dotx:1234'
-            - 'abdc:1234'
+            - 'USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN'
+            - 'EURC:GDHU6WRG4IEQXM5NZ4BMPKOXHW76MZM4Y2IEMFDVXBSDP6SJY4ITNPP2'
+            - 'native'
         enabled:
           type: boolean
           description: |- 

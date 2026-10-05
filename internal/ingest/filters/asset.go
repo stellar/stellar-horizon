@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/stellar/go-stellar-sdk/ingest"
+	"github.com/stellar/go-stellar-sdk/ingest/sac"
 	"github.com/stellar/go-stellar-sdk/support/collections/set"
 	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stellar/go-stellar-sdk/xdr"
@@ -18,9 +19,13 @@ var (
 )
 
 type assetFilter struct {
+	networkPassphrase     string
 	canonicalAssetsLookup set.Set[string]
-	lastModified          int64
-	enabled               bool
+	// Whitelisted assets keyed by their Stellar Asset Contract id. Rebuilt in
+	// RefreshAssetFilter so FilterTransaction never hashes per transaction.
+	assetsByContractID map[xdr.ContractId]xdr.Asset
+	lastModified       int64
+	enabled            bool
 }
 
 type AssetFilter interface {
@@ -28,9 +33,11 @@ type AssetFilter interface {
 	RefreshAssetFilter(filterConfig *history.AssetFilterConfig) error
 }
 
-func NewAssetFilter() AssetFilter {
+func NewAssetFilter(networkPassphrase string) AssetFilter {
 	return &assetFilter{
+		networkPassphrase:     networkPassphrase,
 		canonicalAssetsLookup: set.Set[string]{},
+		assetsByContractID:    map[xdr.ContractId]xdr.Asset{},
 	}
 }
 
@@ -45,18 +52,56 @@ func (f *assetFilter) RefreshAssetFilter(filterConfig *history.AssetFilterConfig
 		logger.Infof("New Asset Filter config detected, reloading new config %v ", *filterConfig)
 		f.enabled = filterConfig.Enabled
 		f.canonicalAssetsLookup = listToSet(filterConfig.Whitelist)
+		f.assetsByContractID = f.assetsByContractIDForWhitelist(filterConfig.Whitelist)
 		f.lastModified = filterConfig.LastModified
 	}
 
 	return nil
 }
 
+func (f *assetFilter) assetsByContractIDForWhitelist(whitelist []string) map[xdr.ContractId]xdr.Asset {
+	byContractID := make(map[xdr.ContractId]xdr.Asset, len(whitelist))
+	for _, entry := range whitelist {
+		assets, err := xdr.BuildAssets(entry)
+		if err != nil || len(assets) != 1 {
+			logger.Warnf("asset filter whitelist entry %q is not a canonical asset, it will never match", entry)
+			continue
+		}
+		id, err := assets[0].ContractID(f.networkPassphrase)
+		if err != nil {
+			logger.Warnf("could not derive contract id for asset filter whitelist entry %q: %v", entry, err)
+			continue
+		}
+		byContractID[xdr.ContractId(id)] = assets[0]
+	}
+	return byContractID
+}
+
+// FilterTransaction keeps a transaction when a whitelisted asset is named by
+// one of its operations or touched by one of its ledger entry changes.
 func (f *assetFilter) FilterTransaction(ctx context.Context, transaction ingest.LedgerTransaction) (bool, bool, error) {
 	if !f.isEnabled() {
 		return false, true, nil
 	}
 
-	if f.filterOperationsMatchedOnRules(transaction.Envelope.Operations()) {
+	// Operation bodies come first. They are the only source available for
+	// failed transactions, whose meta carries no operation changes.
+	if f.matchOperations(transaction) {
+		return true, true, nil
+	}
+
+	// The SDK cannot read changes out of TransactionMeta V0, so the operation
+	// bodies are the only source for those transactions.
+	if transaction.UnsafeMeta.V == 0 {
+		logger.Debugf("No match, dropped tx with seq %v ", transaction.Envelope.SeqNum())
+		return true, false, nil
+	}
+
+	changes, err := transaction.GetChanges()
+	if err != nil {
+		return true, false, err
+	}
+	if f.matchChanges(changes) {
 		return true, true, nil
 	}
 
@@ -64,58 +109,142 @@ func (f *assetFilter) FilterTransaction(ctx context.Context, transaction ingest.
 	return true, false, nil
 }
 
-func (f assetFilter) filterOperationsMatchedOnRules(operations []xdr.Operation) bool {
-	for _, operation := range operations {
-		switch operation.Body.Type {
-		case xdr.OperationTypeChangeTrust:
-			if f.filterChangeTrustMatched(operation) {
-				return true
-			}
-		case xdr.OperationTypeManageSellOffer:
-			if f.assetMatchedFilter(&operation.Body.ManageSellOfferOp.Buying) || f.assetMatchedFilter(&operation.Body.ManageSellOfferOp.Selling) {
-				return true
-			}
-		case xdr.OperationTypeManageBuyOffer:
-			if f.assetMatchedFilter(&operation.Body.ManageBuyOfferOp.Buying) || f.assetMatchedFilter(&operation.Body.ManageBuyOfferOp.Selling) {
-				return true
-			}
-		case xdr.OperationTypeCreateClaimableBalance:
-			if f.assetMatchedFilter(&operation.Body.CreateClaimableBalanceOp.Asset) {
-				return true
-			}
-		case xdr.OperationTypeCreatePassiveSellOffer:
-			if f.assetMatchedFilter(&operation.Body.CreatePassiveSellOfferOp.Buying) || f.assetMatchedFilter(&operation.Body.CreatePassiveSellOfferOp.Selling) {
-				return true
-			}
-		case xdr.OperationTypeClawback:
-			if f.assetMatchedFilter(&operation.Body.ClawbackOp.Asset) {
-				return true
-			}
-		case xdr.OperationTypePayment:
-			if f.assetMatchedFilter(&operation.Body.PaymentOp.Asset) {
-				return true
-			}
-		case xdr.OperationTypePathPaymentStrictReceive:
-			if f.assetMatchedFilter(&operation.Body.PathPaymentStrictReceiveOp.DestAsset) || f.assetMatchedFilter(&operation.Body.PathPaymentStrictReceiveOp.SendAsset) {
-				return true
-			}
-		case xdr.OperationTypePathPaymentStrictSend:
-			if f.assetMatchedFilter(&operation.Body.PathPaymentStrictSendOp.DestAsset) || f.assetMatchedFilter(&operation.Body.PathPaymentStrictSendOp.SendAsset) {
-				return true
-			}
+func (f assetFilter) matchOperations(transaction ingest.LedgerTransaction) bool {
+	for _, operation := range transaction.Envelope.Operations() {
+		if f.anyAssetMatchedFilter(assetsNamedByOperation(transaction, operation)) {
+			return true
 		}
 	}
 	return false
 }
 
-func (f assetFilter) filterChangeTrustMatched(operation xdr.Operation) bool {
-	if pool, ok := operation.Body.ChangeTrustOp.Line.GetLiquidityPool(); ok {
-		if f.assetMatchedFilter(&pool.ConstantProduct.AssetA) || f.assetMatchedFilter(&pool.ConstantProduct.AssetB) {
+// assetsNamedByOperation lists every asset an operation body names.
+func assetsNamedByOperation(transaction ingest.LedgerTransaction, operation xdr.Operation) []xdr.Asset {
+	body := operation.Body
+	switch body.Type {
+	case xdr.OperationTypeChangeTrust:
+		return assetsNamedByChangeTrust(*body.ChangeTrustOp)
+	case xdr.OperationTypeManageSellOffer:
+		return []xdr.Asset{body.ManageSellOfferOp.Buying, body.ManageSellOfferOp.Selling}
+	case xdr.OperationTypeManageBuyOffer:
+		return []xdr.Asset{body.ManageBuyOfferOp.Buying, body.ManageBuyOfferOp.Selling}
+	case xdr.OperationTypeCreatePassiveSellOffer:
+		return []xdr.Asset{body.CreatePassiveSellOfferOp.Buying, body.CreatePassiveSellOfferOp.Selling}
+	case xdr.OperationTypeCreateClaimableBalance:
+		return []xdr.Asset{body.CreateClaimableBalanceOp.Asset}
+	case xdr.OperationTypeClawback:
+		return []xdr.Asset{body.ClawbackOp.Asset}
+	case xdr.OperationTypePayment:
+		return []xdr.Asset{body.PaymentOp.Asset}
+	case xdr.OperationTypePathPaymentStrictReceive:
+		op := body.PathPaymentStrictReceiveOp
+		return append([]xdr.Asset{op.SendAsset, op.DestAsset}, op.Path...)
+	case xdr.OperationTypePathPaymentStrictSend:
+		op := body.PathPaymentStrictSendOp
+		return append([]xdr.Asset{op.SendAsset, op.DestAsset}, op.Path...)
+	case xdr.OperationTypeSetTrustLineFlags:
+		return []xdr.Asset{body.SetTrustLineFlagsOp.Asset}
+	case xdr.OperationTypeAllowTrust:
+		return []xdr.Asset{assetNamedByAllowTrust(transaction, operation)}
+	case xdr.OperationTypeRevokeSponsorship:
+		return assetsNamedByRevokeSponsorship(*body.RevokeSponsorshipOp)
+	}
+	return nil
+}
+
+func assetsNamedByChangeTrust(op xdr.ChangeTrustOp) []xdr.Asset {
+	if pool, ok := op.Line.GetLiquidityPool(); ok {
+		return []xdr.Asset{pool.ConstantProduct.AssetA, pool.ConstantProduct.AssetB}
+	}
+	return []xdr.Asset{op.Line.ToAsset()}
+}
+
+// assetNamedByAllowTrust rebuilds the asset from the code in the operation.
+// The issuer is the operation source, or the transaction source when the
+// operation has none.
+func assetNamedByAllowTrust(transaction ingest.LedgerTransaction, operation xdr.Operation) xdr.Asset {
+	issuer := transaction.Envelope.SourceAccount()
+	if operation.SourceAccount != nil {
+		issuer = *operation.SourceAccount
+	}
+	return operation.Body.AllowTrustOp.Asset.ToAsset(issuer.ToAccountId())
+}
+
+func assetsNamedByRevokeSponsorship(op xdr.RevokeSponsorshipOp) []xdr.Asset {
+	key, ok := op.GetLedgerKey()
+	if !ok || key.Type != xdr.LedgerEntryTypeTrustline {
+		return nil
+	}
+	return assetsNamedByTrustLineAsset(key.TrustLine.Asset)
+}
+
+func (f assetFilter) matchChanges(changes []ingest.Change) bool {
+	for _, change := range changes {
+		entry := change.Post
+		if entry == nil {
+			entry = change.Pre
+		}
+		if entry != nil && f.anyAssetMatchedFilter(f.assetsTouchedByEntry(*entry)) {
 			return true
 		}
-	} else {
-		asset := operation.Body.ChangeTrustOp.Line.ToAsset()
-		if f.assetMatchedFilter(&asset) {
+	}
+	return false
+}
+
+// assetsTouchedByEntry lists every asset a ledger entry names. Account entries
+// hold only lumens and are not listed.
+func (f assetFilter) assetsTouchedByEntry(entry xdr.LedgerEntry) []xdr.Asset {
+	switch entry.Data.Type {
+	case xdr.LedgerEntryTypeTrustline:
+		return assetsNamedByTrustLineAsset(entry.Data.MustTrustLine().Asset)
+	case xdr.LedgerEntryTypeOffer:
+		offer := entry.Data.MustOffer()
+		return []xdr.Asset{offer.Selling, offer.Buying}
+	case xdr.LedgerEntryTypeClaimableBalance:
+		return []xdr.Asset{entry.Data.MustClaimableBalance().Asset}
+	case xdr.LedgerEntryTypeLiquidityPool:
+		if pool, ok := entry.Data.MustLiquidityPool().Body.GetConstantProduct(); ok {
+			return []xdr.Asset{pool.Params.AssetA, pool.Params.AssetB}
+		}
+	case xdr.LedgerEntryTypeContractData:
+		return f.assetsTouchedByContractData(entry)
+	}
+	return nil
+}
+
+// assetsTouchedByContractData recognizes the two entries the Stellar Asset
+// Contract writes: the per-holder balance entry and the per-asset metadata
+// entry. Both are stored under the asset's contract id, so a balance entry is
+// matched by contract id and a metadata entry by the asset it describes.
+func (f assetFilter) assetsTouchedByContractData(entry xdr.LedgerEntry) []xdr.Asset {
+	if _, _, ok := sac.ContractBalanceFromContractData(entry, f.networkPassphrase); ok {
+		contractID := entry.Data.MustContractData().Contract.ContractId
+		if contractID == nil {
+			return nil
+		}
+		if asset, ok := f.assetsByContractID[*contractID]; ok {
+			return []xdr.Asset{asset}
+		}
+		return nil
+	}
+	if asset, ok := sac.AssetFromContractData(entry, f.networkPassphrase); ok {
+		return []xdr.Asset{asset}
+	}
+	return nil
+}
+
+// assetsNamedByTrustLineAsset skips pool share trustlines. They carry a pool
+// id, not an asset, and the pool entry in the same transaction names the assets.
+func assetsNamedByTrustLineAsset(trustLineAsset xdr.TrustLineAsset) []xdr.Asset {
+	if trustLineAsset.Type == xdr.AssetTypeAssetTypePoolShare {
+		return nil
+	}
+	return []xdr.Asset{trustLineAsset.ToAsset()}
+}
+
+func (f assetFilter) anyAssetMatchedFilter(assets []xdr.Asset) bool {
+	for i := range assets {
+		if f.assetMatchedFilter(&assets[i]) {
 			return true
 		}
 	}
