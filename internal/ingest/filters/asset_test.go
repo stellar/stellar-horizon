@@ -314,12 +314,6 @@ func TestAssetFilterMatchesPathPaymentIntermediateAsset(t *testing.T) {
 	tt.False(include)
 }
 
-const (
-	testNetworkPassphrase = "Test SDF Network ; September 2015"
-	testIssuer            = "GD6WNNTW664WH7FXC5RUMUTF7P5QSURC2IT36VOQEEGFZ4UWUEQGECAL"
-	testHolder            = "GAHK7EEG2WWHVKDNT4CEQFZGKF2LGDSW2IVM4S5DP42RBW3K6BTODB4A"
-)
-
 func newTestAssetFilter(t *testing.T, whitelist ...xdr.Asset) AssetFilter {
 	canonical := make([]string, 0, len(whitelist))
 	for _, asset := range whitelist {
@@ -438,8 +432,20 @@ func TestAssetFilterMatchesAllowTrustUsingIssuerAsSource(t *testing.T) {
 		tt.True(include, name)
 	}
 
+	feeBump := wrapInFeeBump(successfulTxWithMetaV3(issuer, []xdr.Operation{allowTrust(nil)}, nil))
+	feeBump.Envelope.FeeBump.Tx.FeeSource = xdr.MustMuxedAddress(other)
+	_, include, err := filter.FilterTransaction(context.Background(), feeBump)
+	tt.NoError(err)
+	tt.True(include, "fee-bump: the issuer is the inner transaction source, not the fee source")
+
+	feeSourceIsIssuer := wrapInFeeBump(successfulTxWithMetaV3(other, []xdr.Operation{allowTrust(nil)}, nil))
+	feeSourceIsIssuer.Envelope.FeeBump.Tx.FeeSource = issuerMuxed
+	_, include, err = filter.FilterTransaction(context.Background(), feeSourceIsIssuer)
+	tt.NoError(err)
+	tt.False(include, "fee-bump: the fee source is not the issuer of an AllowTrust")
+
 	notIssuer := successfulTxWithMetaV3(other, []xdr.Operation{allowTrust(nil)}, nil)
-	_, include, err := filter.FilterTransaction(context.Background(), notIssuer)
+	_, include, err = filter.FilterTransaction(context.Background(), notIssuer)
 	tt.NoError(err)
 	tt.False(include)
 }

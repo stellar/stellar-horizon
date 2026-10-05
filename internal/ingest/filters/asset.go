@@ -250,16 +250,19 @@ func ledgerEntryChangeGroups(meta xdr.TransactionMeta) []xdr.LedgerEntryChanges 
 		groups = append(groups, v1.TxChanges)
 		addOperations(v1.Operations)
 	} else if v2, ok := meta.GetV2(); ok {
-		groups = append(groups, v2.TxChangesBefore, v2.TxChangesAfter)
+		groups = append(groups, v2.TxChangesBefore)
 		addOperations(v2.Operations)
+		groups = append(groups, v2.TxChangesAfter)
 	} else if v3, ok := meta.GetV3(); ok {
-		groups = append(groups, v3.TxChangesBefore, v3.TxChangesAfter)
+		groups = append(groups, v3.TxChangesBefore)
 		addOperations(v3.Operations)
+		groups = append(groups, v3.TxChangesAfter)
 	} else if v4, ok := meta.GetV4(); ok {
-		groups = append(groups, v4.TxChangesBefore, v4.TxChangesAfter)
+		groups = append(groups, v4.TxChangesBefore)
 		for _, op := range v4.Operations {
 			groups = append(groups, op.Changes)
 		}
+		groups = append(groups, v4.TxChangesAfter)
 	}
 	return groups
 }
