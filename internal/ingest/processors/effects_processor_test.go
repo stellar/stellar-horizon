@@ -3765,6 +3765,8 @@ func TestInvokeHostFunctionEffectsWithMuxedDestination(t *testing.T) {
 
 	muxedTo, err := xdr.MuxedAccountFromAccountId(to, 123456)
 	assert.NoError(t, err)
+	muxedToContract := strkey.MustEncode(strkey.VersionByteMuxedContract,
+		append(toContractBytes[:], 0, 0, 0, 0, 0, 0x01, 0xe2, 0x40)) // id 123456
 
 	assetDetails := map[string]interface{}{
 		"amount":       "0.0012345",
@@ -3772,8 +3774,12 @@ func TestInvokeHostFunctionEffectsWithMuxedDestination(t *testing.T) {
 		"asset_issuer": asset.GetIssuer(),
 		"asset_type":   "credit_alphanum12",
 	}
-	withContract := func(contract string) map[string]interface{} {
-		details := map[string]interface{}{"contract": contract}
+	withMuxedContract := func(contract, muxed string) map[string]interface{} {
+		details := map[string]interface{}{
+			"contract":          contract,
+			"contract_muxed":    muxed,
+			"contract_muxed_id": "123456",
+		}
 		for k, v := range assetDetails {
 			details[k] = v
 		}
@@ -3781,13 +3787,15 @@ func TestInvokeHostFunctionEffectsWithMuxedDestination(t *testing.T) {
 	}
 
 	testCases := []struct {
-		desc     string
-		to       string
-		expected []effect
+		desc      string
+		eventType contractevents.EventType
+		to        string
+		expected  []effect
 	}{
 		{
-			desc: "transfer to muxed account",
-			to:   to,
+			desc:      "transfer to muxed account",
+			eventType: contractevents.EventTypeTransfer,
+			to:        to,
 			expected: []effect{
 				{
 					order:       1,
@@ -3805,8 +3813,9 @@ func TestInvokeHostFunctionEffectsWithMuxedDestination(t *testing.T) {
 				},
 			},
 		}, {
-			desc: "transfer to muxed contract",
-			to:   toContract,
+			desc:      "transfer to muxed contract",
+			eventType: contractevents.EventTypeTransfer,
+			to:        toContract,
 			expected: []effect{
 				{
 					order:       1,
@@ -3819,7 +3828,20 @@ func TestInvokeHostFunctionEffectsWithMuxedDestination(t *testing.T) {
 					address:     admin,
 					effectType:  history.EffectContractCredited,
 					operationID: toid.New(1, 0, 1).ToInt64(),
-					details:     withContract(toContract),
+					details:     withMuxedContract(toContract, muxedToContract),
+				},
+			},
+		}, {
+			desc:      "mint to muxed contract",
+			eventType: contractevents.EventTypeMint,
+			to:        toContract,
+			expected: []effect{
+				{
+					order:       1,
+					address:     admin,
+					effectType:  history.EffectContractCredited,
+					operationID: toid.New(1, 0, 1).ToInt64(),
+					details:     withMuxedContract(toContract, muxedToContract),
 				},
 			},
 		},
@@ -3828,13 +3850,18 @@ func TestInvokeHostFunctionEffectsWithMuxedDestination(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.desc, func(t *testing.T) {
 			event := contractevents.GenerateEvent(
-				contractevents.EventTypeTransfer,
+				testCase.eventType,
 				from, testCase.to, admin,
 				asset,
 				big.NewInt(12345),
 				networkPassphrase,
 				&muxedID,
 			)
+			if testCase.eventType == contractevents.EventTypeMint {
+				// GenerateEvent builds the V3 mint shape; V4 drops the admin topic.
+				topics := event.Body.V0.Topics
+				event.Body.V0.Topics = append(topics[:1:1], topics[2:]...)
+			}
 			tx, _ := makeInvocationTransactionWithChanges(admin, nil, nil)
 			tx.UnsafeMeta = xdr.TransactionMeta{
 				V: 4,
