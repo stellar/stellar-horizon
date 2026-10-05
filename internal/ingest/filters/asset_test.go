@@ -385,8 +385,8 @@ func TestAssetFilterMatchesAllowTrustUsingIssuerAsSource(t *testing.T) {
 	whitelisted := xdr.MustNewCreditAsset("USDC", issuer)
 	filter := newTestAssetFilter(t, whitelisted)
 
-	code, err := xdr.NewAssetCodeFromString("USDC")
-	tt.NoError(err)
+	code, codeErr := xdr.NewAssetCodeFromString("USDC")
+	tt.NoError(codeErr)
 	allowTrust := func(opSource *xdr.MuxedAccount) xdr.Operation {
 		return xdr.Operation{
 			SourceAccount: opSource,
