@@ -7,6 +7,7 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 - Added Protocol 30 (CAP-0084, muxed contract addresses) ingestion support and bumped `MaxSupportedProtocolVersion` to 30.
+- Added Protocol 30 CAP-0087 (ML-DSA signature verification) support: decodes the new contract cost types.
 
 ## 29.0.0
 
