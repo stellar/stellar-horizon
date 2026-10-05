@@ -28,8 +28,8 @@ on:
         required: false
         type: string
       stellar_rpc_docker_img:
-        description: 'Full docker image reference for Stellar RPC (e.g. stellar/stellar-rpc:27.0.0)'
-        required: true
+        description: 'Full docker image reference for Stellar RPC (e.g. stellar/stellar-rpc:27.0.0). Empty skips the stellar-rpc tests.'
+        required: false
         type: string
       full_matrix:
         description: 'Run the full go/postgres version matrix. Defaults to false: a single job on the latest go and postgres, which is what external callers (e.g. stellar-core CI) want.'
@@ -189,6 +189,7 @@ jobs:
           echo "Using stellar core version $(stellar-core version)"
 
       - name: Pull and set Stellar RPC image
+        if: env.STELLAR_RPC_DOCKER_IMG != ''
         run: |
           docker pull "$STELLAR_RPC_DOCKER_IMG"
           echo HORIZON_INTEGRATION_TESTS_STELLAR_RPC_DOCKER_IMG="$STELLAR_RPC_DOCKER_IMG" >> $GITHUB_ENV

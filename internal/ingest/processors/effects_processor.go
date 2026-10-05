@@ -1534,6 +1534,26 @@ func (e *effectsWrapper) addLiquidityPoolWithdrawEffect() error {
 	return e.addMuxed(e.operation.SourceAccount(), history.EffectLiquidityPoolWithdrew, details)
 }
 
+// addContractMuxedDetails records a muxed contract destination (CAP-0084) on a
+// contract_credited effect, the way account_credited records a muxed account.
+func addContractMuxedDetails(details map[string]interface{}, contract string, muxedID *uint64) error {
+	if muxedID == nil {
+		return nil
+	}
+	var m strkey.MuxedContract
+	if err := m.SetContractID(contract); err != nil {
+		return err
+	}
+	m.SetID(*muxedID)
+	address, err := m.Address()
+	if err != nil {
+		return err
+	}
+	details["contract_muxed"] = address
+	details["contract_muxed_id"] = strconv.FormatUint(*muxedID, 10)
+	return nil
+}
+
 // addInvokeHostFunctionEffects iterates through the events and generates
 // account_credited and account_debited effects when it sees events related to
 // the Stellar Asset Contract corresponding to those effects.
@@ -1627,6 +1647,9 @@ func (e *effectsWrapper) addInvokeHostFunctionEffects(events []xdr.ContractEvent
 				}
 			} else {
 				toDetails["contract"] = evt.To
+				if err := addContractMuxedDetails(toDetails, evt.To, memoId); err != nil {
+					return errors.Wrapf(err, "invokeHostFunction: failed to generate muxed contract during contract transfer for destination %s", evt.To)
+				}
 				e.addMuxed(source, history.EffectContractCredited, toDetails)
 			}
 
@@ -1666,6 +1689,9 @@ func (e *effectsWrapper) addInvokeHostFunctionEffects(events []xdr.ContractEvent
 				}
 			} else {
 				details["contract"] = evt.To
+				if err := addContractMuxedDetails(details, evt.To, memoId); err != nil {
+					return errors.Wrapf(err, "invokeHostFunction: failed to generate muxed contract during contract mint for destination %s", evt.To)
+				}
 				e.addMuxed(source, history.EffectContractCredited, details)
 			}
 
