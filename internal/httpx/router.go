@@ -167,7 +167,6 @@ func (r *Router) addRoutes(config *RouterConfig, rateLimiter *throttled.HTTPRate
 	streamHandler := sse.StreamHandler{
 		RateLimiter:         rateLimiter,
 		LedgerSourceFactory: historyLedgerSourceFactory{ledgerState: ledgerState, updateFrequency: config.SSEUpdateFrequency},
-		WriteTimeout:        config.ConnectionTimeout,
 	}
 
 	historyMiddleware := NewHistoryMiddleware(ledgerState, int32(config.StaleThreshold), config.DBSession, config.ClientQueryTimeout)

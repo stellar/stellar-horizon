@@ -37,21 +37,45 @@ type ServerConfig struct {
 }
 
 const (
-	serverReadTimeout  = 5 * time.Second
-	serverWriteTimeout = 60 * time.Second
-	serverIdleTimeout  = 120 * time.Second
+	serverReadTimeout = 5 * time.Second
+	serverIdleTimeout = 120 * time.Second
+
+	// writeTimeoutBuffer is added to the connection timeout to get the write
+	// timeout. The connection timeout cancels a request through its context at
+	// its own deadline (returning 504, and sending the close event on a
+	// stream); the write timeout is the hard backstop for a response whose
+	// write is stuck and cannot see that cancellation. The buffer lets the
+	// context deadline fire first so clients get the normal response rather
+	// than a dropped connection.
+	writeTimeoutBuffer = 5 * time.Second
+
+	// defaultWriteTimeout applies when the connection timeout is not set.
+	defaultWriteTimeout = 60 * time.Second
 )
 
 // newHTTPServer builds a listener bounded on read, write, and idle timeouts.
-// Streaming handlers push the write deadline forward on each write (via
-// http.ResponseController), so a healthy long-lived stream is not cut off at
-// serverWriteTimeout.
-func newHTTPServer(addr string, handler http.Handler) *http.Server {
+//
+// The write timeout is derived from the connection timeout rather than fixed.
+// --connection-timeout defaults to 55s, but operators raise it behind load
+// balancers with longer idle timeouts. A fixed write timeout below the raised
+// connection timeout would cut responses and streams short before the
+// connection timeout's context deadline fires, so clients would miss the 504
+// and streams would miss their close event.
+//
+// The idle timeout is set explicitly because an unset IdleTimeout falls back
+// to ReadTimeout (5s here), not to "no timeout". Keeping backend idle
+// connections open longer than the load balancer's idle timeout avoids
+// intermittent 502s.
+func newHTTPServer(addr string, handler http.Handler, connectionTimeout time.Duration) *http.Server {
+	writeTimeout := defaultWriteTimeout
+	if connectionTimeout > 0 {
+		writeTimeout = connectionTimeout + writeTimeoutBuffer
+	}
 	return &http.Server{
 		Addr:         addr,
 		Handler:      handler,
 		ReadTimeout:  serverReadTimeout,
-		WriteTimeout: serverWriteTimeout,
+		WriteTimeout: writeTimeout,
 		IdleTimeout:  serverIdleTimeout,
 	}
 }
@@ -122,12 +146,12 @@ func NewServer(serverConfig ServerConfig, routerConfig RouterConfig, ledgerState
 		Router:  router,
 		Metrics: sm,
 		config:  serverConfig,
-		server:  newHTTPServer(addr, router),
+		server:  newHTTPServer(addr, router, routerConfig.ConnectionTimeout),
 	}
 
 	if serverConfig.AdminPort != 0 {
 		adminAddr := fmt.Sprintf(":%d", serverConfig.AdminPort)
-		result.internalServer = newHTTPServer(adminAddr, result.Router.Internal)
+		result.internalServer = newHTTPServer(adminAddr, result.Router.Internal, routerConfig.ConnectionTimeout)
 	}
 	return result, nil
 }
