@@ -9,11 +9,9 @@ import (
 	"github.com/stellar/throttled"
 )
 
-// streamWriteTimeout bounds a single write to a streaming response. The handler
-// pushes the deadline forward by this amount before each write, so the
-// server-wide WriteTimeout does not cut off a healthy long-lived stream while
-// each individual write is still bounded.
-const streamWriteTimeout = 30 * time.Second
+// defaultStreamWriteTimeout bounds a single write to a streaming response when
+// StreamHandler.WriteTimeout is not set.
+const defaultStreamWriteTimeout = 30 * time.Second
 
 type LedgerSourceFactory interface {
 	Get() ledger.Source
@@ -23,6 +21,13 @@ type LedgerSourceFactory interface {
 type StreamHandler struct {
 	RateLimiter         *throttled.HTTPRateLimiter
 	LedgerSourceFactory LedgerSourceFactory
+
+	// WriteTimeout bounds each individual write to the stream. The handler
+	// pushes the deadline forward by this amount before every write, so the
+	// server-wide WriteTimeout does not cut off a healthy long-lived stream
+	// while a single stalled write is still bounded. It is wired to the
+	// connection timeout; when zero, defaultStreamWriteTimeout applies.
+	WriteTimeout time.Duration
 }
 
 // GenerateEventsFunc generates a slice of sse.Event which are sent via
@@ -42,6 +47,10 @@ func (handler StreamHandler) ServeStream(
 	stream.SetLimit(limit)
 
 	rc := http.NewResponseController(w)
+	writeTimeout := handler.WriteTimeout
+	if writeTimeout <= 0 {
+		writeTimeout = defaultStreamWriteTimeout
+	}
 
 	ledgerSource := handler.LedgerSourceFactory.Get()
 	defer ledgerSource.Close()
@@ -52,7 +61,7 @@ func (handler StreamHandler) ServeStream(
 		// response writers (for example httptest.ResponseRecorder in tests) do
 		// not support write deadlines, and the stream must still run when they
 		// do not.
-		_ = rc.SetWriteDeadline(time.Now().Add(streamWriteTimeout))
+		_ = rc.SetWriteDeadline(time.Now().Add(writeTimeout))
 
 		// Rate limit the request if it's a call to stream since it queries the DB every second. See
 		// https://github.com/stellar/go-stellar-sdk/issues/715 for more details.
