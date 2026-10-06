@@ -51,28 +51,34 @@ func (handler StreamHandler) ServeStream(
 	if writeTimeout <= 0 {
 		writeTimeout = defaultStreamWriteTimeout
 	}
+	// resetWriteDeadline gives the next write a fresh window. Call it right
+	// before every write to the stream, so one write's duration is never
+	// charged against another's and server work between writes (such as the
+	// database query below) does not eat into the write budget. Ignore the
+	// error: some response writers (for example httptest.ResponseRecorder in
+	// tests) do not support write deadlines, and the stream must still run when
+	// they do not.
+	resetWriteDeadline := func() {
+		_ = rc.SetWriteDeadline(time.Now().Add(writeTimeout))
+	}
 
 	ledgerSource := handler.LedgerSourceFactory.Get()
 	defer ledgerSource.Close()
 
 	currentLedgerSequence := ledgerSource.CurrentLedger()
 	for {
-		// Give this iteration's writes a fresh deadline. Ignore the error: some
-		// response writers (for example httptest.ResponseRecorder in tests) do
-		// not support write deadlines, and the stream must still run when they
-		// do not.
-		_ = rc.SetWriteDeadline(time.Now().Add(writeTimeout))
-
 		// Rate limit the request if it's a call to stream since it queries the DB every second. See
 		// https://github.com/stellar/go-stellar-sdk/issues/715 for more details.
 		rateLimiter := handler.RateLimiter
 		if rateLimiter != nil {
 			limited, _, err := rateLimiter.RateLimiter.RateLimit(rateLimiter.VaryBy.Key(r), 1)
 			if err != nil {
+				resetWriteDeadline()
 				stream.Err(errors.Wrap(err, "RateLimiter error"))
 				return
 			}
 			if limited {
+				resetWriteDeadline()
 				stream.Err(ErrRateLimited)
 				return
 			}
@@ -80,6 +86,7 @@ func (handler StreamHandler) ServeStream(
 
 		events, err := generateEvents()
 		if err != nil {
+			resetWriteDeadline()
 			stream.Err(err)
 			return
 		}
@@ -87,11 +94,13 @@ func (handler StreamHandler) ServeStream(
 			if limit <= 0 {
 				break
 			}
+			resetWriteDeadline()
 			stream.Send(event)
 			limit--
 		}
 
 		if limit <= 0 {
+			resetWriteDeadline()
 			stream.Done()
 			return
 		}
@@ -99,12 +108,14 @@ func (handler StreamHandler) ServeStream(
 		// Manually send the preamble in case there are no data events in SSE to trigger a stream.Send call.
 		// This method is called every iteration of the loop, but is protected by a sync.Once variable so it's
 		// only executed once.
+		resetWriteDeadline()
 		stream.Init()
 
 		select {
 		case currentLedgerSequence = <-ledgerSource.NextLedger(currentLedgerSequence):
 			continue
 		case <-ctx.Done():
+			resetWriteDeadline()
 			stream.Done()
 			return
 		}
