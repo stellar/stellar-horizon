@@ -8,12 +8,15 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - Added Protocol 30 (CAP-0084, muxed contract addresses) ingestion support and bumped `MaxSupportedProtocolVersion` to 30.
 
+### Fixed
+- The asset ingestion filter now matches rules on the inner operations of fee-bump transactions. Earlier versions collected operations only from TxV0 and Tx envelopes, so a fee-bump transaction was not ingested even when its inner operations referenced a whitelisted asset.
+
 ## 29.0.0
 
 **This release adds support for Protocol 29.**
 
 ### Added
-- Added Protocol 29 support and bumped `MaxSupportedProtocolVersion` to 29.
+- Added Protocol 29 support and bumped `MaxSupportedProtocolVersion` to stable 29.
 
 ## 28.0.1
 
