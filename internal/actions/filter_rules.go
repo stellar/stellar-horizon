@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
 	hProtocol "github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/support/collections/set"
 	"github.com/stellar/go-stellar-sdk/support/render/problem"
 	horizonContext "github.com/stellar/stellar-horizon/internal/context"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
@@ -77,6 +80,7 @@ func (handler FilterConfigHandler) UpdateAccountConfig(w http.ResponseWriter, r 
 	config, err := historyQ.UpdateAccountFilterConfig(r.Context(), filterConfig)
 	if err != nil {
 		problem.Render(r.Context(), w, err)
+		return
 	}
 
 	responsePayload := handler.accountConfigResource(config)
@@ -99,7 +103,13 @@ func (handler FilterConfigHandler) UpdateAssetConfig(w http.ResponseWriter, r *h
 		return
 	}
 
-	whitelist, err := canonicalAssetWhitelist(filterRequest.Whitelist)
+	stored, err := historyQ.GetAssetFilterConfig(r.Context())
+	if err != nil {
+		problem.Render(r.Context(), w, err)
+		return
+	}
+
+	whitelist, err := canonicalAssetWhitelist(filterRequest.Whitelist, stored.Whitelist)
 	if err != nil {
 		problem.Render(r.Context(), w, err)
 		return
@@ -112,6 +122,7 @@ func (handler FilterConfigHandler) UpdateAssetConfig(w http.ResponseWriter, r *h
 	config, err := historyQ.UpdateAssetFilterConfig(r.Context(), filterConfig)
 	if err != nil {
 		problem.Render(r.Context(), w, err)
+		return
 	}
 
 	responsePayload := handler.assetConfigResource(config)
@@ -123,20 +134,34 @@ func (handler FilterConfigHandler) UpdateAssetConfig(w http.ResponseWriter, r *h
 
 // canonicalAssetWhitelist parses each whitelist entry as a SEP-11 asset
 // ("CODE:ISSUER" or "native") and returns the canonical form the ingestion
-// filter compares against. Entries that do not parse are rejected so an entry
-// that could never match is not stored.
-func canonicalAssetWhitelist(entries []string) ([]string, error) {
+// filter compares against. A new entry that does not parse is rejected, so an
+// entry that could never match is not stored. An entry that is already stored
+// is kept as it is, even when it does not parse: earlier versions stored
+// entries without validation, and a client that reads the config, flips
+// "enabled", and writes it back must not be blocked by such an entry.
+func canonicalAssetWhitelist(entries []string, stored []string) ([]string, error) {
+	storedSet := set.NewSet[string](len(stored))
+	storedSet.AddSlice(stored)
+
 	whitelist := make([]string, 0, len(entries))
+	var invalid []string
 	for _, entry := range entries {
 		asset, err := filters.ParseWhitelistAsset(entry)
-		if err != nil {
-			return nil, problem.NewProblemWithInvalidField(
-				problem.BadRequest,
-				"whitelist",
-				fmt.Errorf("%q is not a valid asset, expected CODE:ISSUER or native", entry),
-			)
+		switch {
+		case err == nil:
+			whitelist = append(whitelist, asset.StringCanonical())
+		case storedSet.Contains(entry):
+			whitelist = append(whitelist, entry)
+		default:
+			invalid = append(invalid, strconv.Quote(entry))
 		}
-		whitelist = append(whitelist, asset.StringCanonical())
+	}
+	if len(invalid) > 0 {
+		return nil, problem.NewProblemWithInvalidField(
+			problem.BadRequest,
+			"whitelist",
+			fmt.Errorf("%s: not a valid asset, expected CODE:ISSUER or native", strings.Join(invalid, ", ")),
+		)
 	}
 	return whitelist, nil
 }

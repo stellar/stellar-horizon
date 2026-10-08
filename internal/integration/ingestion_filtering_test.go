@@ -207,21 +207,10 @@ func TestFilteringAssetWhiteList(t *testing.T) {
 
 	// A claim of a claimable balance denominated in the whitelisted asset is
 	// stored, even though the claim operation only carries the balance id.
-	itest.MustSubmitOperations(itest.MasterAccount(), itest.Master(),
-		&txnbuild.CreateClaimableBalance{
-			Destinations: []txnbuild.Claimant{txnbuild.NewClaimant(defaultAllowedAccount.GetAccountID(), nil)},
-			Asset:        whitelistedAsset,
-			Amount:       "10",
-		},
-	)
-	balances, err := itest.Client().ClaimableBalances(horizonclient.ClaimableBalanceRequest{
-		Claimant: defaultAllowedAccount.GetAccountID(),
-	})
-	tt.NoError(err)
-	tt.Len(balances.Embedded.Records, 1)
-
+	claim := itest.MustCreateClaimableBalance(itest.Master(), whitelistedAsset, "10",
+		txnbuild.NewClaimant(defaultAllowedAccount.GetAccountID(), nil))
 	txResp = itest.MustSubmitOperations(defaultAllowedAccount, defaultAllowedAccountKey,
-		&txnbuild.ClaimClaimableBalance{BalanceID: balances.Embedded.Records[0].BalanceID},
+		&txnbuild.ClaimClaimableBalance{BalanceID: claim.BalanceID},
 	)
 	_, err = itest.Client().TransactionDetail(txResp.Hash)
 	tt.NoError(err)

@@ -285,6 +285,55 @@ func TestUpdateAssetFilterConfigRejectsMalformedWhitelistEntry(t *testing.T) {
 	tt.Assert.Empty(config.Whitelist)
 }
 
+func TestUpdateAssetFilterConfigKeepsStoredLegacyWhitelistEntry(t *testing.T) {
+	tt := test.Start(t)
+	defer tt.Finish()
+	test.ResetHorizonDB(t, tt.HorizonDB)
+
+	q := &history.Q{SessionInterface: tt.HorizonSession()}
+	// Earlier versions stored entries without validation.
+	_, err := q.UpdateAssetFilterConfig(tt.Ctx, history.AssetFilterConfig{
+		Whitelist: []string{"usdc:1234"},
+		Enabled:   true,
+	})
+	tt.Assert.NoError(err)
+
+	// A client reads the config, flips "enabled", and writes it back.
+	handler := &FilterConfigHandler{}
+	recorder := httptest.NewRecorder()
+	request := makeRequest(t, map[string]string{}, map[string]string{}, q)
+	request.Body = ioutil.NopCloser(strings.NewReader(`{"whitelist": ["usdc:1234"], "enabled": false}`))
+	handler.UpdateAssetConfig(recorder, request)
+
+	resp := recorder.Result()
+	tt.Assert.Equal(http.StatusOK, resp.StatusCode)
+	raw, err := ioutil.ReadAll(resp.Body)
+	tt.Assert.NoError(err)
+	var filterCfgResource hProtocol.AssetFilterConfig
+	tt.Assert.NoError(json.Unmarshal(raw, &filterCfgResource))
+	tt.Assert.Equal([]string{"usdc:1234"}, filterCfgResource.Whitelist)
+	tt.Assert.False(*filterCfgResource.Enabled)
+}
+
+func TestUpdateAssetFilterConfigReportsEveryMalformedWhitelistEntry(t *testing.T) {
+	tt := test.Start(t)
+	defer tt.Finish()
+	test.ResetHorizonDB(t, tt.HorizonDB)
+
+	q := &history.Q{SessionInterface: tt.HorizonSession()}
+	handler := &FilterConfigHandler{}
+	recorder := httptest.NewRecorder()
+	request := makeRequest(t, map[string]string{}, map[string]string{}, q)
+	request.Body = ioutil.NopCloser(strings.NewReader(`{"whitelist": ["native", "usdc:1234", "eurc:5678"], "enabled": true}`))
+	handler.UpdateAssetConfig(recorder, request)
+
+	resp := recorder.Result()
+	tt.Assert.Equal(http.StatusBadRequest, resp.StatusCode)
+	raw, err := ioutil.ReadAll(resp.Body)
+	tt.Assert.NoError(err)
+	tt.Assert.Contains(string(raw), `\"usdc:1234\", \"eurc:5678\"`)
+}
+
 func TestUpdateAccountFilterConfig(t *testing.T) {
 	tt := test.Start(t)
 	defer tt.Finish()

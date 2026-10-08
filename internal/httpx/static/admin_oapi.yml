@@ -143,7 +143,7 @@ components:
           items:
             type: string
           description: |-
-            a list of canonical asset ids, each in the form CODE:ISSUER or the string native. A transaction is ingested to the local horizon history database when one of its operations names a listed asset. It is also ingested when one of its ledger entry changes touches a listed asset. Otherwise it is skipped. An entry that is not a valid asset id is rejected with a 400 response.
+            a list of canonical asset ids, each in the form CODE:ISSUER or the string native. A transaction is ingested to the local horizon history database when one of its operations or its Soroban footprint names a listed asset. It is also ingested when one of its ledger entry changes touches a listed asset. Otherwise it is skipped. A failed transaction has no ledger entry changes, so a failed claimable balance claim, liquidity pool deposit or similar operation that names the asset only through an id is skipped. A new entry that is not a valid asset id is rejected with a 400 response that lists every invalid entry. An entry that is already stored is kept as it is.
           example: 
             - 'USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN'
             - 'EURC:GDHU6WRG4IEQXM5NZ4BMPKOXHW76MZM4Y2IEMFDVXBSDP6SJY4ITNPP2'
