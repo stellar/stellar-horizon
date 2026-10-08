@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/go-stellar-sdk/ingest"
 	"github.com/stellar/go-stellar-sdk/network"
@@ -394,6 +395,75 @@ func TestProcessorRunnerRunTransactionsProcessorsOnLedgers(t *testing.T) {
 
 	err := runner.RunTransactionProcessorsOnLedgers(ledgers, false)
 	assert.NoError(t, err)
+}
+
+// TestProcessorRunnerRunTransactionsProcessorsOnLedgerMsCloseTime runs a
+// Protocol 30 ledger whose header carries a CAP-0088 millisecond close time
+// (STELLAR_VALUE_SIGNED_MS) through the transaction processors, decoded from
+// XDR as a ledger backend delivers it. The ledger row gets the header unchanged,
+// so closed_at comes from its whole-second CloseTime.
+func TestProcessorRunnerRunTransactionsProcessorsOnLedgerMsCloseTime(t *testing.T) {
+	ctx := context.Background()
+
+	config := Config{
+		NetworkPassphrase: network.PublicNetworkPassphrase,
+	}
+
+	mockSession := &db.MockSession{}
+	q := &mockDBQ{}
+	defer mock.AssertExpectationsForObjects(t, q)
+
+	const closeTimeMs = 1_760_000_000_789
+	raw, err := xdr.LedgerCloseMeta{
+		V: 2,
+		V2: &xdr.LedgerCloseMetaV2{
+			LedgerHeader: xdr.LedgerHeaderHistoryEntry{
+				Header: xdr.LedgerHeader{
+					LedgerVersion:  30,
+					LedgerSeq:      23,
+					BucketListHash: xdr.Hash{0, 1, 2},
+					ScpValue: xdr.StellarValue{
+						CloseTime: closeTimeMs / 1000,
+						Ext: xdr.StellarValueExt{
+							V: xdr.StellarValueTypeStellarValueSignedMs,
+							SignedMsValue: &xdr.StellarValueSignedMsValue{
+								CloseTimeMs: closeTimeMs,
+								LcValueSignature: xdr.LedgerCloseValueSignature{
+									NodeId:    xdr.NodeId(xdr.MustAddress("GAUJETIZVEP2NRYLUESJ3LS66NVCEGMON4UDCBCSBEVPIID773P2W6AY")),
+									Signature: xdr.Signature{1, 2, 3},
+								},
+							},
+						},
+					},
+				},
+			},
+			TxSet: xdr.GeneralizedTransactionSet{V: 1, V1TxSet: &xdr.TransactionSetV1{}},
+		},
+	}.MarshalBinary()
+	require.NoError(t, err)
+	var ledger xdr.LedgerCloseMeta
+	require.NoError(t, ledger.UnmarshalBinary(raw))
+	header := ledger.LedgerHeaderHistoryEntry()
+	require.Equal(t, xdr.StellarValueTypeStellarValueSignedMs, header.Header.ScpValue.Ext.V)
+	require.Equal(t, int64(closeTimeMs/1000), ledger.LedgerCloseTime())
+
+	defer mock.AssertExpectationsForObjects(t, mockTxProcessorBatchBuilders(q, mockSession, ctx)...)
+
+	mockBatchInsertBuilder := &history.MockLedgersBatchInsertBuilder{}
+	q.MockQLedgers.On("NewLedgerBatchInsertBuilder").Return(mockBatchInsertBuilder)
+	mockBatchInsertBuilder.On("Add", header, 0, 0, 0, 0, CurrentVersion).Return(nil).Once()
+	mockBatchInsertBuilder.On("Exec", ctx, mockSession).Return(nil).Once()
+	defer mock.AssertExpectationsForObjects(t, mockBatchInsertBuilder)
+
+	runner := ProcessorRunner{
+		ctx:      ctx,
+		config:   config,
+		historyQ: q,
+		session:  mockSession,
+		filters:  &MockFilters{},
+	}
+
+	require.NoError(t, runner.RunTransactionProcessorsOnLedgers([]xdr.LedgerCloseMeta{ledger}, false))
 }
 
 func TestProcessorRunnerRunAllProcessorsOnLedgerProtocolVersionNotSupported(t *testing.T) {
