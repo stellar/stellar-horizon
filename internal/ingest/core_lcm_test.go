@@ -5,11 +5,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/stellar/go-stellar-sdk/protocols/horizon/effects"
 	"github.com/stellar/go-stellar-sdk/xdr"
+	"github.com/stellar/stellar-horizon/internal/db2"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/db2/schema"
 	"github.com/stellar/stellar-horizon/internal/ingest/filters"
@@ -150,21 +153,26 @@ func TestCoreLCMIngestion(t *testing.T) {
 }
 
 // TestCoreLCMMuxedContractDestination checks that SAC transfers and mints to a
-// muxed contract address keep the destination's muxed id.
+// muxed contract address (CAP-0084) keep the destination's muxed id, both in
+// the operation's asset_balance_changes and on the contract_credited effect.
 func TestCoreLCMMuxedContractDestination(t *testing.T) {
 	const (
-		sender        = "GCE4HENKZ3ZIHQY4VEYCVX5ZE5LNDIN3FH4MHZCWFKXQZGQIOGAO77CN"
-		muxedContract = "CAA3QKIP2SNVXUJTB4HKOGF55JTSSMQGED3FZYNHMNSXYV3DRRMAWA3Y"
+		sender   = "GCE4HENKZ3ZIHQY4VEYCVX5ZE5LNDIN3FH4MHZCWFKXQZGQIOGAO77CN"
+		contract = "CAA3QKIP2SNVXUJTB4HKOGF55JTSSMQGED3FZYNHMNSXYV3DRRMAWA3Y"
 	)
 	type balanceChange struct {
-		ledger     int32
-		changeType string
-		from       string
-		muxedID    string
+		ledger        int32
+		changeType    string
+		from          string
+		muxedID       string
+		muxedContract string
 	}
-	transfer := balanceChange{23, "transfer", sender, "987654321987654321"}
+	transfer := balanceChange{23, "transfer", sender, "987654321987654321",
+		"WAA3QKIP2SNVXUJTB4HKOGF55JTSSMQGED3FZYNHMNSXYV3DRRMAWDNU3JPX55ASWEDNS"}
+	mint := balanceChange{25, "mint", "", "111222333444555666",
+		"WAA3QKIP2SNVXUJTB4HKOGF55JTSSMQGED3FZYNHMNSXYV3DRRMAWAMLEQPXYDMDSLJLI"}
 	for file, expected := range map[string][]balanceChange{
-		"8fe0b7272f3a072f.xdr": {transfer, {25, "mint", "", "111222333444555666"}},
+		"8fe0b7272f3a072f.xdr": {transfer, mint},
 		"938fb779c48ac3af.xdr": {transfer},
 	} {
 		t.Run(file, func(t *testing.T) {
@@ -182,13 +190,30 @@ func TestCoreLCMMuxedContractDestination(t *testing.T) {
 				require.Len(t, details.AssetBalanceChanges, 1)
 				change := details.AssetBalanceChanges[0]
 				require.Equal(t, want.changeType, change["type"])
-				require.Equal(t, muxedContract, change["to"])
+				require.Equal(t, contract, change["to"])
 				require.Equal(t, want.muxedID, change["destination_muxed_id"])
 				if want.from == "" {
 					require.NotContains(t, change, "from")
 				} else {
 					require.Equal(t, want.from, change["from"])
 				}
+
+				ledgerEffects, err := historyQ.EffectsForLedger(ctx, want.ledger,
+					db2.PageQuery{Order: db2.OrderAscending, Limit: 10})
+				require.NoError(t, err)
+				var credits []history.Effect
+				for _, effect := range ledgerEffects {
+					if effect.Type == history.EffectContractCredited {
+						credits = append(credits, effect)
+					}
+				}
+				require.Len(t, credits, 1)
+				// Decode the way the /effects endpoint does.
+				var credit effects.ContractCredited
+				require.NoError(t, credits[0].UnmarshalDetails(&credit))
+				require.Equal(t, contract, credit.Contract)
+				require.Equal(t, want.muxedContract, credit.ContractMuxed)
+				require.Equal(t, want.muxedID, strconv.FormatUint(credit.ContractMuxedID, 10))
 			}
 		})
 	}

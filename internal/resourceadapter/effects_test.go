@@ -132,3 +132,49 @@ func TestNewEffect_EffectTrade_Muxed(t *testing.T) {
 	tt.Equal("MAQAA5L65LSYH7CQ3VTJ7F3HHLGCL3DSLAR2Y47263D56MNNGHSQSAAAAAAAAAAE2LP26", effect.SellerMuxed)
 	tt.Equal(uint64(1234), effect.SellerMuxedID)
 }
+
+func TestNewEffect_EffectContractCredited_MuxedContract(t *testing.T) {
+	tt := assert.New(t)
+	ctx, _ := test.ContextWithLogBuffer()
+
+	// The details the effects processor stores for a SAC transfer to a
+	// CAP-0084 muxed contract. contract_muxed_id is a string so that ids above
+	// 2^53 survive JSON.
+	details := `{
+		"amount":            "40.0000000",
+		"asset_type":        "native",
+		"contract":          "CAA3QKIP2SNVXUJTB4HKOGF55JTSSMQGED3FZYNHMNSXYV3DRRMAWA3Y",
+		"contract_muxed":    "WAA3QKIP2SNVXUJTB4HKOGF55JTSSMQGED3FZYNHMNSXYV3DRRMAWDNU3JPX55ASWEDNS",
+		"contract_muxed_id": "987654321987654321"
+	}`
+
+	hEffect := history.Effect{
+		Account:            "GCE4HENKZ3ZIHQY4VEYCVX5ZE5LNDIN3FH4MHZCWFKXQZGQIOGAO77CN",
+		HistoryOperationID: 1,
+		Order:              2,
+		Type:               history.EffectContractCredited,
+		DetailsString:      null.StringFrom(details),
+	}
+	resource, err := NewEffect(ctx, hEffect, history.Ledger{})
+	tt.NoError(err)
+
+	effect, ok := resource.(effects.ContractCredited)
+	tt.True(ok)
+	tt.Equal("contract_credited", effect.Base.Type)
+	tt.Equal("CAA3QKIP2SNVXUJTB4HKOGF55JTSSMQGED3FZYNHMNSXYV3DRRMAWA3Y", effect.Contract)
+	tt.Equal("WAA3QKIP2SNVXUJTB4HKOGF55JTSSMQGED3FZYNHMNSXYV3DRRMAWDNU3JPX55ASWEDNS", effect.ContractMuxed)
+	tt.Equal(uint64(987654321987654321), effect.ContractMuxedID)
+	// account_muxed belongs to the operation source account, not the destination.
+	tt.Empty(effect.AccountMuxed)
+
+	var resourcePage hal.Page
+	resourcePage.Add(resource)
+	binary, err := json.Marshal(resourcePage)
+	tt.NoError(err)
+	tt.Contains(string(binary), `"contract_muxed_id":"987654321987654321"`)
+
+	var page effects.EffectsPage
+	tt.NoError(json.Unmarshal(binary, &page))
+	tt.Len(page.Embedded.Records, 1)
+	tt.Equal(effect, page.Embedded.Records[0].(effects.ContractCredited))
+}
