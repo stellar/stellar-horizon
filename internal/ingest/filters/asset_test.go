@@ -184,3 +184,58 @@ func getAssetTestV0Tx(t *testing.T, issuer string) ingest.LedgerTransaction {
 		},
 	}
 }
+
+func wrapInFeeBump(inner ingest.LedgerTransaction) ingest.LedgerTransaction {
+	return ingest.LedgerTransaction{
+		Result: inner.Result,
+		Envelope: xdr.TransactionEnvelope{
+			Type: xdr.EnvelopeTypeEnvelopeTypeTxFeeBump,
+			FeeBump: &xdr.FeeBumpTransactionEnvelope{
+				Tx: xdr.FeeBumpTransaction{
+					FeeSource: xdr.MustMuxedAddress("GD6WNNTW664WH7FXC5RUMUTF7P5QSURC2IT36VOQEEGFZ4UWUEQGECAL"),
+					Fee:       2000,
+					InnerTx: xdr.FeeBumpTransactionInnerTx{
+						Type: xdr.EnvelopeTypeEnvelopeTypeTx,
+						V1:   inner.Envelope.V1,
+					},
+				},
+			},
+		},
+	}
+}
+
+func TestAssetFilterMatchesFeeBumpInnerOperations(t *testing.T) {
+	tt := assert.New(t)
+	ctx := context.Background()
+	issuer := "GD6WNNTW664WH7FXC5RUMUTF7P5QSURC2IT36VOQEEGFZ4UWUEQGECAL"
+
+	filter := NewAssetFilter()
+	tt.NoError(filter.RefreshAssetFilter(&history.AssetFilterConfig{
+		Whitelist:    []string{"USDC:" + issuer},
+		Enabled:      true,
+		LastModified: 1,
+	}))
+
+	isEnabled, result, err := filter.FilterTransaction(ctx, wrapInFeeBump(getAssetTestV1Tx(t, issuer)))
+	tt.NoError(err)
+	tt.True(isEnabled)
+	tt.True(result)
+}
+
+func TestAssetFilterDoesNotAllowFeeBumpWhenNoMatch(t *testing.T) {
+	tt := assert.New(t)
+	ctx := context.Background()
+	issuer := "GD6WNNTW664WH7FXC5RUMUTF7P5QSURC2IT36VOQEEGFZ4UWUEQGECAL"
+
+	filter := NewAssetFilter()
+	tt.NoError(filter.RefreshAssetFilter(&history.AssetFilterConfig{
+		Whitelist:    []string{"USDX:" + issuer},
+		Enabled:      true,
+		LastModified: 1,
+	}))
+
+	isEnabled, result, err := filter.FilterTransaction(ctx, wrapInFeeBump(getAssetTestV1Tx(t, issuer)))
+	tt.NoError(err)
+	tt.True(isEnabled)
+	tt.False(result)
+}
