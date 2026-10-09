@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/guregu/null"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/go-stellar-sdk/toid"
 	"github.com/stellar/go-stellar-sdk/xdr"
@@ -148,6 +150,56 @@ func TestInsertLedger(t *testing.T) {
 	expectedLedger.ClosedAt = ledgerFromDB.ClosedAt
 
 	tt.Assert.Equal(expectedLedger, ledgerFromDB)
+}
+
+// TestLedgerHeaderToMapMsCloseTime checks that a ledger whose StellarValue uses
+// a CAP-0088 millisecond close-time arm is stored with the whole-second
+// CloseTime as closed_at, and with the arm intact in ledger_header.
+func TestLedgerHeaderToMapMsCloseTime(t *testing.T) {
+	const closeTimeMs = 1_760_000_000_789
+	signature := xdr.LedgerCloseValueSignature{
+		NodeId:    xdr.NodeId(xdr.MustAddress("GAUJETIZVEP2NRYLUESJ3LS66NVCEGMON4UDCBCSBEVPIID773P2W6AY")),
+		Signature: xdr.Signature{1, 2, 3},
+	}
+	for _, ext := range []xdr.StellarValueExt{
+		{
+			V: xdr.StellarValueTypeStellarValueSignedMs,
+			SignedMsValue: &xdr.StellarValueSignedMsValue{
+				CloseTimeMs:      closeTimeMs,
+				LcValueSignature: signature,
+			},
+		},
+		{
+			V: xdr.StellarValueTypeStellarValueEmptyTxSetMs,
+			ProposedMsValue: &xdr.StellarValueProposedMsValue{
+				CloseTimeMs:           closeTimeMs,
+				TxSetHash:             xdr.Hash{4},
+				PreviousLedgerHash:    xdr.Hash{5},
+				PreviousLedgerVersion: 30,
+				LcValueSignature:      signature,
+			},
+		},
+	} {
+		t.Run(ext.V.String(), func(t *testing.T) {
+			entry := xdr.LedgerHeaderHistoryEntry{
+				Header: xdr.LedgerHeader{
+					LedgerVersion: 30,
+					LedgerSeq:     100,
+					ScpValue: xdr.StellarValue{
+						CloseTime: closeTimeMs / 1000,
+						Ext:       ext,
+					},
+				},
+			}
+			row, err := ledgerHeaderToMap(entry, 0, 0, 0, 0, 1)
+			require.NoError(t, err)
+			assert.Equal(t, time.Unix(closeTimeMs/1000, 0).UTC(), row["closed_at"])
+
+			var header xdr.LedgerHeader
+			require.NoError(t, xdr.SafeUnmarshalBase64(row["ledger_header"].(string), &header))
+			assert.Equal(t, ext, header.ScpValue.Ext)
+		})
+	}
 }
 
 func insertLedgerWithSequence(tt *test.T, q *Q, seq uint32) {

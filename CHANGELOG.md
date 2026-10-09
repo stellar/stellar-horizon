@@ -5,6 +5,12 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Added
+- Added Protocol 30 support and bumped `MaxSupportedProtocolVersion` to 30 ([#237](https://github.com/stellar/stellar-horizon/pull/237)). The regenerated `go-stellar-sdk` XDR ([go-stellar-sdk#6015](https://github.com/stellar/go-stellar-sdk/pull/6015)) decodes all three Protocol 30 CAPs:
+  - CAP-0084 (muxed contract addresses): a Stellar Asset Contract `transfer` or `mint` to a muxed contract (`W...`) produces a `contract_credited` effect with new `contract_muxed` and `contract_muxed_id` fields holding the muxed address and id, as `account_muxed` and `account_muxed_id` do for muxed accounts. `contract` stays the base `C...` address. The operation's `asset_balance_changes` entry has the base contract in `to` and the id in `destination_muxed_id`, as for muxed accounts.
+  - CAP-0088 (millisecond close times): every ledger after the one that applies the Protocol 30 upgrade uses one of the new `STELLAR_VALUE_SIGNED_MS` or `STELLAR_VALUE_EMPTY_TX_SET_MS` `StellarValue` arms. The close times Horizon serves, such as a ledger's `closed_at`, stay whole seconds, but consecutive ledgers can now share the same `closed_at`. A ledger's `header_xdr` carries the new arms, so clients that decode it need Protocol 30 XDR.
+  - CAP-0087 (ML-DSA host functions) needs no Horizon changes.
+
 ### Fixed
 - The asset ingestion filter now matches rules on the inner operations of fee-bump transactions. Earlier versions collected operations only from TxV0 and Tx envelopes, so a fee-bump transaction was not ingested even when its inner operations referenced a whitelisted asset.
 

@@ -6,15 +6,16 @@ on:
   pull_request:
 
 jobs:
-  integration-p28-pkg:
-    name: Integration tests (P28)
+  integration-p29-pkg:
+    name: Integration tests (P29)
     uses: ./.github/workflows/integration-tests.yml
     with:
-      protocol_version: '28'
-      # The P28 leg runs the NEW core and rpc builds at protocol 28 — the point
-      # is verifying the updated binaries still serve the previous protocol
-      # (the real configuration during the upgrade window), not re-testing
-      # already-shipped versions against each other.
+      protocol_version: '29'
+      # Until a Protocol 30 stellar-core release is published, this leg runs the
+      # P29 release that networks run today. Once one is, point it at the new
+      # core and rpc builds at protocol 29: the point is verifying the updated
+      # binaries still serve the previous protocol (the real configuration
+      # during the upgrade window).
       core_deb_version: '29.0.0-3589.4eb833373.jammy~buildtests'
       core_docker_img: 'stellar/stellar-core:29.0.0-3589.4eb833373.jammy'
       stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0'
@@ -23,23 +24,21 @@ jobs:
       # latest-go/latest-pg job.
       full_matrix: ${{ github.event_name == 'push' }}
 
-  integration-p29-pkg:
-    name: Integration tests (P29)
+  integration-p30-pkg:
+    name: Integration tests (P30)
     uses: ./.github/workflows/integration-tests.yml
     with:
-      protocol_version: '29'
-      core_deb_version: '29.0.0-3589.4eb833373.jammy~buildtests'
-      core_docker_img: 'stellar/stellar-core:29.0.0-3589.4eb833373.jammy'
-      stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0'
-      full_matrix: ${{ github.event_name == 'push' }}
-
-  # integration-p29-src:
-  #   name: Integration tests (P29, core from source)
-  #   uses: ./.github/workflows/integration-tests.yml
-  #   with:
-  #     protocol_version: '29'
-  #     core_git_ref: 'master'
-  #     stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0'
+      protocol_version: '30'
+      # stellar-core master at ba6a4e6e3, after stellar/stellar-core#5478 made
+      # protocol 30 the current protocol with CAP-0084 and CAP-0087. It requires
+      # the 95 contract cost params in
+      # internal/integration/testdata/unlimited-config-v30.xdr. CAP-0088 (#5423)
+      # is not in this build, so no ledger it closes uses the millisecond
+      # close-time StellarValue arms.
+      core_deb_version: '29.0.1-3637.ba6a4e6e3.noble~buildtests'
+      core_docker_img: 'stellar/unsafe-stellar-core:29.0.1-3637.ba6a4e6e3.noble'
+      # No protocol-30 stellar-rpc image yet: NewTest() AMBER-skips RPC tests.
+      stellar_rpc_docker_img: ''
 
   verify-range:
     name: Test (and push) verify-range image
