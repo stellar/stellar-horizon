@@ -29,14 +29,14 @@ jobs:
     uses: ./.github/workflows/integration-tests.yml
     with:
       protocol_version: '30'
-      # vnext build (next protocol = 30) of stellar-core master at 88d2431d7.
-      # It has CAP-0084 (stellar/stellar-core#5472) but not CAP-0087 (#5455) or
-      # CAP-0088 (#5423), so no ledger it closes uses the millisecond close-time
-      # StellarValue arms. A core with CAP-0087 requires 95 contract cost params
-      # at protocol 30, so moving to one means regenerating
-      # internal/integration/testdata/unlimited-config-v30.xdr, which has 86.
-      core_deb_version: '29.0.1-3630.88d2431d7.noble~vnext~buildtests'
-      core_docker_img: 'stellar/unsafe-stellar-core:29.0.1-3630.88d2431d7.noble-vnext'
+      # stellar-core master at ba6a4e6e3, after stellar/stellar-core#5478 made
+      # protocol 30 the current protocol with CAP-0084 and CAP-0087. It requires
+      # the 95 contract cost params in
+      # internal/integration/testdata/unlimited-config-v30.xdr. CAP-0088 (#5423)
+      # is not in this build, so no ledger it closes uses the millisecond
+      # close-time StellarValue arms.
+      core_deb_version: '29.0.1-3637.ba6a4e6e3.noble~buildtests'
+      core_docker_img: 'stellar/unsafe-stellar-core:29.0.1-3637.ba6a4e6e3.noble'
       # No protocol-30 stellar-rpc image yet: NewTest() AMBER-skips RPC tests.
       stellar_rpc_docker_img: ''
 
