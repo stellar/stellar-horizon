@@ -6,6 +6,16 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 ## Unreleased
 
 ### Fixed
+- The asset ingestion filter now matches rules on ledger entry changes and on Soroban data in the envelope, in addition to operation bodies. These transactions are now ingested when they involve a whitelisted asset:
+  - path payments routed through the asset
+  - trustline flag changes and sponsorship revocations of trustlines
+  - calls to the Stellar Asset Contract of the asset, including the contract for native lumens, and deployments of that contract
+  - `ExtendFootprintTTL` and `RestoreFootprint` on entries of that contract
+  - claims and clawbacks of claimable balances, when the transaction succeeds
+  - liquidity pool deposits and withdrawals, when the transaction succeeds
+  - A failed claim, clawback, deposit or withdrawal is still dropped. The operation body carries only a balance id or a pool id, and a failed transaction writes no operation changes. A failed payment or offer in the same asset is kept. So `include_failed` history for an asset depends on the operation type.
+- The admin API rejects malformed asset whitelist entries that are not already stored. It stores each valid entry in canonical form. The response lists every rejected entry.
+- Operators running with an asset filter can re-run historical range ingestion to back-fill transactions that earlier versions skipped. `db reingest range` first deletes all history in the range, then ingests it again through the filter config stored now. Do this only when the filter config has not changed since the range was first ingested. Otherwise transactions the current config does not keep are deleted, and `db detect-gaps` does not report them.
 - The asset ingestion filter now matches rules on the inner operations of fee-bump transactions. Earlier versions collected operations only from TxV0 and Tx envelopes, so a fee-bump transaction was not ingested even when its inner operations referenced a whitelisted asset.
 
 ## 29.0.0

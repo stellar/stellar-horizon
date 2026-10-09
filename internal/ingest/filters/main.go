@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/stellar/go-stellar-sdk/support/collections/set"
 	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/ingest/processors"
@@ -46,9 +47,9 @@ type Filters interface {
 	GetFilters(filterQ history.QFilter, ctx context.Context) []processors.LedgerTransactionFilterer
 }
 
-func NewFilters() Filters {
+func NewFilters(networkPassphrase string) Filters {
 	return &filtersCache{
-		assetFilter:   NewAssetFilter(),
+		assetFilter:   NewAssetFilter(networkPassphrase),
 		accountFilter: NewAccountFilter(),
 	}
 }
@@ -86,4 +87,12 @@ func (f *filtersCache) GetFilters(filterQ history.QFilter, ctx context.Context) 
 
 func (f *filtersCache) convertCacheToList() []processors.LedgerTransactionFilterer {
 	return []processors.LedgerTransactionFilterer{f.assetFilter, f.accountFilter}
+}
+
+func listToSet(list []string) set.Set[string] {
+	set := set.NewSet[string](len(list))
+	for i := 0; i < len(list); i++ {
+		set.Add(list[i])
+	}
+	return set
 }
