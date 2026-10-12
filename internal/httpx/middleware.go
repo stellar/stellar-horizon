@@ -78,7 +78,7 @@ func methodLabel(method string) string {
 	}
 }
 
-// loggerMiddleware logs http requests and resposnes to the logging subsytem of horizon.
+// loggerMiddleware logs http requests and responses to the logging subsystem of horizon.
 func loggerMiddleware(serverMetrics *ServerMetrics) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
