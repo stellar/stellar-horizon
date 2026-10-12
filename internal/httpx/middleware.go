@@ -64,6 +64,20 @@ func newWrapResponseWriter(w http.ResponseWriter, r *http.Request) middleware.Wr
 	return mw
 }
 
+// methodLabel returns the value of the "method" label in the HTTP request
+// metrics. Standard HTTP methods are reported as is and any other method is
+// reported as "OTHER", so the label has a fixed set of values.
+func methodLabel(method string) string {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut,
+		http.MethodPatch, http.MethodDelete, http.MethodConnect,
+		http.MethodOptions, http.MethodTrace:
+		return method
+	default:
+		return "OTHER"
+	}
+}
+
 // loggerMiddleware logs http requests and resposnes to the logging subsytem of horizon.
 func loggerMiddleware(serverMetrics *ServerMetrics) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -83,7 +97,7 @@ func loggerMiddleware(serverMetrics *ServerMetrics) func(next http.Handler) http
 			requestLabels := prometheus.Labels{
 				"route":     route,
 				"streaming": strconv.FormatBool(streaming),
-				"method":    r.Method,
+				"method":    methodLabel(r.Method),
 			}
 			serverMetrics.RequestsInFlightGauge.With(requestLabels).Inc()
 			defer serverMetrics.RequestsInFlightGauge.With(requestLabels).Dec()
@@ -172,7 +186,7 @@ func logEndOfRequest(ctx context.Context, r *http.Request, route string, request
 		"status":    strconv.FormatInt(int64(mw.Status()), 10),
 		"route":     route,
 		"streaming": strconv.FormatBool(streaming),
-		"method":    r.Method,
+		"method":    methodLabel(r.Method),
 	}).Observe(float64(duration.Seconds()))
 }
 

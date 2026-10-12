@@ -18,6 +18,9 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 - Operators running with an asset filter can re-run historical range ingestion to back-fill transactions that earlier versions skipped. `db reingest range` first deletes all history in the range, then ingests it again through the filter config stored now. Do this only when the filter config has not changed since the range was first ingested. Otherwise transactions the current config does not keep are deleted, and `db detect-gaps` does not report them.
 - The asset ingestion filter now matches rules on the inner operations of fee-bump transactions. Earlier versions collected operations only from TxV0 and Tx envelopes, so a fee-bump transaction was not ingested even when its inner operations referenced a whitelisted asset.
 
+### Updated
+- The `method` label of the `horizon_http_requests_duration_seconds`, `horizon_http_requests_in_flight` and `horizon_http_requests_received` metrics reports standard HTTP methods as before and groups any other method under `OTHER`.
+
 ## 29.0.0
 
 **This release adds support for Protocol 29.**
