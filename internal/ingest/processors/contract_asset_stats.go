@@ -29,16 +29,59 @@ func (v assetContractStatValue) ConvertToHistoryObject() history.ContractAssetSt
 	}
 }
 
+// contractStats holds the stats of contract balances, or the changes to them, by contract.
+type contractStats map[xdr.ContractId]assetContractStatValue
+
+// add adds holders and amount to the stats of a contract.
+func (c contractStats) add(contractID xdr.ContractId, holders int32, amount *big.Int) {
+	stat, ok := c[contractID]
+	if !ok {
+		stat = assetContractStatValue{contractID: contractID, activeBalance: big.NewInt(0)}
+	}
+	stat.activeHolders += holders
+	stat.activeBalance.Add(stat.activeBalance, amount)
+	if stat.activeHolders == 0 && stat.activeBalance.Sign() == 0 {
+		delete(c, contractID)
+	} else {
+		c[contractID] = stat
+	}
+}
+
+// removeRow removes a contract balance row stored in the db from the stats.
+func (c contractStats) removeRow(row history.ContractAssetBalance) error {
+	amount, ok := new(big.Int).SetString(row.Amount, 10)
+	if !ok {
+		return errors.Errorf(
+			"contract balance %v has invalid amount: %v",
+			row.KeyHash,
+			row.Amount,
+		)
+	}
+
+	var contractID xdr.ContractId
+	copy(contractID[:], row.ContractID)
+	c.add(contractID, -1, amount.Neg(amount))
+	return nil
+}
+
+func (c contractStats) rows() []history.ContractAssetStatRow {
+	var rows []history.ContractAssetStatRow
+	for _, stat := range c {
+		rows = append(rows, stat.ConvertToHistoryObject())
+	}
+	return rows
+}
+
 type contractAssetBalancesQ interface {
 	GetContractAssetBalances(ctx context.Context, keys []xdr.Hash) ([]history.ContractAssetBalance, error)
 	DeleteContractAssetBalancesExpiredBefore(ctx context.Context, ledger uint32) ([]history.ContractAssetBalance, error)
 }
 
-// contractBalanceChange is the latest value of a ledger entry whose key has the form
-// of a Stellar Asset Contract balance key. post is nil if the entry was removed.
-type contractBalanceChange struct {
+// contractBalance is the latest value of a contract balance entry. amount is nil if the
+// entry was removed or if its value is not a Stellar Asset Contract balance.
+type contractBalance struct {
 	contractID xdr.ContractId
-	post       *xdr.LedgerEntry
+	amount     *big.Int
 }
 
 // ContractAssetStatSet represents a collection of asset stats for
@@ -46,10 +89,10 @@ type contractBalanceChange struct {
 type ContractAssetStatSet struct {
 	createdAssetContracts []xdr.Asset
 	// contractAssetStats holds the change to the stats of each contract.
-	contractAssetStats map[xdr.ContractId]assetContractStatValue
-	// balanceChanges holds the changed contract balance entries by key hash, and
-	// balanceKeys holds their key hashes in the order they were added.
-	balanceChanges           map[xdr.Hash]contractBalanceChange
+	contractAssetStats contractStats
+	// balances holds the latest value of the changed contract balance entries by key
+	// hash, and balanceKeys holds their key hashes in the order they were added.
+	balances                 map[xdr.Hash]contractBalance
 	balanceKeys              []xdr.Hash
 	removedExpirationEntries map[xdr.Hash]uint32
 	createdExpirationEntries map[xdr.Hash]uint32
@@ -59,24 +102,23 @@ type ContractAssetStatSet struct {
 	currentLedger            uint32
 }
 
-// NewContractAssetStatSet constructs a new ContractAssetStatSet instance
+// NewContractAssetStatSet constructs a new ContractAssetStatSet instance. The ttl
+// changes of a ledger are only read when the rows of the set are built, so they can be
+// added before or after its contract data changes.
 func NewContractAssetStatSet(
 	assetStatsQ contractAssetBalancesQ,
 	networkPassphrase string,
-	removedExpirationEntries map[xdr.Hash]uint32,
-	createdExpirationEntries map[xdr.Hash]uint32,
-	updatedExpirationEntries map[xdr.Hash][2]uint32,
 	currentLedger uint32,
 ) *ContractAssetStatSet {
 	return &ContractAssetStatSet{
 		createdAssetContracts:    []xdr.Asset{},
-		contractAssetStats:       map[xdr.ContractId]assetContractStatValue{},
-		balanceChanges:           map[xdr.Hash]contractBalanceChange{},
+		contractAssetStats:       contractStats{},
+		balances:                 map[xdr.Hash]contractBalance{},
+		removedExpirationEntries: map[xdr.Hash]uint32{},
+		createdExpirationEntries: map[xdr.Hash]uint32{},
+		updatedExpirationEntries: map[xdr.Hash][2]uint32{},
 		networkPassphrase:        networkPassphrase,
 		assetStatsQ:              assetStatsQ,
-		removedExpirationEntries: removedExpirationEntries,
-		createdExpirationEntries: createdExpirationEntries,
-		updatedExpirationEntries: updatedExpirationEntries,
 		currentLedger:            currentLedger,
 	}
 }
@@ -84,17 +126,106 @@ func NewContractAssetStatSet(
 // AddContractData updates the set to account for how a given contract data entry has changed.
 // change must be a xdr.LedgerEntryTypeContractData type.
 func (s *ContractAssetStatSet) AddContractData(change ingest.Change) error {
-	// skip ingestion of contract asset balances if we find an asset contract metadata entry
-	// because a ledger entry cannot be both an asset contract metadata entry and a
-	// contract asset balance.
-	if found, err := s.ingestAssetContractMetadata(change); err != nil {
-		return err
-	} else if found {
+	// a ledger entry cannot be both an asset contract instance and a contract balance
+	if s.addAssetContract(change) {
 		return nil
 	}
-	return s.addContractBalanceChange(change)
+	return s.addContractBalance(change)
 }
 
+// ContractAssetStatSet requires that the ttl changes it ingests are already compacted
+// because the TTL change semantics in CAP-63 (see
+// https://github.com/stellar/stellar-protocol/blob/master/core/cap-0063.md#ttl-ledger-change-semantics )
+// are encapsulated in the ChangeCompactor
+func (s *ContractAssetStatSet) checkTTLChangeIsCompacted(change ingest.Change) error {
+	var keyHash xdr.Hash
+	if change.Pre != nil {
+		keyHash = change.Pre.Data.MustTtl().KeyHash
+	} else {
+		keyHash = change.Post.Data.MustTtl().KeyHash
+	}
+	if _, ok := s.removedExpirationEntries[keyHash]; ok {
+		return errors.Errorf("ttl change is not compacted Pre: %v Post: %v", change.Pre, change.Post)
+	}
+	if _, ok := s.createdExpirationEntries[keyHash]; ok {
+		return errors.Errorf("ttl change is not compacted Pre: %v Post: %v", change.Pre, change.Post)
+	}
+	if _, ok := s.updatedExpirationEntries[keyHash]; ok {
+		return errors.Errorf("ttl change is not compacted Pre: %v Post: %v", change.Pre, change.Post)
+	}
+	return nil
+}
+
+// AddTTL updates the set to account for how a given ttl entry has changed.
+// change must be a xdr.LedgerEntryTypeTtl type.
+func (s *ContractAssetStatSet) AddTTL(change ingest.Change) error {
+	if err := s.checkTTLChangeIsCompacted(change); err != nil {
+		return err
+	}
+
+	switch {
+	case change.Pre == nil && change.Post != nil: // created
+		post := change.Post.Data.MustTtl()
+		s.createdExpirationEntries[post.KeyHash] = uint32(post.LiveUntilLedgerSeq)
+	case change.Pre != nil && change.Post == nil: // removed
+		pre := change.Pre.Data.MustTtl()
+		s.removedExpirationEntries[pre.KeyHash] = uint32(pre.LiveUntilLedgerSeq)
+	case change.Pre != nil && change.Post != nil: // updated
+		pre := change.Pre.Data.MustTtl()
+		post := change.Post.Data.MustTtl()
+		// it's unclear if core could emit a ledger entry change where the
+		// expiration ledger remains the same
+		if pre.LiveUntilLedgerSeq == post.LiveUntilLedgerSeq {
+			return nil
+		}
+
+		// if a TTL was created, restored, or updated at ledger N
+		// the LiveUntilLedgerSeq must be >= current ledger
+		if uint32(post.LiveUntilLedgerSeq) < s.currentLedger {
+			return errors.Errorf(
+				"post TTL %v is less than current ledger %v",
+				post.LiveUntilLedgerSeq,
+				s.currentLedger,
+			)
+		}
+
+		// The previous expiration ledger must always be greater than or equal to the current ledger
+		// because if the previous expiration ledger is less than the current ledger then it implies
+		// the ledger entry was archived. However, an archived ledger entry cannot be updated without
+		// first being restored.
+		// Alternatively, the TTL can be updated without being restored if it is a temporary ledger
+		// entry. However, in that case, we can ignore the ledger entry entirely because SAC
+		// ledger entries are always kept in persistent storage.
+		if uint32(pre.LiveUntilLedgerSeq) < s.currentLedger {
+			return nil
+		}
+		s.updatedExpirationEntries[pre.KeyHash] = [2]uint32{
+			uint32(pre.LiveUntilLedgerSeq),
+			uint32(post.LiveUntilLedgerSeq),
+		}
+	default:
+		return errors.Errorf("unexpected change Pre: %v Post: %v", change.Pre, change.Post)
+	}
+
+	return nil
+}
+
+// addAssetContract records the asset of a created asset contract instance, and reports
+// whether the change created one. Asset contract instances are recognized by their
+// value, which names the asset that their contract id is derived from.
+func (s *ContractAssetStatSet) addAssetContract(change ingest.Change) bool {
+	if change.Pre != nil || change.Post == nil {
+		return false
+	}
+	asset, found := sac.AssetFromContractData(*change.Post, s.networkPassphrase)
+	if found {
+		s.createdAssetContracts = append(s.createdAssetContracts, asset)
+	}
+	return found
+}
+
+// GetCreatedAssetContracts returns the rows of the created asset contract instances
+// which are active in the current ledger.
 func (s *ContractAssetStatSet) GetCreatedAssetContracts() ([]history.AssetContract, error) {
 	var rows []history.AssetContract
 	for _, asset := range s.createdAssetContracts {
@@ -102,24 +233,21 @@ func (s *ContractAssetStatSet) GetCreatedAssetContracts() ([]history.AssetContra
 		if err != nil {
 			return nil, err
 		}
+		keyHash, err := getLedgerKeyHash(sac.AssetToContractDataLedgerKey(contractID))
+		if err != nil {
+			return nil, err
+		}
+		expirationLedger, ok := s.createdExpirationEntries[keyHash]
+		if !ok || expirationLedger < s.currentLedger {
+			continue
+		}
 		row := history.AssetContract{
-			ContractID: contractID[:],
+			KeyHash:          keyHash[:],
+			ContractID:       contractID[:],
+			ExpirationLedger: expirationLedger,
 		}
 		if err = asset.Extract(&row.AssetType, &row.AssetCode, &row.AssetIssuer); err != nil {
 			return nil, errors.Wrap(err, "could not extract asset info from asset")
-		}
-
-		ledgerKey := sac.AssetToContractDataLedgerKey(contractID)
-		bin, err := ledgerKey.MarshalBinary()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not marshal key")
-		}
-		keyHash := sha256.Sum256(bin)
-		row.KeyHash = keyHash[:]
-		var ok bool
-		row.ExpirationLedger, ok = s.createdExpirationEntries[keyHash]
-		if !ok {
-			return nil, errors.Errorf("could not find expiration ledger entry for asset contract %d", contractID)
 		}
 		rows = append(rows, row)
 	}
@@ -133,63 +261,15 @@ func (s *ContractAssetStatSet) GetCreatedAssetContracts() ([]history.AssetContra
 // ledger entry.
 func (s *ContractAssetStatSet) GetCreatedBalancesAndStats() ([]history.ContractAssetBalance, []history.ContractAssetStatRow) {
 	var rows []history.ContractAssetBalance
-	stats := map[xdr.ContractId]assetContractStatValue{}
+	stats := contractStats{}
 	for _, keyHash := range s.balanceKeys {
-		change := s.balanceChanges[keyHash]
-		row, amount, ok := s.balanceRow(keyHash, change, nil)
-		if !ok {
-			continue
+		balance := s.balances[keyHash]
+		if row, ok := s.balanceRow(keyHash, balance, nil); ok {
+			rows = append(rows, row)
+			stats.add(balance.contractID, 1, balance.amount)
 		}
-		rows = append(rows, row)
-
-		stat, ok := stats[change.contractID]
-		if !ok {
-			stat = assetContractStatValue{
-				contractID:    change.contractID,
-				activeBalance: big.NewInt(0),
-			}
-		}
-		stat.activeHolders++
-		stat.activeBalance.Add(stat.activeBalance, amount)
-		stats[change.contractID] = stat
 	}
-
-	var contractStats []history.ContractAssetStatRow
-	for _, contractStat := range stats {
-		contractStats = append(contractStats, contractStat.ConvertToHistoryObject())
-	}
-	return rows, contractStats
-}
-
-func (s *ContractAssetStatSet) ingestAssetContractMetadata(change ingest.Change) (bool, error) {
-	if change.Pre != nil || change.Post == nil {
-		return false, nil
-	}
-	asset, found := sac.AssetFromContractData(*change.Post, s.networkPassphrase)
-	if !found {
-		return false, nil
-	}
-	keyHash, err := getKeyHash(*change.Post)
-	if err != nil {
-		return false, err
-	}
-	expirationLedger, ok := s.createdExpirationEntries[keyHash]
-	if !ok || expirationLedger < s.currentLedger {
-		return false, nil
-	}
-	if pContactID := change.Post.Data.MustContractData().Contract.ContractId; pContactID != nil {
-		s.createdAssetContracts = append(s.createdAssetContracts, asset)
-		return true, nil
-	}
-	return false, nil
-}
-
-func getKeyHash(ledgerEntry xdr.LedgerEntry) (xdr.Hash, error) {
-	lk, err := ledgerEntry.LedgerKey()
-	if err != nil {
-		return xdr.Hash{}, errors.Wrap(err, "could not extract ledger key")
-	}
-	return getLedgerKeyHash(lk)
+	return rows, stats.rows()
 }
 
 func getLedgerKeyHash(ledgerKey xdr.LedgerKey) (xdr.Hash, error) {
@@ -200,73 +280,75 @@ func getLedgerKeyHash(ledgerKey xdr.LedgerKey) (xdr.Hash, error) {
 	return sha256.Sum256(bin), nil
 }
 
-// addContractBalanceChange records the latest value of a ledger entry whose key has
-// the form of a Stellar Asset Contract balance key. Entries are selected by their key,
-// which never changes, rather than by their value, which any contract can set to
-// anything for its own entries. A value which is not a balance removes the row of the
-// key, the same way a removed entry does.
-func (s *ContractAssetStatSet) addContractBalanceChange(change ingest.Change) error {
-	entry := change.Post
-	if entry == nil {
-		entry = change.Pre
-	}
-	if entry == nil {
+// addContractBalance records the latest value of a ledger entry whose key has the form
+// of a Stellar Asset Contract balance key. Entries are selected by their key, which
+// never changes, rather than by their value, which any contract can set to anything for
+// its own entries. A value which is not a balance removes the row of the key, the same
+// way a removed entry does.
+func (s *ContractAssetStatSet) addContractBalance(change ingest.Change) error {
+	if change.Pre == nil && change.Post == nil {
 		return errors.Errorf("unexpected change Pre: %v Post: %v", change.Pre, change.Post)
 	}
-	ledgerKey, err := entry.LedgerKey()
+	ledgerKey, err := change.LedgerKey()
 	if err != nil {
 		return errors.Wrap(err, "could not extract ledger key")
 	}
 	if !sac.ValidContractBalanceLedgerKey(ledgerKey) {
 		return nil
 	}
-	pContractID := entry.Data.MustContractData().Contract.ContractId
-	if pContractID == nil {
+	contractID := ledgerKey.ContractData.Contract.ContractId
+	if contractID == nil {
 		return nil
 	}
 	keyHash, err := getLedgerKeyHash(ledgerKey)
 	if err != nil {
 		return err
 	}
-	if _, ok := s.balanceChanges[keyHash]; !ok {
+	balance := contractBalance{contractID: *contractID}
+	if change.Post != nil {
+		if _, amount, valid := sac.ContractBalanceFromContractData(*change.Post, s.networkPassphrase); valid {
+			balance.amount = amount
+		}
+	}
+	if _, seen := s.balances[keyHash]; !seen {
 		s.balanceKeys = append(s.balanceKeys, keyHash)
 	}
-	s.balanceChanges[keyHash] = contractBalanceChange{contractID: *pContractID, post: change.Post}
+	s.balances[keyHash] = balance
 	return nil
 }
 
-// balanceRow returns the row to store for the latest value of a contract balance entry
-// along with its amount, or false if the entry should have no row: when it was removed,
-// when its value is not a Stellar Asset Contract balance, or when it is not active in
-// the current ledger. stored is the row in the db, if any, and is only used for the
-// expiration ledger of entries whose ttl did not change in this ledger.
+// balanceRow returns the row to store for the latest value of a contract balance entry,
+// or false if the entry should have no row: when it was removed, when its value is not
+// a Stellar Asset Contract balance, or when it is not active in the current ledger.
+// stored is the row in the db, if any.
 func (s *ContractAssetStatSet) balanceRow(
 	keyHash xdr.Hash,
-	change contractBalanceChange,
+	balance contractBalance,
 	stored *history.ContractAssetBalance,
-) (history.ContractAssetBalance, *big.Int, bool) {
-	if change.post == nil {
-		return history.ContractAssetBalance{}, nil, false
-	}
-	_, amount, ok := sac.ContractBalanceFromContractData(*change.post, s.networkPassphrase)
-	if !ok {
-		return history.ContractAssetBalance{}, nil, false
+) (history.ContractAssetBalance, bool) {
+	if balance.amount == nil {
+		return history.ContractAssetBalance{}, false
 	}
 	expirationLedger, ok := s.expirationLedger(keyHash, stored)
 	if !ok || expirationLedger < s.currentLedger {
-		return history.ContractAssetBalance{}, nil, false
+		return history.ContractAssetBalance{}, false
 	}
-	contractID := change.contractID
 	return history.ContractAssetBalance{
 		KeyHash:          keyHash[:],
-		ContractID:       contractID[:],
-		Amount:           amount.String(),
+		ContractID:       balance.contractID[:],
+		Amount:           balance.amount.String(),
 		ExpirationLedger: expirationLedger,
-	}, amount, true
+	}, true
 }
 
 // expirationLedger returns the expiration ledger of a contract balance entry. A ttl
 // change in this ledger takes precedence over the stored row.
+//
+// Neither is known when a value which is not a balance removed the row of an entry, and
+// a later ledger turns the value back into a balance without changing its ttl. Stellar
+// Asset Contracts only write balances, so from protocol 23, where restoring an entry
+// also emits the entry and its ttl, this only happens to the entries of other
+// contracts, whose balances are not served. Such an entry is left without a row.
 func (s *ContractAssetStatSet) expirationLedger(keyHash xdr.Hash, stored *history.ContractAssetBalance) (uint32, bool) {
 	if expirationLedger, ok := s.createdExpirationEntries[keyHash]; ok {
 		return expirationLedger, true
@@ -289,7 +371,7 @@ func (s *ContractAssetStatSet) ingestExpiredBalances(ctx context.Context) error 
 	}
 
 	for _, row := range rows {
-		if err = s.removeFromStats(row); err != nil {
+		if err = s.contractAssetStats.removeRow(row); err != nil {
 			return err
 		}
 	}
@@ -312,31 +394,24 @@ func (s *ContractAssetStatSet) reconcileBalances(ctx context.Context) ([]history
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "Error fetching contract asset balances")
 	}
-	stored := make(map[xdr.Hash]history.ContractAssetBalance, len(rows))
-	for _, row := range rows {
+	stored := make(map[xdr.Hash]*history.ContractAssetBalance, len(rows))
+	for i := range rows {
 		var keyHash xdr.Hash
-		copy(keyHash[:], row.KeyHash)
-		stored[keyHash] = row
+		copy(keyHash[:], rows[i].KeyHash)
+		stored[keyHash] = &rows[i]
 	}
 
 	var upserts []history.ContractAssetBalance
 	var removals []xdr.Hash
 	for _, keyHash := range s.balanceKeys {
-		change := s.balanceChanges[keyHash]
-		storedRow, hasStored := stored[keyHash]
-		var storedPtr *history.ContractAssetBalance
-		if hasStored {
-			storedPtr = &storedRow
-		}
-		row, amount, hasRow := s.balanceRow(keyHash, change, storedPtr)
-
-		if hasStored && hasRow &&
-			row.Amount == storedRow.Amount &&
-			row.ExpirationLedger == storedRow.ExpirationLedger {
-			continue
-		}
-		if hasStored {
-			if err = s.removeFromStats(storedRow); err != nil {
+		balance := s.balances[keyHash]
+		storedRow := stored[keyHash]
+		row, hasRow := s.balanceRow(keyHash, balance, storedRow)
+		if storedRow != nil {
+			if hasRow && row.Amount == storedRow.Amount && row.ExpirationLedger == storedRow.ExpirationLedger {
+				continue
+			}
+			if err = s.contractAssetStats.removeRow(*storedRow); err != nil {
 				return nil, nil, err
 			}
 			if !hasRow {
@@ -344,57 +419,9 @@ func (s *ContractAssetStatSet) reconcileBalances(ctx context.Context) ([]history
 			}
 		}
 		if hasRow {
-			s.addToStats(change.contractID, amount)
+			s.contractAssetStats.add(balance.contractID, 1, balance.amount)
 			upserts = append(upserts, row)
 		}
 	}
 	return upserts, removals, nil
-}
-
-func (s *ContractAssetStatSet) addToStats(contractID xdr.ContractId, amount *big.Int) {
-	stat := s.getContractAssetStat(contractID)
-	stat.activeHolders++
-	stat.activeBalance.Add(stat.activeBalance, amount)
-	s.maybeAddContractAssetStat(contractID, stat)
-}
-
-// removeFromStats removes a contract balance row stored in the db from the contract stats.
-func (s *ContractAssetStatSet) removeFromStats(row history.ContractAssetBalance) error {
-	amount, ok := new(big.Int).SetString(row.Amount, 10)
-	if !ok {
-		return errors.Errorf(
-			"contract balance %v has invalid amount: %v",
-			row.KeyHash,
-			row.Amount,
-		)
-	}
-
-	var contractID xdr.ContractId
-	copy(contractID[:], row.ContractID)
-	stat := s.getContractAssetStat(contractID)
-	stat.activeHolders--
-	stat.activeBalance.Sub(stat.activeBalance, amount)
-	s.maybeAddContractAssetStat(contractID, stat)
-	return nil
-}
-
-func (s *ContractAssetStatSet) maybeAddContractAssetStat(contractID xdr.ContractId, stat assetContractStatValue) {
-	if stat.activeHolders == 0 &&
-		stat.activeBalance.Cmp(big.NewInt(0)) == 0 {
-		delete(s.contractAssetStats, contractID)
-	} else {
-		s.contractAssetStats[contractID] = stat
-	}
-}
-
-func (s *ContractAssetStatSet) getContractAssetStat(contractID xdr.ContractId) assetContractStatValue {
-	stat, ok := s.contractAssetStats[contractID]
-	if !ok {
-		stat = assetContractStatValue{
-			contractID:    contractID,
-			activeBalance: big.NewInt(0),
-			activeHolders: 0,
-		}
-	}
-	return stat
 }

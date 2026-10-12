@@ -57,16 +57,6 @@ func runContractDataLedger(
 	return upserted, removed, statInserts
 }
 
-func upsertedKeys(rows []history.ContractAssetBalance) []xdr.Hash {
-	var keys []xdr.Hash
-	for _, row := range rows {
-		var keyHash xdr.Hash
-		copy(keyHash[:], row.KeyHash)
-		keys = append(keys, keyHash)
-	}
-	return keys
-}
-
 func contractDataChange(pre, post *xdr.LedgerEntryData) ingest.Change {
 	change := ingest.Change{Type: xdr.LedgerEntryTypeContractData}
 	if pre != nil {
@@ -76,19 +66,6 @@ func contractDataChange(pre, post *xdr.LedgerEntryData) ingest.Change {
 		change.Post = &xdr.LedgerEntry{Data: *post}
 	}
 	return change
-}
-
-func ttlCreate(keyHash xdr.Hash, liveUntil uint32) ingest.Change {
-	return ingest.Change{
-		Type: xdr.LedgerEntryTypeTtl,
-		Post: &xdr.LedgerEntry{Data: xdr.LedgerEntryData{
-			Type: xdr.LedgerEntryTypeTtl,
-			Ttl: &xdr.TtlEntry{
-				KeyHash:            keyHash,
-				LiveUntilLedgerSeq: xdr.Uint32(liveUntil),
-			},
-		}},
-	}
 }
 
 func ttlEntry(keyHash xdr.Hash, liveUntil uint32) *xdr.LedgerEntry {
@@ -101,24 +78,40 @@ func ttlEntry(keyHash xdr.Hash, liveUntil uint32) *xdr.LedgerEntry {
 	}}
 }
 
+func ttlCreate(keyHash xdr.Hash, liveUntil uint32) ingest.Change {
+	return ingest.Change{Type: xdr.LedgerEntryTypeTtl, Post: ttlEntry(keyHash, liveUntil)}
+}
+
 func ttlUpdate(keyHash xdr.Hash, from, to uint32) ingest.Change {
-	return ingest.Change{
-		Type: xdr.LedgerEntryTypeTtl,
-		Pre:  ttlEntry(keyHash, from),
-		Post: ttlEntry(keyHash, to),
-	}
+	return ingest.Change{Type: xdr.LedgerEntryTypeTtl, Pre: ttlEntry(keyHash, from), Post: ttlEntry(keyHash, to)}
 }
 
 func ttlRemove(keyHash xdr.Hash, liveUntil uint32) ingest.Change {
-	return ingest.Change{
-		Type: xdr.LedgerEntryTypeTtl,
-		Pre: &xdr.LedgerEntry{Data: xdr.LedgerEntryData{
-			Type: xdr.LedgerEntryTypeTtl,
-			Ttl: &xdr.TtlEntry{
-				KeyHash:            keyHash,
-				LiveUntilLedgerSeq: xdr.Uint32(liveUntil),
-			},
-		}},
+	return ingest.Change{Type: xdr.LedgerEntryTypeTtl, Pre: ttlEntry(keyHash, liveUntil)}
+}
+
+// rewrittenBalance returns a balance entry whose value was rewritten, at the same
+// ledger key, into something which is not a Stellar Asset Contract balance.
+func rewrittenBalance(t *testing.T, balance xdr.LedgerEntryData) xdr.LedgerEntryData {
+	rewritten := *balance.ContractData
+	val := xdr.Uint32(1)
+	rewritten.Val = xdr.ScVal{Type: xdr.ScValTypeScvU32, U32: &val}
+	rewrittenData := xdr.LedgerEntryData{
+		Type:         xdr.LedgerEntryTypeContractData,
+		ContractData: &rewritten,
+	}
+	_, _, ok := sac.ContractBalanceFromContractData(xdr.LedgerEntry{Data: rewrittenData}, "passphrase")
+	assert.False(t, ok, "rewritten entry must no longer resemble a balance")
+	return rewrittenData
+}
+
+// storedBalance returns the row of a balance of 1000 which expires at ledger 5000.
+func storedBalance(keyHash xdr.Hash, assetContractID [32]byte) history.ContractAssetBalance {
+	return history.ContractAssetBalance{
+		KeyHash:          keyHash[:],
+		ContractID:       assetContractID[:],
+		Amount:           "1000",
+		ExpirationLedger: 5000,
 	}
 }
 
@@ -133,69 +126,37 @@ func TestContractDataRemovalFilteredByLedgerKey(t *testing.T) {
 
 	balance := sac.BalanceToContractData(assetContractID, holderID, 1000)
 	keyHash := getKeyHashForBalance(t, assetContractID, holderID)
-
-	// value rewritten, ledger key unchanged
-	rewritten := *balance.ContractData
-	val := xdr.Uint32(1)
-	rewritten.Val = xdr.ScVal{Type: xdr.ScValTypeScvU32, U32: &val}
-	rewrittenData := xdr.LedgerEntryData{
-		Type:         xdr.LedgerEntryTypeContractData,
-		ContractData: &rewritten,
-	}
-
-	_, _, ok := sac.ContractBalanceFromContractData(
-		xdr.LedgerEntry{Data: rewrittenData}, "passphrase",
-	)
-	assert.False(t, ok, "rewritten entry must no longer resemble a balance")
+	rewrittenData := rewrittenBalance(t, balance)
+	stored := storedBalance(keyHash, assetContractID)
 
 	upserted, _, _ := runContractDataLedger(t, 100, nil,
 		contractDataChange(nil, &balance),
 		ttlCreate(keyHash, 5000),
 	)
-	assert.Equal(t, []xdr.Hash{keyHash}, upsertedKeys(upserted))
+	assert.Equal(t, []history.ContractAssetBalance{stored}, upserted)
 
-	storedRows := []history.ContractAssetBalance{
-		{
-			KeyHash:          keyHash[:],
-			ContractID:       assetContractID[:],
-			Amount:           "1000",
-			ExpirationLedger: 5000,
-		},
-	}
-	_, removed, _ := runContractDataLedger(t, 101, storedRows, contractDataChange(&rewrittenData, nil))
+	_, removed, _ := runContractDataLedger(t, 101, []history.ContractAssetBalance{stored},
+		contractDataChange(&rewrittenData, nil),
+	)
 	assert.Equal(t, []xdr.Hash{keyHash}, removed)
 }
 
 // TestContractDataUpdateFollowsValue covers updates which rewrite the value of a
 // balance entry into something which is not a balance and back. The row follows
 // the latest value of the entry: it is removed while the value is not a balance,
-// and stored again once it is.
+// and stored again when the value turns back into a balance in a ledger which also
+// changes its ttl, since the expiration ledger was removed along with the row.
 func TestContractDataUpdateFollowsValue(t *testing.T) {
 	assetContractID := [32]byte{0xAA}
 	holderID := [32]byte{0xBB}
 
 	balance := sac.BalanceToContractData(assetContractID, holderID, 1000)
 	keyHash := getKeyHashForBalance(t, assetContractID, holderID)
-
-	// value rewritten, ledger key unchanged
-	rewritten := *balance.ContractData
-	val := xdr.Uint32(1)
-	rewritten.Val = xdr.ScVal{Type: xdr.ScValTypeScvU32, U32: &val}
-	rewrittenData := xdr.LedgerEntryData{
-		Type:         xdr.LedgerEntryTypeContractData,
-		ContractData: &rewritten,
-	}
+	rewrittenData := rewrittenBalance(t, balance)
 	updatedBalance := sac.BalanceToContractData(assetContractID, holderID, 5000)
 
-	storedRows := []history.ContractAssetBalance{
-		{
-			KeyHash:          keyHash[:],
-			ContractID:       assetContractID[:],
-			Amount:           "1000",
-			ExpirationLedger: 5000,
-		},
-	}
-	upserted, removed, statInserts := runContractDataLedger(t, 101, storedRows,
+	upserted, removed, statInserts := runContractDataLedger(t, 101,
+		[]history.ContractAssetBalance{storedBalance(keyHash, assetContractID)},
 		contractDataChange(&balance, &rewrittenData),
 	)
 	assert.Empty(t, upserted)
@@ -267,26 +228,10 @@ func TestContractDataRemovalUsesStoredAmount(t *testing.T) {
 
 	balance := sac.BalanceToContractData(assetContractID, holderID, 1000)
 	keyHash := getKeyHashForBalance(t, assetContractID, holderID)
+	rewrittenData := rewrittenBalance(t, balance)
 
-	// value rewritten, ledger key unchanged
-	rewritten := *balance.ContractData
-	val := xdr.Uint32(1)
-	rewritten.Val = xdr.ScVal{Type: xdr.ScValTypeScvU32, U32: &val}
-	rewrittenData := xdr.LedgerEntryData{
-		Type:         xdr.LedgerEntryTypeContractData,
-		ContractData: &rewritten,
-	}
-
-	storedRows := []history.ContractAssetBalance{
-		{
-			KeyHash:          keyHash[:],
-			ContractID:       assetContractID[:],
-			Amount:           "1000",
-			ExpirationLedger: 5000,
-		},
-	}
-
-	_, removed, statInserts := runContractDataLedger(t, 101, storedRows,
+	_, removed, statInserts := runContractDataLedger(t, 101,
+		[]history.ContractAssetBalance{storedBalance(keyHash, assetContractID)},
 		contractDataChange(&rewrittenData, nil),
 		ttlRemove(keyHash, 5000),
 	)

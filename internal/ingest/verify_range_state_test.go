@@ -620,9 +620,6 @@ func (s *VerifyRangeStateTestSuite) TestVerifyFailsWhenAssetStatsMismatch() {
 	contractAssetStatsSet := processors.NewContractAssetStatSet(
 		s.historyQ,
 		s.system.config.NetworkPassphrase,
-		map[xdr.Hash]uint32{},
-		map[xdr.Hash]uint32{},
-		map[xdr.Hash][2]uint32{},
 		100,
 	)
 

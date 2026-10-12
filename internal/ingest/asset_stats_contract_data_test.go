@@ -5,11 +5,12 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"fmt"
-	"maps"
 	"math/rand"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	ingestsdk "github.com/stellar/go-stellar-sdk/ingest"
@@ -157,7 +158,7 @@ func (c *contractDataTest) restore(keyHash xdr.Hash, liveUntil uint32) {
 // closeLedger ingests the changes of the current ledger with the same change
 // compactor configuration and processor as live ingestion, in one db transaction.
 func (c *contractDataTest) closeLedger() {
-	compactor := ingestsdk.NewChangeCompactor(ingestsdk.ChangeCompactorConfig{SuppressRemoveAfterRestoreChange: true})
+	compactor := ingestsdk.NewChangeCompactor(ledgerChangeCompactorConfig)
 	for _, change := range c.changes {
 		require.NoError(c.t, compactor.AddChange(change))
 	}
@@ -292,17 +293,60 @@ func (c *contractDataTest) checkAssetContractBalances(ledger uint32) {
 	require.Equal(c.t, expected, actual, "contract balances of asset contracts at ledger %d", ledger)
 }
 
-// verify runs the state verification of asset stats with the ledger entries in the
-// model, the way verifyState builds them from the history archive.
-func (c *contractDataTest) verify(ledger uint32) error {
-	set := processors.NewContractAssetStatSet(
-		c.q,
-		contractDataTestPassphrase,
-		map[xdr.Hash]uint32{},
-		maps.Clone(c.ttl),
-		map[xdr.Hash][2]uint32{},
-		ledger,
-	)
+// newSystem returns a system which last ingested the given ledger, and whose history
+// archive holds the ledger entries of the model at that ledger.
+func (c *contractDataTest) newSystem(ledger uint32) (*system, *mockHistoryArchiveAdapter) {
+	reader := &memoryChangeReader{}
+	addEntry := func(entry xdr.LedgerEntry) {
+		reader.changes = append(reader.changes, xdr.LedgerEntryChange{
+			Type:  xdr.LedgerEntryChangeTypeLedgerEntryState,
+			State: &entry,
+		})
+	}
+	for _, data := range c.data {
+		if entry := (xdr.LedgerEntry{Data: data}); ledgerEntryFilter(contractDataTestPassphrase, entry) {
+			addEntry(entry)
+		}
+	}
+	for keyHash, liveUntil := range c.ttl {
+		addEntry(xdr.LedgerEntry{Data: ttlEntryData(keyHash, liveUntil)})
+	}
+
+	historyAdapter := &mockHistoryArchiveAdapter{}
+	historyAdapter.On("GetLatestLedgerSequence").Return(ledger, nil).Maybe()
+	historyAdapter.On("GetState", mock.Anything, ledger).Return(reader, nil).Once()
+
+	require.NoError(c.t, c.q.UpdateLastLedgerIngest(c.ctx, ledger))
+	sys := &system{
+		ctx:                          c.ctx,
+		historyQ:                     c.q,
+		historyAdapter:               historyAdapter,
+		runStateVerificationOnLedger: func(uint32) bool { return true },
+		config:                       Config{NetworkPassphrase: contractDataTestPassphrase},
+	}
+	sys.initMetrics()
+	return sys, historyAdapter
+}
+
+// verifyState runs the state verification of a system whose history archive holds the
+// ledger entries of the model at the given ledger.
+func (c *contractDataTest) verifyState(periodic bool, ledger uint32) error {
+	sys, historyAdapter := c.newSystem(ledger)
+	err := sys.verifyState(periodic, ledger, xdr.Hash{})
+	historyAdapter.AssertExpectations(c.t)
+	return err
+}
+
+// checkAssetStats runs the check of asset stats of the state verification, in the
+// current transaction of the test, with the ledger entries in the model.
+func (c *contractDataTest) checkAssetStats(ledger uint32) error {
+	set := processors.NewContractAssetStatSet(c.q, contractDataTestPassphrase, ledger)
+	for keyHash, liveUntil := range c.ttl {
+		entry := xdr.LedgerEntry{Data: ttlEntryData(keyHash, liveUntil)}
+		if err := set.AddTTL(ingestsdk.Change{Type: xdr.LedgerEntryTypeTtl, Post: &entry}); err != nil {
+			return err
+		}
+	}
 	for _, data := range c.data {
 		if err := set.AddContractData(ingestsdk.Change{
 			Type: xdr.LedgerEntryTypeContractData,
@@ -318,7 +362,7 @@ func (c *contractDataTest) verify(ledger uint32) error {
 // contract balance entries and asset contract instances. The values written by
 // contracts which are not Stellar Asset Contracts change between balances and other
 // values. After every ledger the stored balances of the Stellar Asset Contracts must
-// match the ledger, and the state verification of asset stats must pass.
+// match the ledger, and every 10 ledgers the state verification must pass.
 func TestContractDataIngestionMatchesVerification(t *testing.T) {
 	for _, seed := range []int64{1, 2, 3} {
 		t.Run(fmt.Sprintf("seed %d", seed), func(t *testing.T) {
@@ -331,7 +375,7 @@ func TestContractDataIngestionMatchesVerification(t *testing.T) {
 				ledger := c.ledger - 1
 				c.checkAssetContractBalances(ledger)
 				if ledger%10 == 0 {
-					require.NoError(t, c.verify(ledger), "state verification at ledger %d", ledger)
+					require.NoError(t, c.verifyState(false, ledger), "state verification at ledger %d", ledger)
 				}
 			}
 		})
@@ -429,7 +473,8 @@ func contractDataMismatchCases(
 // TestCheckAssetStatsReportsContractDataMismatches changes the stored contract data in
 // different ways, and checks that the state verification of asset stats reports each
 // difference as a contractDataMismatchError. Differences in the balances of contracts
-// which are not Stellar Asset Contracts are not reported.
+// which are not Stellar Asset Contracts are not reported. It then checks how the
+// periodic state verification handles such a difference.
 func TestCheckAssetStatsReportsContractDataMismatches(t *testing.T) {
 	c, finish := newContractDataTest(t, 1)
 	defer finish()
@@ -442,7 +487,7 @@ func TestCheckAssetStatsReportsContractDataMismatches(t *testing.T) {
 	c.create(sac.BalanceToContractData(c.otherContracts[0], c.holders[0], 30), liveUntil)
 	c.closeLedger()
 	ledger := c.ledger - 1
-	require.NoError(t, c.verify(ledger))
+	require.NoError(t, c.checkAssetStats(ledger))
 
 	// an asset contract whose instance is not in the ledger
 	instance := c.instances[c.assetContracts[1]]
@@ -466,7 +511,7 @@ func TestCheckAssetStatsReportsContractDataMismatches(t *testing.T) {
 			}()
 			require.NoError(t, testCase.change())
 
-			err := c.verify(ledger)
+			err := c.checkAssetStats(ledger)
 			if len(testCase.expected) == 0 {
 				require.NoError(t, err)
 				return
@@ -478,27 +523,69 @@ func TestCheckAssetStatsReportsContractDataMismatches(t *testing.T) {
 			}
 		})
 	}
+
+	c.checkPeriodicStateVerification(ledger, liveUntil)
 }
 
-func TestHandleStateVerificationError(t *testing.T) {
-	historyQ := &mockDBQ{}
-	sys := &system{ctx: context.Background(), historyQ: historyQ}
-	sys.initMetrics()
+// checkPeriodicStateVerification changes the stored balance of the first holder of the
+// first asset contract, and checks that the periodic state verification reports it in
+// its metrics without marking the state as invalid, while the state verification of
+// verify-range fails on it. A difference in the classic asset stats still marks the
+// state as invalid.
+func (c *contractDataTest) checkPeriodicStateVerification(ledger, liveUntil uint32) {
+	t := c.t
+	require.NoError(t, c.verifyState(false, ledger))
+	require.NoError(t, c.q.UpsertContractAssetBalances(c.ctx, []history.ContractAssetBalance{
+		c.balanceRow(c.assetContracts[0], c.holders[0], "11", liveUntil),
+	}))
+	_, ok := errors.Cause(c.verifyState(false, ledger)).(contractDataMismatchError)
+	require.True(t, ok, "expected a contractDataMismatchError")
 
-	// a mismatch in contract data is counted, and does not mark the state as invalid
-	sys.handleStateVerificationError(errors.Wrap(
-		contractDataMismatchError{mismatches: []string{"contract balance is missing from db"}},
-		"checkAssetStats failed",
-	))
+	sys, historyAdapter := c.newSystem(ledger)
+	sys.incrementStateVerificationErrors()
+	sys.maybeVerifyState(ledger, xdr.Hash{})
+	sys.wg.Wait()
+	historyAdapter.AssertExpectations(t)
 	require.Equal(t, 1.0, testutil.ToFloat64(sys.Metrics().StateVerifyContractDataMismatchCounter))
-	historyQ.AssertNotCalled(t, "UpdateExpStateInvalid", sys.ctx, true)
+	require.Zero(t, sys.stateVerificationErrors)
+	// the verification completed, so it records the number of entries it checked
+	require.Equal(t, 4.0, testutil.ToFloat64(
+		sys.Metrics().StateVerifyLedgerEntriesCount.With(prometheus.Labels{"type": "contract_data"}),
+	))
+	invalid, err := c.q.GetExpStateInvalid(c.ctx)
+	require.NoError(t, err)
+	require.False(t, invalid)
 
-	historyQ.On("CloneIngestionQ").Return(historyQ).Once()
-	historyQ.On("UpdateExpStateInvalid", sys.ctx, true).Return(nil).Once()
-	sys.handleStateVerificationError(errors.Wrap(
-		ingestsdk.NewStateError(fmt.Errorf("asset stat does not match")),
-		"checkAssetStats failed",
-	))
-	require.Equal(t, 1.0, testutil.ToFloat64(sys.Metrics().StateVerifyContractDataMismatchCounter))
-	historyQ.AssertExpectations(t)
+	_, err = c.q.InsertAssetStat(c.ctx, history.ExpAssetStat{
+		AssetType:   xdr.AssetTypeAssetTypeCreditAlphanum4,
+		AssetCode:   "GBP",
+		AssetIssuer: keypair.MustRandom().Address(),
+		Accounts:    history.ExpAssetStatAccounts{Authorized: 1},
+		Balances: history.ExpAssetStatBalances{
+			Authorized:                      "1",
+			AuthorizedToMaintainLiabilities: "0",
+			ClaimableBalances:               "0",
+			LiquidityPools:                  "0",
+			Unauthorized:                    "0",
+		},
+	})
+	require.NoError(t, err)
+	sys, historyAdapter = c.newSystem(ledger)
+	sys.maybeVerifyState(ledger, xdr.Hash{})
+	sys.wg.Wait()
+	historyAdapter.AssertExpectations(t)
+	invalid, err = c.q.GetExpStateInvalid(c.ctx)
+	require.NoError(t, err)
+	require.True(t, invalid)
+}
+
+func TestContractDataMismatchErrorKeepsFirstExamples(t *testing.T) {
+	var mismatches contractDataMismatchError
+	for i := range maxContractDataMismatchExamples + 2 {
+		mismatches.addf("mismatch %d", i)
+	}
+	require.Equal(t, maxContractDataMismatchExamples+2, mismatches.count)
+	require.Len(t, mismatches.examples, maxContractDataMismatchExamples)
+	require.Equal(t, "mismatch 0", mismatches.examples[0])
+	require.Contains(t, mismatches.Error(), fmt.Sprintf("found %d mismatches", maxContractDataMismatchExamples+2))
 }

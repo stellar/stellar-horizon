@@ -155,6 +155,10 @@ func waitForStateVerifications(itest *integration.Test, count int) bool {
 
 		stateInvalid := strings.Contains(metrics, "horizon_ingest_state_invalid 1")
 		assert.False(t, stateInvalid, "State is invalid!")
+		assert.Contains(
+			t, metrics, "horizon_ingest_state_verify_contract_data_mismatches_total 0",
+			"State verification found mismatches in contract data!",
+		)
 
 		notVerifiedYet := strings.Contains(
 			metrics,

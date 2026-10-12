@@ -6,7 +6,6 @@ import (
 	"math/big"
 
 	"github.com/stellar/go-stellar-sdk/ingest"
-	"github.com/stellar/go-stellar-sdk/ingest/sac"
 	"github.com/stellar/go-stellar-sdk/support/errors"
 	"github.com/stellar/go-stellar-sdk/xdr"
 
@@ -17,12 +16,8 @@ type AssetStatsProcessor struct {
 	assetStatsQ              history.QAssetStats
 	currentLedger            uint32
 	assetStatSet             AssetStatSet
-	contractDataChanges      []ingest.Change
-	removedExpirationEntries map[xdr.Hash]uint32
-	createdExpirationEntries map[xdr.Hash]uint32
-	updatedExpirationEntries map[xdr.Hash][2]uint32
+	contractAssetStatSet     *ContractAssetStatSet
 	ingestFromHistoryArchive bool
-	networkPassphrase        string
 }
 
 // NewAssetStatsProcessor constructs a new AssetStatsProcessor instance.
@@ -36,12 +31,8 @@ func NewAssetStatsProcessor(
 		currentLedger:            currentLedger,
 		assetStatsQ:              assetStatsQ,
 		ingestFromHistoryArchive: ingestFromHistoryArchive,
-		networkPassphrase:        networkPassphrase,
 		assetStatSet:             NewAssetStatSet(),
-		contractDataChanges:      []ingest.Change{},
-		removedExpirationEntries: map[xdr.Hash]uint32{},
-		createdExpirationEntries: map[xdr.Hash]uint32{},
-		updatedExpirationEntries: map[xdr.Hash][2]uint32{},
+		contractAssetStatSet:     NewContractAssetStatSet(assetStatsQ, networkPassphrase, currentLedger),
 	}
 	return p
 }
@@ -68,37 +59,9 @@ func (p *AssetStatsProcessor) ProcessChange(ctx context.Context, change ingest.C
 	case xdr.LedgerEntryTypeTrustline:
 		err = p.assetStatSet.AddTrustline(change)
 	case xdr.LedgerEntryTypeContractData:
-		// Only ingest contract data entries which could be relevant to
-		// asset stats.
-		//
-		// We care about SAC activity exclusively, but balance provenance cannot
-		// be determined from the entry alone. Thus we propagate every change to
-		// an entry with a balance key, whatever its value, because keys are
-		// immutable while values can be set to anything. Asset contract instances
-		// are recognized by their value, which names the asset that their contract
-		// id is derived from.
-		entry := change.Post
-		if entry == nil {
-			entry = change.Pre
-		}
-		if entry == nil { // defensive
-			return nil
-		}
-		ledgerKey, keyErr := entry.LedgerKey()
-		if keyErr != nil {
-			return errors.Wrap(keyErr, "could not extract ledger key")
-		}
-		if !sac.ValidContractBalanceLedgerKey(ledgerKey) {
-			if change.Post == nil {
-				return nil
-			}
-			if _, assetFound := sac.AssetFromContractData(*change.Post, p.networkPassphrase); !assetFound {
-				return nil
-			}
-		}
-		p.contractDataChanges = append(p.contractDataChanges, change)
+		err = p.contractAssetStatSet.AddContractData(change)
 	case xdr.LedgerEntryTypeTtl:
-		err = p.addExpirationChange(change)
+		err = p.contractAssetStatSet.AddTTL(change)
 	default:
 		return errors.Errorf("Change type %v is unexpected", change.Type)
 	}
@@ -106,103 +69,7 @@ func (p *AssetStatsProcessor) ProcessChange(ctx context.Context, change ingest.C
 	return err
 }
 
-// AssetStatsProcessor requires that the ttl changes it ingests are already compacted
-// because the TTL change semantics in CAP-63 (see
-// https://github.com/stellar/stellar-protocol/blob/master/core/cap-0063.md#ttl-ledger-change-semantics )
-// are encapsulated in the ChangeCompactor
-func (p *AssetStatsProcessor) checkTTLChangeIsCompacted(change ingest.Change) error {
-	var keyHash xdr.Hash
-	if change.Pre != nil {
-		keyHash = change.Pre.Data.MustTtl().KeyHash
-	} else {
-		keyHash = change.Post.Data.MustTtl().KeyHash
-	}
-	if _, ok := p.removedExpirationEntries[keyHash]; ok {
-		return errors.Errorf("ttl change is not compacted Pre: %v Post: %v", change.Pre, change.Post)
-	}
-	if _, ok := p.createdExpirationEntries[keyHash]; ok {
-		return errors.Errorf("ttl change is not compacted Pre: %v Post: %v", change.Pre, change.Post)
-	}
-	if _, ok := p.updatedExpirationEntries[keyHash]; ok {
-		return errors.Errorf("ttl change is not compacted Pre: %v Post: %v", change.Pre, change.Post)
-	}
-	return nil
-}
-
-func (p *AssetStatsProcessor) addExpirationChange(change ingest.Change) error {
-	if err := p.checkTTLChangeIsCompacted(change); err != nil {
-		return err
-	}
-
-	switch {
-	case change.Pre == nil && change.Post != nil: // created
-		post := change.Post.Data.MustTtl()
-		p.createdExpirationEntries[post.KeyHash] = uint32(post.LiveUntilLedgerSeq)
-	case change.Pre != nil && change.Post == nil: // removed
-		pre := change.Pre.Data.MustTtl()
-		p.removedExpirationEntries[pre.KeyHash] = uint32(pre.LiveUntilLedgerSeq)
-	case change.Pre != nil && change.Post != nil: // updated
-		pre := change.Pre.Data.MustTtl()
-		post := change.Post.Data.MustTtl()
-		// it's unclear if core could emit a ledger entry change where the
-		// expiration ledger remains the same
-		if pre.LiveUntilLedgerSeq == post.LiveUntilLedgerSeq {
-			return nil
-		}
-
-		// if a TTL was created, restored, or updated at ledger N
-		// the LiveUntilLedgerSeq must be >= current ledger
-		if uint32(post.LiveUntilLedgerSeq) < p.currentLedger {
-			return errors.Errorf(
-				"post TTL %v is less than current ledger %v",
-				post.LiveUntilLedgerSeq,
-				p.currentLedger,
-			)
-		}
-
-		// The previous expiration ledger must always be greater than or equal to the current ledger
-		// because if the previous expiration ledger is less than the current ledger then it implies
-		// the ledger entry was archived. However, an archived ledger entry cannot be updated without
-		// first being restored.
-		// Alternatively, the TTL can be updated without being restored if it is a temporary ledger
-		// entry. However, in that case, we can ignore the ledger entry entirely because SAC
-		// ledger entries are always kept in persistent storage.
-		if uint32(pre.LiveUntilLedgerSeq) < p.currentLedger {
-			return nil
-		}
-		p.updatedExpirationEntries[pre.KeyHash] = [2]uint32{
-			uint32(pre.LiveUntilLedgerSeq),
-			uint32(post.LiveUntilLedgerSeq),
-		}
-	default:
-		return errors.Errorf("unexpected change Pre: %v Post: %v", change.Pre, change.Post)
-	}
-
-	return nil
-}
-
 func (p *AssetStatsProcessor) Commit(ctx context.Context) error {
-	contractAssetStatSet := NewContractAssetStatSet(
-		p.assetStatsQ,
-		p.networkPassphrase,
-		p.removedExpirationEntries,
-		p.createdExpirationEntries,
-		p.updatedExpirationEntries,
-		p.currentLedger,
-	)
-	for _, change := range p.contractDataChanges {
-		if err := contractAssetStatSet.AddContractData(change); err != nil {
-			return errors.Wrap(err, "Error ingesting contract data")
-		}
-	}
-
-	return p.updateDB(ctx, contractAssetStatSet)
-}
-
-func (p *AssetStatsProcessor) updateDB(
-	ctx context.Context,
-	contractAssetStatSet *ContractAssetStatSet,
-) error {
 	if p.ingestFromHistoryArchive {
 		// When ingesting from the history archives we can take advantage of the fact
 		// that there are only created ledger entries. We don't need to execute any
@@ -215,20 +82,20 @@ func (p *AssetStatsProcessor) updateDB(
 			}
 		}
 
-		balances, contractStats := contractAssetStatSet.GetCreatedBalancesAndStats()
-		if len(contractStats) > 0 {
-			if err := p.assetStatsQ.InsertContractAssetStats(ctx, contractStats); err != nil {
+		balances, statRows := p.contractAssetStatSet.GetCreatedBalancesAndStats()
+		if len(statRows) > 0 {
+			if err := p.assetStatsQ.InsertContractAssetStats(ctx, statRows); err != nil {
 				return errors.Wrap(err, "Error inserting asset contract stats")
 			}
 		}
 
 		if len(balances) > 0 {
 			if err := p.assetStatsQ.InsertContractAssetBalances(ctx, balances); err != nil {
-				return errors.Wrap(err, "Error inserting asset contract stats")
+				return errors.Wrap(err, "Error inserting contract asset balances")
 			}
 		}
 
-		rows, err := contractAssetStatSet.GetCreatedAssetContracts()
+		rows, err := p.contractAssetStatSet.GetCreatedAssetContracts()
 		if err != nil {
 			return errors.Wrap(err, "Error getting created asset contracts")
 		}
@@ -256,7 +123,7 @@ func (p *AssetStatsProcessor) updateDB(
 	// changed balances. An entry archived at ledger E can be restored in E+1, which
 	// stellar-core emits as LEDGER_ENTRY_RESTORED (Change.Pre == nil), and its expired
 	// row must be removed from the stats once, when it is reaped.
-	if err := contractAssetStatSet.ingestExpiredBalances(ctx); err != nil {
+	if err := p.contractAssetStatSet.ingestExpiredBalances(ctx); err != nil {
 		return err
 	}
 
@@ -264,7 +131,7 @@ func (p *AssetStatsProcessor) updateDB(
 		return errors.Wrap(err, "Error deleting expired asset contracts")
 	}
 
-	upserts, removals, err := contractAssetStatSet.reconcileBalances(ctx)
+	upserts, removals, err := p.contractAssetStatSet.reconcileBalances(ctx)
 	if err != nil {
 		return err
 	}
@@ -279,7 +146,7 @@ func (p *AssetStatsProcessor) updateDB(
 		}
 	}
 
-	assetContractRows, err := contractAssetStatSet.GetCreatedAssetContracts()
+	assetContractRows, err := p.contractAssetStatSet.GetCreatedAssetContracts()
 	if err != nil {
 		return errors.Wrap(err, "Error getting created asset contracts")
 	}
@@ -289,13 +156,14 @@ func (p *AssetStatsProcessor) updateDB(
 		}
 	}
 
-	return p.updateContractAssetStats(ctx, contractAssetStatSet.contractAssetStats)
+	return p.updateContractAssetStats(ctx)
 }
 
 func (p *AssetStatsProcessor) updateContractDataExpirations(ctx context.Context) error {
-	keys := make([]xdr.Hash, 0, len(p.updatedExpirationEntries))
-	expirationLedgers := make([]uint32, 0, len(p.updatedExpirationEntries))
-	for key, update := range p.updatedExpirationEntries {
+	updatedExpirationEntries := p.contractAssetStatSet.updatedExpirationEntries
+	keys := make([]xdr.Hash, 0, len(updatedExpirationEntries))
+	expirationLedgers := make([]uint32, 0, len(updatedExpirationEntries))
+	for key, update := range updatedExpirationEntries {
 		keys = append(keys, key)
 		expirationLedgers = append(expirationLedgers, update[1])
 	}
@@ -444,11 +312,8 @@ func (p *AssetStatsProcessor) addContractAssetStat(contractAssetStat assetContra
 	return nil
 }
 
-func (p *AssetStatsProcessor) updateContractAssetStats(
-	ctx context.Context,
-	contractAssetStats map[xdr.ContractId]assetContractStatValue,
-) error {
-	for contractID, contractAssetStat := range contractAssetStats {
+func (p *AssetStatsProcessor) updateContractAssetStats(ctx context.Context) error {
+	for contractID, contractAssetStat := range p.contractAssetStatSet.contractAssetStats {
 		if err := p.updateAssetContractStats(ctx, contractID, contractAssetStat); err != nil {
 			return err
 		}
