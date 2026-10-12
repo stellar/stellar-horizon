@@ -196,6 +196,11 @@ type Metrics struct {
 	// 0 otherwise.
 	StateInvalidGauge prometheus.GaugeFunc
 
+	// StateVerifyContractDataMismatchCounter counts the state verifications which found
+	// asset contracts, contract balances or contract stats in the db which do not match
+	// the history archive.
+	StateVerifyContractDataMismatchCounter prometheus.Counter
+
 	// StateVerifyLedgerEntriesCount exposes total number of ledger entries
 	// checked by the state verifier by type.
 	StateVerifyLedgerEntriesCount *prometheus.GaugeVec
@@ -460,6 +465,13 @@ func (s *system) initMetrics() {
 		},
 	)
 
+	s.metrics.StateVerifyContractDataMismatchCounter = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: "horizon", Subsystem: "ingest", Name: "state_verify_contract_data_mismatches_total",
+			Help: "number of state verifications which found contract data in the db that does not match the history archive",
+		},
+	)
+
 	s.metrics.StateVerifyLedgerEntriesCount = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "horizon", Subsystem: "ingest", Name: "state_verify_ledger_entries",
@@ -571,6 +583,7 @@ func (s *system) registerMetrics() {
 	s.metricsRegistry.MustRegister(s.metrics.LoadersRunDurationSummary)
 	s.metricsRegistry.MustRegister(s.metrics.LoadersStatsSummary)
 	s.metricsRegistry.MustRegister(s.metrics.StateVerifyLedgerEntriesCount)
+	s.metricsRegistry.MustRegister(s.metrics.StateVerifyContractDataMismatchCounter)
 	s.metricsRegistry.MustRegister(s.metrics.HistoryArchiveStatsCounter)
 	s.metricsRegistry.MustRegister(s.metrics.IngestionErrorCounter)
 	s.ledgerBackend = ledgerbackend.WithMetrics(s.ledgerBackend, s.metricsRegistry, "horizon")
@@ -919,6 +932,9 @@ func (s *system) maybeVerifyState(lastIngestedLedger uint32, expectedBucketListH
 				switch errors.Cause(err).(type) {
 				case ingest.StateError:
 					markStateInvalid(s.ctx, s.historyQ, err)
+				case contractDataMismatchError:
+					s.Metrics().StateVerifyContractDataMismatchCounter.Inc()
+					log.WithError(err).Error("State verification found mismatches in contract data")
 				default:
 					logger := log.WithError(err).Warn
 					if errorCount >= stateVerificationErrorThreshold {

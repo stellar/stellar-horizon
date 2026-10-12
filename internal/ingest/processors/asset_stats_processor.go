@@ -72,25 +72,27 @@ func (p *AssetStatsProcessor) ProcessChange(ctx context.Context, change ingest.C
 		// asset stats.
 		//
 		// We care about SAC activity exclusively, but balance provenance cannot
-		// be determined from the entry alone. Thus we propagate balance-looking
-		// changes and validate SACs when possible.
-		if change.Post == nil { // removal
-			if change.Pre == nil { // defensive
+		// be determined from the entry alone. Thus we propagate every change to
+		// an entry with a balance key, whatever its value, because keys are
+		// immutable while values can be set to anything. Asset contract instances
+		// are recognized by their value, which names the asset that their contract
+		// id is derived from.
+		entry := change.Post
+		if entry == nil {
+			entry = change.Pre
+		}
+		if entry == nil { // defensive
+			return nil
+		}
+		ledgerKey, keyErr := entry.LedgerKey()
+		if keyErr != nil {
+			return errors.Wrap(keyErr, "could not extract ledger key")
+		}
+		if !sac.ValidContractBalanceLedgerKey(ledgerKey) {
+			if change.Post == nil {
 				return nil
 			}
-			// Keys are immutable so we check that over the value on removal.
-			ledgerKey, keyErr := change.Pre.LedgerKey()
-			if keyErr != nil {
-				return errors.Wrap(keyErr, "could not extract ledger key")
-			}
-
-			if !sac.ValidContractBalanceLedgerKey(ledgerKey) {
-				return nil
-			}
-		} else { // create/update
-			_, assetFound := sac.AssetFromContractData(*change.Post, p.networkPassphrase)
-			_, _, balanceFound := sac.ContractBalanceFromContractData(*change.Post, p.networkPassphrase)
-			if !assetFound && !balanceFound { // neither balance nor asset init
+			if _, assetFound := sac.AssetFromContractData(*change.Post, p.networkPassphrase); !assetFound {
 				return nil
 			}
 		}
@@ -219,8 +221,8 @@ func (p *AssetStatsProcessor) updateDB(
 			}
 		}
 
-		if len(contractAssetStatSet.createdBalances) > 0 {
-			if err := p.assetStatsQ.InsertContractAssetBalances(ctx, contractAssetStatSet.createdBalances); err != nil {
+		if rows := contractAssetStatSet.GetCreatedBalances(); len(rows) > 0 {
+			if err := p.assetStatsQ.InsertContractAssetBalances(ctx, rows); err != nil {
 				return errors.Wrap(err, "Error inserting asset contract stats")
 			}
 		}
@@ -243,62 +245,50 @@ func (p *AssetStatsProcessor) updateDB(
 		return err
 	}
 
-	// reads the rows RemoveContractAssetBalances is about to delete
-	if err := contractAssetStatSet.ingestRemovedBalances(ctx); err != nil {
-		return err
-	}
-
-	if err := p.assetStatsQ.RemoveContractAssetBalances(ctx, contractAssetStatSet.removedBalances); err != nil {
-		return errors.Wrap(err, "Error removing contract asset balances")
-	}
-
-	if err := p.updateContractAssetBalanceAmounts(ctx, contractAssetStatSet.updatedBalances); err != nil {
-		return err
-	}
-
+	// Apply the ttl changes first, so that rows whose expiration was extended in this
+	// ledger are not reaped below.
 	if err := p.updateContractDataExpirations(ctx); err != nil {
 		return err
 	}
 
-	// Reap expired rows before inserting. An entry archived at ledger E can be restored
-	// in E+1, which stellar-core emits as LEDGER_ENTRY_RESTORED (Change.Pre == nil) and
-	// we ingest as a creation. The stale row is only reaped when currentLedger-1 == E,
-	// i.e. this same ledger, so inserting first would collide with it on the primary key
-	// and abort ingestion of the ledger (see processor_runner.go SuppressRemoveAfterRestoreChange).
+	// Reap the rows which are no longer active before reading the stored rows of the
+	// changed balances. An entry archived at ledger E can be restored in E+1, which
+	// stellar-core emits as LEDGER_ENTRY_RESTORED (Change.Pre == nil), and its expired
+	// row must be removed from the stats once, when it is reaped.
 	if err := contractAssetStatSet.ingestExpiredBalances(ctx); err != nil {
 		return err
 	}
 
-	if _, err := p.assetStatsQ.DeleteAssetContractsExpiringAt(ctx, p.currentLedger-1); err != nil {
+	if _, err := p.assetStatsQ.DeleteAssetContractsExpiredBefore(ctx, p.currentLedger); err != nil {
 		return errors.Wrap(err, "Error deleting expired asset contracts")
+	}
+
+	upserts, removals, err := contractAssetStatSet.reconcileBalances(ctx)
+	if err != nil {
+		return err
+	}
+	if len(removals) > 0 {
+		if err = p.assetStatsQ.RemoveContractAssetBalances(ctx, removals); err != nil {
+			return errors.Wrap(err, "Error removing contract asset balances")
+		}
+	}
+	if len(upserts) > 0 {
+		if err = p.assetStatsQ.UpsertContractAssetBalances(ctx, upserts); err != nil {
+			return errors.Wrap(err, "Error upserting contract asset balances")
+		}
 	}
 
 	assetContractRows, err := contractAssetStatSet.GetCreatedAssetContracts()
 	if err != nil {
 		return errors.Wrap(err, "Error getting created asset contracts")
 	}
-	if err = p.assetStatsQ.InsertAssetContracts(ctx, assetContractRows); err != nil {
-		return errors.Wrap(err, "Error inserting asset contracts")
-	}
-
-	if err := p.assetStatsQ.InsertContractAssetBalances(ctx, contractAssetStatSet.createdBalances); err != nil {
-		return errors.Wrap(err, "Error inserting contract asset balances")
+	if len(assetContractRows) > 0 {
+		if err = p.assetStatsQ.UpsertAssetContracts(ctx, assetContractRows); err != nil {
+			return errors.Wrap(err, "Error upserting asset contracts")
+		}
 	}
 
 	return p.updateContractAssetStats(ctx, contractAssetStatSet.contractAssetStats)
-}
-
-func (p *AssetStatsProcessor) updateContractAssetBalanceAmounts(ctx context.Context, updatedBalances map[xdr.Hash]*big.Int) error {
-	keys := make([]xdr.Hash, 0, len(updatedBalances))
-	amounts := make([]string, 0, len(updatedBalances))
-	for key, amount := range updatedBalances {
-		keys = append(keys, key)
-		amounts = append(amounts, amount.String())
-	}
-	if err := p.assetStatsQ.UpdateContractAssetBalanceAmounts(ctx, keys, amounts); err != nil {
-		return errors.Wrap(err, "Error updating contract asset balance amounts")
-	}
-	return nil
 }
 
 func (p *AssetStatsProcessor) updateContractDataExpirations(ctx context.Context) error {

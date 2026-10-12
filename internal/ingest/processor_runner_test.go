@@ -273,22 +273,14 @@ func TestProcessorRunnerRunAllProcessorsOnLedger(t *testing.T) {
 
 	defer mock.AssertExpectationsForObjects(t, mockBatchInsertBuilder)
 
-	q.MockQAssetStats.On("InsertAssetContracts", ctx, []history.AssetContract(nil)).
-		Return(nil).Once()
 	q.MockQAssetStats.On("UpdateAssetContractExpirations", ctx, []xdr.Hash{}, []uint32{}).
 		Return(nil).Once()
-	q.MockQAssetStats.On("DeleteAssetContractsExpiringAt", ctx, uint32(22)).
+	q.MockQAssetStats.On("DeleteAssetContractsExpiredBefore", ctx, uint32(23)).
 		Return(int64(0), nil).Once()
 
-	q.MockQAssetStats.On("RemoveContractAssetBalances", ctx, []xdr.Hash(nil)).
-		Return(nil).Once()
-	q.MockQAssetStats.On("UpdateContractAssetBalanceAmounts", ctx, []xdr.Hash{}, []string{}).
-		Return(nil).Once()
-	q.MockQAssetStats.On("InsertContractAssetBalances", ctx, []history.ContractAssetBalance(nil)).
-		Return(nil).Once()
 	q.MockQAssetStats.On("UpdateContractAssetBalanceExpirations", ctx, []xdr.Hash{}, []uint32{}).
 		Return(nil).Once()
-	q.MockQAssetStats.On("DeleteContractAssetBalancesExpiringAt", ctx, uint32(22)).
+	q.MockQAssetStats.On("DeleteContractAssetBalancesExpiredBefore", ctx, uint32(23)).
 		Return([]history.ContractAssetBalance{}, nil).Once()
 
 	runner := ProcessorRunner{
@@ -494,22 +486,14 @@ func TestProcessorRunnerRunAllProcessorsOnLedgerProtocolVersionNotSupportedButAl
 
 	defer mock.AssertExpectationsForObjects(t, mockBatchInsertBuilder)
 
-	q.MockQAssetStats.On("InsertAssetContracts", ctx, []history.AssetContract(nil)).
-		Return(nil).Once()
 	q.MockQAssetStats.On("UpdateAssetContractExpirations", ctx, []xdr.Hash{}, []uint32{}).
 		Return(nil).Once()
-	q.MockQAssetStats.On("DeleteAssetContractsExpiringAt", ctx, uint32(22)).
+	q.MockQAssetStats.On("DeleteAssetContractsExpiredBefore", ctx, uint32(23)).
 		Return(int64(0), nil).Once()
 
-	q.MockQAssetStats.On("RemoveContractAssetBalances", ctx, []xdr.Hash(nil)).
-		Return(nil).Once()
-	q.MockQAssetStats.On("UpdateContractAssetBalanceAmounts", ctx, []xdr.Hash{}, []string{}).
-		Return(nil).Once()
-	q.MockQAssetStats.On("InsertContractAssetBalances", ctx, []history.ContractAssetBalance(nil)).
-		Return(nil).Once()
 	q.MockQAssetStats.On("UpdateContractAssetBalanceExpirations", ctx, []xdr.Hash{}, []uint32{}).
 		Return(nil).Once()
-	q.MockQAssetStats.On("DeleteContractAssetBalancesExpiringAt", ctx, uint32(22)).
+	q.MockQAssetStats.On("DeleteContractAssetBalancesExpiredBefore", ctx, uint32(23)).
 		Return([]history.ContractAssetBalance{}, nil).Once()
 
 	runner := ProcessorRunner{

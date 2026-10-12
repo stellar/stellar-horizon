@@ -19,12 +19,17 @@ func (m *MockQAssetStats) InsertAssetContracts(ctx context.Context, rows []Asset
 	return a.Error(0)
 }
 
+func (m *MockQAssetStats) UpsertAssetContracts(ctx context.Context, rows []AssetContract) error {
+	a := m.Called(ctx, rows)
+	return a.Error(0)
+}
+
 func (m *MockQAssetStats) UpdateAssetContractExpirations(ctx context.Context, keys []xdr.Hash, expirationLedgers []uint32) error {
 	a := m.Called(ctx, keys, expirationLedgers)
 	return a.Error(0)
 }
 
-func (m *MockQAssetStats) DeleteAssetContractsExpiringAt(ctx context.Context, ledger uint32) (int64, error) {
+func (m *MockQAssetStats) DeleteAssetContractsExpiredBefore(ctx context.Context, ledger uint32) (int64, error) {
 	a := m.Called(ctx, ledger)
 	return a.Get(0).(int64), a.Error(1)
 }
@@ -34,13 +39,13 @@ func (m *MockQAssetStats) InsertContractAssetBalances(ctx context.Context, rows 
 	return a.Error(0)
 }
 
-func (m *MockQAssetStats) RemoveContractAssetBalances(ctx context.Context, keys []xdr.Hash) error {
-	a := m.Called(ctx, keys)
+func (m *MockQAssetStats) UpsertContractAssetBalances(ctx context.Context, rows []ContractAssetBalance) error {
+	a := m.Called(ctx, rows)
 	return a.Error(0)
 }
 
-func (m *MockQAssetStats) UpdateContractAssetBalanceAmounts(ctx context.Context, keys []xdr.Hash, amounts []string) error {
-	a := m.Called(ctx, keys, amounts)
+func (m *MockQAssetStats) RemoveContractAssetBalances(ctx context.Context, keys []xdr.Hash) error {
+	a := m.Called(ctx, keys)
 	return a.Error(0)
 }
 
@@ -54,9 +59,14 @@ func (m *MockQAssetStats) GetContractAssetBalances(ctx context.Context, keys []x
 	return a.Get(0).([]ContractAssetBalance), a.Error(1)
 }
 
-func (m *MockQAssetStats) DeleteContractAssetBalancesExpiringAt(ctx context.Context, ledger uint32) ([]ContractAssetBalance, error) {
+func (m *MockQAssetStats) DeleteContractAssetBalancesExpiredBefore(ctx context.Context, ledger uint32) ([]ContractAssetBalance, error) {
 	a := m.Called(ctx, ledger)
 	return a.Get(0).([]ContractAssetBalance), a.Error(1)
+}
+
+func (m *MockQAssetStats) CountContractAssetBalancesOfAssetContracts(ctx context.Context) (int, error) {
+	a := m.Called(ctx)
+	return a.Get(0).(int), a.Error(1)
 }
 
 func (m *MockQAssetStats) InsertContractAssetStats(ctx context.Context, rows []ContractAssetStatRow) error {

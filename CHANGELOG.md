@@ -17,6 +17,10 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 - The admin API rejects malformed asset whitelist entries that are not already stored. It stores each valid entry in canonical form. The response lists every rejected entry.
 - Operators running with an asset filter can re-run historical range ingestion to back-fill transactions that earlier versions skipped. `db reingest range` first deletes all history in the range, then ingests it again through the filter config stored now. Do this only when the filter config has not changed since the range was first ingested. Otherwise transactions the current config does not keep are deleted, and `db detect-gaps` does not report them.
 - The asset ingestion filter now matches rules on the inner operations of fee-bump transactions. Earlier versions collected operations only from TxV0 and Tx envelopes, so a fee-bump transaction was not ingested even when its inner operations referenced a whitelisted asset.
+- The contract balances behind the `contracts` fields of `/assets` are tracked by ledger key, so each stored balance follows the latest value of its ledger entry, and the contract stats are adjusted from the stored balances. Expired contract balances and asset contracts are removed whenever their expiration ledger has passed, rather than only in the ledger right after it.
+
+### Updated
+- State verification checks the contract balances of Stellar Asset Contracts, and reports differences in asset contracts, contract balances and contract stats in its logs and in the new `horizon_ingest_state_verify_contract_data_mismatches_total` metric.
 
 ## 29.0.0
 

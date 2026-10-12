@@ -16,22 +16,19 @@ import (
 )
 
 // runContractDataLedger ingests changes for a single ledger the way live
-// ingestion does, with one AssetStatsProcessor per ledger, and reports the key
-// hashes the processor asked the db to insert into and remove from
-// contract_asset_balances, plus the contract asset stats it wrote. storedRows is
-// what contract_asset_balances already holds for the keys the ledger removes.
+// ingestion does, with one AssetStatsProcessor per ledger, and reports the rows
+// the processor asked the db to upsert into contract_asset_balances, the key
+// hashes it asked the db to remove, plus the contract asset stats it wrote.
+// storedRows is what contract_asset_balances already holds for the keys the
+// ledger changes.
 func runContractDataLedger(
 	t *testing.T, ledger uint32, storedRows []history.ContractAssetBalance, changes ...ingest.Change,
-) (inserted []xdr.Hash, removed []xdr.Hash, statInserts []history.ContractAssetStatRow) {
+) (upserted []history.ContractAssetBalance, removed []xdr.Hash, statInserts []history.ContractAssetStatRow) {
 	ctx := context.Background()
 	q := &history.MockQAssetStats{}
 
-	q.On("InsertContractAssetBalances", ctx, mock.Anything).Run(func(args mock.Arguments) {
-		for _, row := range args.Get(1).([]history.ContractAssetBalance) {
-			var keyHash xdr.Hash
-			copy(keyHash[:], row.KeyHash)
-			inserted = append(inserted, keyHash)
-		}
+	q.On("UpsertContractAssetBalances", ctx, mock.Anything).Run(func(args mock.Arguments) {
+		upserted = append(upserted, args.Get(1).([]history.ContractAssetBalance)...)
 	}).Return(nil).Maybe()
 	q.On("RemoveContractAssetBalances", ctx, mock.Anything).Run(func(args mock.Arguments) {
 		removed = append(removed, args.Get(1).([]xdr.Hash)...)
@@ -39,13 +36,12 @@ func runContractDataLedger(
 
 	q.On("GetContractAssetBalances", ctx, mock.Anything).Return(storedRows, nil).Maybe()
 
-	q.On("InsertAssetContracts", ctx, mock.Anything).Return(nil).Maybe()
-	q.On("UpdateContractAssetBalanceAmounts", ctx, mock.Anything, mock.Anything).Return(nil).Maybe()
+	q.On("UpsertAssetContracts", ctx, mock.Anything).Return(nil).Maybe()
 	q.On("UpdateContractAssetBalanceExpirations", ctx, mock.Anything, mock.Anything).Return(nil).Maybe()
 	q.On("UpdateAssetContractExpirations", ctx, mock.Anything, mock.Anything).Return(nil).Maybe()
-	q.On("DeleteContractAssetBalancesExpiringAt", ctx, mock.Anything).
+	q.On("DeleteContractAssetBalancesExpiredBefore", ctx, ledger).
 		Return([]history.ContractAssetBalance{}, nil).Maybe()
-	q.On("DeleteAssetContractsExpiringAt", ctx, mock.Anything).Return(int64(0), nil).Maybe()
+	q.On("DeleteAssetContractsExpiredBefore", ctx, ledger).Return(int64(0), nil).Maybe()
 	q.On("GetContractAssetStat", ctx, mock.Anything).
 		Return(history.ContractAssetStatRow{}, sql.ErrNoRows).Maybe()
 	q.On("InsertContractAssetStat", ctx, mock.Anything).Run(func(args mock.Arguments) {
@@ -58,7 +54,17 @@ func runContractDataLedger(
 	}
 	assert.NoError(t, p.Commit(ctx))
 
-	return inserted, removed, statInserts
+	return upserted, removed, statInserts
+}
+
+func upsertedKeys(rows []history.ContractAssetBalance) []xdr.Hash {
+	var keys []xdr.Hash
+	for _, row := range rows {
+		var keyHash xdr.Hash
+		copy(keyHash[:], row.KeyHash)
+		keys = append(keys, keyHash)
+	}
+	return keys
 }
 
 func contractDataChange(pre, post *xdr.LedgerEntryData) ingest.Change {
@@ -82,6 +88,24 @@ func ttlCreate(keyHash xdr.Hash, liveUntil uint32) ingest.Change {
 				LiveUntilLedgerSeq: xdr.Uint32(liveUntil),
 			},
 		}},
+	}
+}
+
+func ttlEntry(keyHash xdr.Hash, liveUntil uint32) *xdr.LedgerEntry {
+	return &xdr.LedgerEntry{Data: xdr.LedgerEntryData{
+		Type: xdr.LedgerEntryTypeTtl,
+		Ttl: &xdr.TtlEntry{
+			KeyHash:            keyHash,
+			LiveUntilLedgerSeq: xdr.Uint32(liveUntil),
+		},
+	}}
+}
+
+func ttlUpdate(keyHash xdr.Hash, from, to uint32) ingest.Change {
+	return ingest.Change{
+		Type: xdr.LedgerEntryTypeTtl,
+		Pre:  ttlEntry(keyHash, from),
+		Post: ttlEntry(keyHash, to),
 	}
 }
 
@@ -124,14 +148,90 @@ func TestContractDataRemovalFilteredByLedgerKey(t *testing.T) {
 	)
 	assert.False(t, ok, "rewritten entry must no longer resemble a balance")
 
-	inserted, _, _ := runContractDataLedger(t, 100, nil,
+	upserted, _, _ := runContractDataLedger(t, 100, nil,
 		contractDataChange(nil, &balance),
 		ttlCreate(keyHash, 5000),
 	)
-	assert.Equal(t, []xdr.Hash{keyHash}, inserted)
+	assert.Equal(t, []xdr.Hash{keyHash}, upsertedKeys(upserted))
 
-	_, removed, _ := runContractDataLedger(t, 101, nil, contractDataChange(&rewrittenData, nil))
+	storedRows := []history.ContractAssetBalance{
+		{
+			KeyHash:          keyHash[:],
+			ContractID:       assetContractID[:],
+			Amount:           "1000",
+			ExpirationLedger: 5000,
+		},
+	}
+	_, removed, _ := runContractDataLedger(t, 101, storedRows, contractDataChange(&rewrittenData, nil))
 	assert.Equal(t, []xdr.Hash{keyHash}, removed)
+}
+
+// TestContractDataUpdateFollowsValue covers updates which rewrite the value of a
+// balance entry into something which is not a balance and back. The row follows
+// the latest value of the entry: it is removed while the value is not a balance,
+// and stored again once it is.
+func TestContractDataUpdateFollowsValue(t *testing.T) {
+	assetContractID := [32]byte{0xAA}
+	holderID := [32]byte{0xBB}
+
+	balance := sac.BalanceToContractData(assetContractID, holderID, 1000)
+	keyHash := getKeyHashForBalance(t, assetContractID, holderID)
+
+	// value rewritten, ledger key unchanged
+	rewritten := *balance.ContractData
+	val := xdr.Uint32(1)
+	rewritten.Val = xdr.ScVal{Type: xdr.ScValTypeScvU32, U32: &val}
+	rewrittenData := xdr.LedgerEntryData{
+		Type:         xdr.LedgerEntryTypeContractData,
+		ContractData: &rewritten,
+	}
+	updatedBalance := sac.BalanceToContractData(assetContractID, holderID, 5000)
+
+	storedRows := []history.ContractAssetBalance{
+		{
+			KeyHash:          keyHash[:],
+			ContractID:       assetContractID[:],
+			Amount:           "1000",
+			ExpirationLedger: 5000,
+		},
+	}
+	upserted, removed, statInserts := runContractDataLedger(t, 101, storedRows,
+		contractDataChange(&balance, &rewrittenData),
+	)
+	assert.Empty(t, upserted)
+	assert.Equal(t, []xdr.Hash{keyHash}, removed)
+	assert.Equal(t, []history.ContractAssetStatRow{
+		{
+			ContractID: assetContractID[:],
+			Stat: history.ContractStat{
+				ActiveBalance: "-1000",
+				ActiveHolders: -1,
+			},
+		},
+	}, statInserts)
+
+	upserted, removed, statInserts = runContractDataLedger(t, 102, nil,
+		contractDataChange(&rewrittenData, &updatedBalance),
+		ttlUpdate(keyHash, 5000, 6000),
+	)
+	assert.Empty(t, removed)
+	assert.Equal(t, []history.ContractAssetBalance{
+		{
+			KeyHash:          keyHash[:],
+			ContractID:       assetContractID[:],
+			Amount:           "5000",
+			ExpirationLedger: 6000,
+		},
+	}, upserted)
+	assert.Equal(t, []history.ContractAssetStatRow{
+		{
+			ContractID: assetContractID[:],
+			Stat: history.ContractStat{
+				ActiveBalance: "5000",
+				ActiveHolders: 1,
+			},
+		},
+	}, statInserts)
 }
 
 // TestContractDataRemovalOfUnrelatedKeyIgnored covers the other side of that
@@ -204,9 +304,9 @@ func TestContractDataRemovalUsesStoredAmount(t *testing.T) {
 }
 
 // TestContractDataRemovalWithoutStoredRowLeavesStats covers a removal whose entry
-// does resemble a balance but which was never ingested as one, because it only
-// came to resemble a balance after it was created. With no stored row there is no
-// stat to adjust, whatever the removed entry's value looks like.
+// does resemble a balance but which was never ingested as one. With no stored row
+// there is nothing to remove and no stat to adjust, whatever the removed entry's
+// value looks like.
 func TestContractDataRemovalWithoutStoredRowLeavesStats(t *testing.T) {
 	assetContractID := [32]byte{0xAA}
 	holderID := [32]byte{0xBB}
@@ -219,6 +319,6 @@ func TestContractDataRemovalWithoutStoredRowLeavesStats(t *testing.T) {
 		ttlRemove(keyHash, 5000),
 	)
 
-	assert.Equal(t, []xdr.Hash{keyHash}, removed)
+	assert.Empty(t, removed)
 	assert.Empty(t, statInserts)
 }

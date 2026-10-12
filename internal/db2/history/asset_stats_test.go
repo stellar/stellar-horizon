@@ -558,7 +558,7 @@ func TestAssetContractExpiration(t *testing.T) {
 		}, results,
 	)
 
-	rowsDeleted, err := q.DeleteAssetContractsExpiringAt(tt.Ctx, 4)
+	rowsDeleted, err := q.DeleteAssetContractsExpiredBefore(tt.Ctx, 5)
 	tt.Assert.Zero(rowsDeleted)
 	tt.Assert.NoError(err)
 
@@ -572,7 +572,7 @@ func TestAssetContractExpiration(t *testing.T) {
 		}, results,
 	)
 
-	rowsDeleted, err = q.DeleteAssetContractsExpiringAt(tt.Ctx, 5)
+	rowsDeleted, err = q.DeleteAssetContractsExpiredBefore(tt.Ctx, 6)
 	tt.Assert.Equal(int64(1), rowsDeleted)
 	tt.Assert.NoError(err)
 
@@ -600,7 +600,7 @@ func TestAssetContractExpiration(t *testing.T) {
 		}, results,
 	)
 
-	rowsDeleted, err = q.DeleteAssetContractsExpiringAt(tt.Ctx, 10)
+	rowsDeleted, err = q.DeleteAssetContractsExpiredBefore(tt.Ctx, 11)
 	tt.Assert.Equal(int64(1), rowsDeleted)
 	tt.Assert.NoError(err)
 
@@ -611,6 +611,53 @@ func TestAssetContractExpiration(t *testing.T) {
 			etherAssetStat,
 		}, results,
 	)
+}
+
+func TestUpsertAssetContracts(t *testing.T) {
+	tt := test.Start(t)
+	defer tt.Finish()
+	test.ResetHorizonDB(t, tt.HorizonDB)
+	q := &Q{tt.HorizonSession()}
+
+	eurContractID := [32]byte{1}
+	eurKeyHash := [32]byte{2}
+	usdContractID := [32]byte{3}
+	usdKeyHash := [32]byte{4}
+	eur := AssetContract{
+		KeyHash:          eurKeyHash[:],
+		ContractID:       eurContractID[:],
+		AssetType:        xdr.AssetTypeAssetTypeCreditAlphanum4,
+		AssetCode:        "EUR",
+		AssetIssuer:      "GA5WBPYA5Y4WAEHXWR2UKO2UO4BUGHUQ74EUPKON2QHV4WRHOIRNKKH2",
+		ExpirationLedger: 5,
+	}
+	usd := AssetContract{
+		KeyHash:          usdKeyHash[:],
+		ContractID:       usdContractID[:],
+		AssetType:        xdr.AssetTypeAssetTypeCreditAlphanum4,
+		AssetCode:        "USD",
+		AssetIssuer:      "GA5WBPYA5Y4WAEHXWR2UKO2UO4BUGHUQ74EUPKON2QHV4WRHOIRNKKH2",
+		ExpirationLedger: 20,
+	}
+
+	tt.Assert.NoError(q.Begin(tt.Ctx))
+	tt.Assert.NoError(q.InsertAssetContracts(tt.Ctx, []AssetContract{eur}))
+	eur.ExpirationLedger = 10
+	tt.Assert.NoError(q.UpsertAssetContracts(tt.Ctx, []AssetContract{eur, usd}))
+
+	// eur was updated to expire at ledger 10, and usd was inserted
+	rowsDeleted, err := q.DeleteAssetContractsExpiredBefore(tt.Ctx, 10)
+	tt.Assert.NoError(err)
+	tt.Assert.Zero(rowsDeleted)
+	rowsDeleted, err = q.DeleteAssetContractsExpiredBefore(tt.Ctx, 11)
+	tt.Assert.NoError(err)
+	tt.Assert.Equal(int64(1), rowsDeleted)
+	// rows which expired before the given ledger are deleted even if they were not
+	// active in the previous ledger either
+	rowsDeleted, err = q.DeleteAssetContractsExpiredBefore(tt.Ctx, 100)
+	tt.Assert.NoError(err)
+	tt.Assert.Equal(int64(1), rowsDeleted)
+	tt.Assert.NoError(q.Rollback())
 }
 
 func TestGetAssetStatsFiltersAndCursor(t *testing.T) {
@@ -1170,7 +1217,7 @@ func TestRemoveContractAssetBalances(t *testing.T) {
 	tt.Assert.NoError(q.Rollback())
 }
 
-func TestUpdateContractAssetBalanceAmounts(t *testing.T) {
+func TestUpsertContractAssetBalances(t *testing.T) {
 	tt := test.Start(t)
 	defer tt.Finish()
 	test.ResetHorizonDB(t, tt.HorizonDB)
@@ -1200,22 +1247,73 @@ func TestUpdateContractAssetBalanceAmounts(t *testing.T) {
 		q.InsertContractAssetBalances(context.Background(), []ContractAssetBalance{balance, otherBalance}),
 	)
 
-	nonExistantKeyHash := xdr.Hash{4}
+	newKeyHash := [32]byte{4}
+	newBalance := ContractAssetBalance{
+		KeyHash:          newKeyHash[:],
+		ContractID:       contractID[:],
+		Amount:           "170141183460469231731687303715884105727",
+		ExpirationLedger: 12,
+	}
+	balance.Amount = "2"
+	balance.ExpirationLedger = 20
+	otherBalance.Amount = "1"
 
 	tt.Assert.NoError(
-		q.UpdateContractAssetBalanceAmounts(
+		q.UpsertContractAssetBalances(
 			context.Background(),
-			[]xdr.Hash{otherKeyHash, keyHash, nonExistantKeyHash},
-			[]string{"1", "2", "3"},
+			[]ContractAssetBalance{otherBalance, balance, newBalance},
 		),
 	)
 
-	balances, err := q.GetContractAssetBalances(context.Background(), []xdr.Hash{keyHash, otherKeyHash})
+	balances, err := q.GetContractAssetBalances(context.Background(), []xdr.Hash{keyHash, otherKeyHash, newKeyHash})
 	tt.Assert.NoError(err)
+	assertContractAssetBalancesEqual(t, balances, []ContractAssetBalance{balance, otherBalance, newBalance})
 
-	balance.Amount = "2"
-	otherBalance.Amount = "1"
-	assertContractAssetBalancesEqual(t, balances, []ContractAssetBalance{balance, otherBalance})
+	tt.Assert.NoError(q.Rollback())
+}
+
+func TestCountContractAssetBalancesOfAssetContracts(t *testing.T) {
+	tt := test.Start(t)
+	defer tt.Finish()
+	test.ResetHorizonDB(t, tt.HorizonDB)
+
+	q := &Q{tt.HorizonSession()}
+	tt.Assert.NoError(q.Begin(context.Background()))
+
+	assetContractID := [32]byte{1}
+	otherContractID := [32]byte{2}
+	assetContractKeyHash := [32]byte{3}
+	tt.Assert.NoError(q.InsertAssetContracts(context.Background(), []AssetContract{
+		{
+			KeyHash:          assetContractKeyHash[:],
+			ContractID:       assetContractID[:],
+			AssetType:        xdr.AssetTypeAssetTypeCreditAlphanum4,
+			AssetCode:        "EUR",
+			AssetIssuer:      "GA5WBPYA5Y4WAEHXWR2UKO2UO4BUGHUQ74EUPKON2QHV4WRHOIRNKKH2",
+			ExpirationLedger: 10,
+		},
+	}))
+
+	count, err := q.CountContractAssetBalancesOfAssetContracts(context.Background())
+	tt.Assert.NoError(err)
+	tt.Assert.Zero(count)
+
+	var balances []ContractAssetBalance
+	for i, contractID := range [][32]byte{assetContractID, assetContractID, otherContractID} {
+		keyHash := [32]byte{10 + byte(i)}
+		balances = append(balances, ContractAssetBalance{
+			KeyHash:          keyHash[:],
+			ContractID:       contractID[:],
+			Amount:           "1",
+			ExpirationLedger: 10,
+		})
+	}
+	tt.Assert.NoError(q.InsertContractAssetBalances(context.Background(), balances))
+
+	// the balance of the contract which is not an asset contract is not counted
+	count, err = q.CountContractAssetBalancesOfAssetContracts(context.Background())
+	tt.Assert.NoError(err)
+	tt.Assert.Equal(2, count)
 
 	tt.Assert.NoError(q.Rollback())
 }
@@ -1250,11 +1348,15 @@ func TestUpdateContractAssetBalanceExpirations(t *testing.T) {
 		q.InsertContractAssetBalances(context.Background(), []ContractAssetBalance{balance, otherBalance}),
 	)
 
-	balances, err := q.DeleteContractAssetBalancesExpiringAt(context.Background(), 10)
+	balances, err := q.DeleteContractAssetBalancesExpiredBefore(context.Background(), 10)
+	tt.Assert.NoError(err)
+	tt.Assert.Empty(balances)
+
+	balances, err = q.DeleteContractAssetBalancesExpiredBefore(context.Background(), 11)
 	tt.Assert.NoError(err)
 	assertContractAssetBalancesEqual(t, balances, []ContractAssetBalance{balance})
 
-	balances, err = q.DeleteContractAssetBalancesExpiringAt(context.Background(), 11)
+	balances, err = q.DeleteContractAssetBalancesExpiredBefore(context.Background(), 12)
 	tt.Assert.NoError(err)
 	assertContractAssetBalancesEqual(t, balances, []ContractAssetBalance{otherBalance})
 
@@ -1276,7 +1378,7 @@ func TestUpdateContractAssetBalanceExpirations(t *testing.T) {
 	tt.Assert.NoError(err)
 	tt.Assert.Empty(balances)
 
-	balances, err = q.DeleteContractAssetBalancesExpiringAt(context.Background(), 10)
+	balances, err = q.DeleteContractAssetBalancesExpiredBefore(context.Background(), 500)
 	tt.Assert.NoError(err)
 	assert.Empty(t, balances)
 
