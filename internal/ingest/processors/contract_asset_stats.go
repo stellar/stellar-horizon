@@ -127,26 +127,11 @@ func (s *ContractAssetStatSet) GetCreatedAssetContracts() ([]history.AssetContra
 	return rows, nil
 }
 
-// GetCreatedBalances returns the rows of the contract balances added to the set,
-// assuming none of them is stored yet. This is the case when ingesting state from a
-// history archive, where every change creates a ledger entry.
-func (s *ContractAssetStatSet) GetCreatedBalances() []history.ContractAssetBalance {
-	rows, _ := s.createdBalances()
-	return rows
-}
-
-// GetContractStats returns the stats of the balances returned by GetCreatedBalances,
-// grouped by contract.
-func (s *ContractAssetStatSet) GetContractStats() []history.ContractAssetStatRow {
-	_, stats := s.createdBalances()
-	var contractStats []history.ContractAssetStatRow
-	for _, contractStat := range stats {
-		contractStats = append(contractStats, contractStat.ConvertToHistoryObject())
-	}
-	return contractStats
-}
-
-func (s *ContractAssetStatSet) createdBalances() ([]history.ContractAssetBalance, map[xdr.ContractId]assetContractStatValue) {
+// GetCreatedBalancesAndStats returns the rows of the contract balances added to the set,
+// assuming none of them is stored yet, along with their stats grouped by contract. This
+// is the case when ingesting state from a history archive, where every change creates a
+// ledger entry.
+func (s *ContractAssetStatSet) GetCreatedBalancesAndStats() ([]history.ContractAssetBalance, []history.ContractAssetStatRow) {
 	var rows []history.ContractAssetBalance
 	stats := map[xdr.ContractId]assetContractStatValue{}
 	for _, keyHash := range s.balanceKeys {
@@ -168,7 +153,12 @@ func (s *ContractAssetStatSet) createdBalances() ([]history.ContractAssetBalance
 		stat.activeBalance.Add(stat.activeBalance, amount)
 		stats[change.contractID] = stat
 	}
-	return rows, stats
+
+	var contractStats []history.ContractAssetStatRow
+	for _, contractStat := range stats {
+		contractStats = append(contractStats, contractStat.ConvertToHistoryObject())
+	}
+	return rows, contractStats
 }
 
 func (s *ContractAssetStatSet) ingestAssetContractMetadata(change ingest.Change) (bool, error) {

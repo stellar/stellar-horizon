@@ -9,12 +9,14 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 
 	ingestsdk "github.com/stellar/go-stellar-sdk/ingest"
 	"github.com/stellar/go-stellar-sdk/ingest/sac"
 	"github.com/stellar/go-stellar-sdk/keypair"
 	"github.com/stellar/go-stellar-sdk/support/db"
+	"github.com/stellar/go-stellar-sdk/support/errors"
 	"github.com/stellar/go-stellar-sdk/xdr"
 
 	"github.com/stellar/stellar-horizon/internal/db2/history"
@@ -334,4 +336,169 @@ func TestContractDataIngestionMatchesVerification(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (c *contractDataTest) balanceRow(
+	contractID xdr.ContractId, holder [32]byte, amount string, expirationLedger uint32,
+) history.ContractAssetBalance {
+	keyHash := contractDataKeyHash(c.t, sac.BalanceToContractData(contractID, holder, 0))
+	return history.ContractAssetBalance{
+		KeyHash:          keyHash[:],
+		ContractID:       contractID[:],
+		Amount:           amount,
+		ExpirationLedger: expirationLedger,
+	}
+}
+
+type contractDataMismatchCase struct {
+	name     string
+	change   func() error
+	expected []string
+}
+
+// contractDataMismatchCases returns changes to the stored contract data of a test whose
+// first asset contract holds a balance of 10 for its first holder and of 20 for its
+// second holder, along with parts of the mismatches each change must produce.
+func contractDataMismatchCases(
+	c *contractDataTest, liveUntil uint32, extraAssetContract history.AssetContract,
+) []contractDataMismatchCase {
+	assetContractID := c.assetContracts[0]
+	upsertBalance := func(contractID xdr.ContractId, holder [32]byte, amount string, expirationLedger uint32) error {
+		return c.q.UpsertContractAssetBalances(c.ctx, []history.ContractAssetBalance{
+			c.balanceRow(contractID, holder, amount, expirationLedger),
+		})
+	}
+	return []contractDataMismatchCase{
+		{
+			name:     "balance amount",
+			change:   func() error { return upsertBalance(assetContractID, c.holders[0], "11", liveUntil) },
+			expected: []string{"has amount 10 in HAS but 11 in db"},
+		},
+		{
+			name:     "balance expiration",
+			change:   func() error { return upsertBalance(assetContractID, c.holders[0], "10", liveUntil+1) },
+			expected: []string{fmt.Sprintf("has expiration %d in HAS but %d in db", liveUntil, liveUntil+1)},
+		},
+		{
+			name: "missing balance",
+			change: func() error {
+				keyHash := contractDataKeyHash(c.t, sac.BalanceToContractData(assetContractID, c.holders[1], 0))
+				return c.q.RemoveContractAssetBalances(c.ctx, []xdr.Hash{keyHash})
+			},
+			expected: []string{
+				"is missing from db",
+				"db contains 1 balances of asset contracts but HAS contains 2",
+			},
+		},
+		{
+			name:     "extra balance",
+			change:   func() error { return upsertBalance(assetContractID, c.holders[2], "5", liveUntil) },
+			expected: []string{"db contains 3 balances of asset contracts but HAS contains 2"},
+		},
+		{
+			name: "contract stats",
+			change: func() error {
+				_, err := c.q.UpdateContractAssetStat(c.ctx, history.ContractAssetStatRow{
+					ContractID: assetContractID[:],
+					Stat:       history.ContractStat{ActiveBalance: "31", ActiveHolders: 2},
+				})
+				return err
+			},
+			expected: []string{"in HAS but {ActiveBalance:31 ActiveHolders:2} in db"},
+		},
+		{
+			name: "missing asset contract",
+			change: func() error {
+				_, err := c.q.DeleteAssetContractsExpiredBefore(c.ctx, liveUntil+1)
+				return err
+			},
+			expected: []string{"asset contract of EUR:", "is missing from db"},
+		},
+		{
+			name:     "extra asset contract",
+			change:   func() error { return c.q.UpsertAssetContracts(c.ctx, []history.AssetContract{extraAssetContract}) },
+			expected: []string{"db contains asset contract of USDOLLAR:"},
+		},
+		{
+			name:   "balance of a contract which is not an asset contract",
+			change: func() error { return upsertBalance(c.otherContracts[0], c.holders[0], "31", liveUntil) },
+		},
+	}
+}
+
+// TestCheckAssetStatsReportsContractDataMismatches changes the stored contract data in
+// different ways, and checks that the state verification of asset stats reports each
+// difference as a contractDataMismatchError. Differences in the balances of contracts
+// which are not Stellar Asset Contracts are not reported.
+func TestCheckAssetStatsReportsContractDataMismatches(t *testing.T) {
+	c, finish := newContractDataTest(t, 1)
+	defer finish()
+
+	assetContractID := c.assetContracts[0]
+	liveUntil := c.ledger + 100
+	c.create(c.instances[assetContractID], liveUntil)
+	c.create(sac.BalanceToContractData(assetContractID, c.holders[0], 10), liveUntil)
+	c.create(sac.BalanceToContractData(assetContractID, c.holders[1], 20), liveUntil)
+	c.create(sac.BalanceToContractData(c.otherContracts[0], c.holders[0], 30), liveUntil)
+	c.closeLedger()
+	ledger := c.ledger - 1
+	require.NoError(t, c.verify(ledger))
+
+	// an asset contract whose instance is not in the ledger
+	instance := c.instances[c.assetContracts[1]]
+	asset, ok := sac.AssetFromContractData(xdr.LedgerEntry{Data: instance}, contractDataTestPassphrase)
+	require.True(t, ok)
+	instanceKeyHash := contractDataKeyHash(t, instance)
+	extraAssetContract := history.AssetContract{
+		KeyHash:          instanceKeyHash[:],
+		ContractID:       c.assetContracts[1][:],
+		ExpirationLedger: liveUntil,
+	}
+	require.NoError(t, asset.Extract(
+		&extraAssetContract.AssetType, &extraAssetContract.AssetCode, &extraAssetContract.AssetIssuer,
+	))
+
+	for _, testCase := range contractDataMismatchCases(c, liveUntil, extraAssetContract) {
+		t.Run(testCase.name, func(t *testing.T) {
+			require.NoError(t, c.q.Begin(c.ctx))
+			defer func() {
+				require.NoError(t, c.q.Rollback())
+			}()
+			require.NoError(t, testCase.change())
+
+			err := c.verify(ledger)
+			if len(testCase.expected) == 0 {
+				require.NoError(t, err)
+				return
+			}
+			mismatch, ok := errors.Cause(err).(contractDataMismatchError)
+			require.True(t, ok, "expected a contractDataMismatchError, got %v", err)
+			for _, expected := range testCase.expected {
+				require.Contains(t, mismatch.Error(), expected)
+			}
+		})
+	}
+}
+
+func TestHandleStateVerificationError(t *testing.T) {
+	historyQ := &mockDBQ{}
+	sys := &system{ctx: context.Background(), historyQ: historyQ}
+	sys.initMetrics()
+
+	// a mismatch in contract data is counted, and does not mark the state as invalid
+	sys.handleStateVerificationError(errors.Wrap(
+		contractDataMismatchError{mismatches: []string{"contract balance is missing from db"}},
+		"checkAssetStats failed",
+	))
+	require.Equal(t, 1.0, testutil.ToFloat64(sys.Metrics().StateVerifyContractDataMismatchCounter))
+	historyQ.AssertNotCalled(t, "UpdateExpStateInvalid", sys.ctx, true)
+
+	historyQ.On("CloneIngestionQ").Return(historyQ).Once()
+	historyQ.On("UpdateExpStateInvalid", sys.ctx, true).Return(nil).Once()
+	sys.handleStateVerificationError(errors.Wrap(
+		ingestsdk.NewStateError(fmt.Errorf("asset stat does not match")),
+		"checkAssetStats failed",
+	))
+	require.Equal(t, 1.0, testutil.ToFloat64(sys.Metrics().StateVerifyContractDataMismatchCounter))
+	historyQ.AssertExpectations(t)
 }

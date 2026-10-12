@@ -572,12 +572,13 @@ func checkAssetStats(
 	}
 
 	var mismatches []string
+	var assetStats []history.AssetAndContractStat
 	page := db2.PageQuery{
 		Order: "asc",
 		Limit: assetStatsBatchSize,
 	}
 	for {
-		assetStats, err := q.GetAssetStats(ctx, "", "", page)
+		assetStats, err = q.GetAssetStats(ctx, "", "", page)
 		if err != nil {
 			return errors.Wrap(err, "could not fetch asset stats from db")
 		}
@@ -587,7 +588,7 @@ func checkAssetStats(
 
 		for _, assetStat := range assetStats {
 			key := assetStat.AssetCode + ":" + assetStat.AssetIssuer
-			if err := checkClassicAssetStat(classicStats, key, assetStat); err != nil {
+			if err = checkClassicAssetStat(classicStats, key, assetStat); err != nil {
 				return err
 			}
 			mismatches = checkContractAssetStat(contractStats, key, assetStat, mismatches)
@@ -701,8 +702,9 @@ type expectedContractAssetStat struct {
 func extractContractAssetStatsAndBalances(
 	contractAssetStatSet *processors.ContractAssetStatSet,
 ) (map[string]expectedContractAssetStat, []history.ContractAssetBalance, error) {
+	createdBalances, contractStatRows := contractAssetStatSet.GetCreatedBalancesAndStats()
 	contractToStats := map[xdr.ContractId]history.ContractStat{}
-	for _, row := range contractAssetStatSet.GetContractStats() {
+	for _, row := range contractStatRows {
 		var contractID xdr.ContractId
 		copy(contractID[:], row.ContractID)
 		contractToStats[contractID] = row.Stat
@@ -733,7 +735,7 @@ func extractContractAssetStatsAndBalances(
 	}
 
 	var balances []history.ContractAssetBalance
-	for _, balance := range contractAssetStatSet.GetCreatedBalances() {
+	for _, balance := range createdBalances {
 		var contractID xdr.ContractId
 		copy(contractID[:], balance.ContractID)
 		if assetContractIDs[contractID] {

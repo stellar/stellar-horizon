@@ -927,25 +927,29 @@ func (s *system) maybeVerifyState(lastIngestedLedger uint32, expectedBucketListH
 				if isCancelledError(s.ctx, err) {
 					return
 				}
-
-				errorCount := s.incrementStateVerificationErrors()
-				switch errors.Cause(err).(type) {
-				case ingest.StateError:
-					markStateInvalid(s.ctx, s.historyQ, err)
-				case contractDataMismatchError:
-					s.Metrics().StateVerifyContractDataMismatchCounter.Inc()
-					log.WithError(err).Error("State verification found mismatches in contract data")
-				default:
-					logger := log.WithError(err).Warn
-					if errorCount >= stateVerificationErrorThreshold {
-						logger = log.WithError(err).Error
-					}
-					logger("State verification errored")
-				}
+				s.handleStateVerificationError(err)
 			} else {
 				s.resetStateVerificationErrors()
 			}
 		}()
+	}
+}
+
+// handleStateVerificationError records a state verification which returned an error.
+func (s *system) handleStateVerificationError(err error) {
+	errorCount := s.incrementStateVerificationErrors()
+	switch errors.Cause(err).(type) {
+	case ingest.StateError:
+		markStateInvalid(s.ctx, s.historyQ, err)
+	case contractDataMismatchError:
+		s.Metrics().StateVerifyContractDataMismatchCounter.Inc()
+		log.WithError(err).Error("State verification found mismatches in contract data")
+	default:
+		logger := log.WithError(err).Warn
+		if errorCount >= stateVerificationErrorThreshold {
+			logger = log.WithError(err).Error
+		}
+		logger("State verification errored")
 	}
 }
 

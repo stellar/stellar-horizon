@@ -189,6 +189,7 @@ func TestAddContractData(t *testing.T) {
 			ExpirationLedger: 150,
 		},
 	}, createdAssetContracts)
+	createdBalances, contractStats := set.GetCreatedBalancesAndStats()
 	assert.Equal(t, []history.ContractAssetBalance{
 		{
 			KeyHash:          uniBalanceKeyHash[:],
@@ -202,8 +203,8 @@ func TestAddContractData(t *testing.T) {
 			Amount:           "150",
 			ExpirationLedger: 150,
 		},
-	}, set.GetCreatedBalances())
-	assert.ElementsMatch(t, set.GetContractStats(), []history.ContractAssetStatRow{
+	}, createdBalances)
+	assert.ElementsMatch(t, contractStats, []history.ContractAssetStatRow{
 		{
 			ContractID: uniID[:],
 			Stat: history.ContractStat{

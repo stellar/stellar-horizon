@@ -215,14 +215,15 @@ func (p *AssetStatsProcessor) updateDB(
 			}
 		}
 
-		if rows := contractAssetStatSet.GetContractStats(); len(rows) > 0 {
-			if err := p.assetStatsQ.InsertContractAssetStats(ctx, rows); err != nil {
+		balances, contractStats := contractAssetStatSet.GetCreatedBalancesAndStats()
+		if len(contractStats) > 0 {
+			if err := p.assetStatsQ.InsertContractAssetStats(ctx, contractStats); err != nil {
 				return errors.Wrap(err, "Error inserting asset contract stats")
 			}
 		}
 
-		if rows := contractAssetStatSet.GetCreatedBalances(); len(rows) > 0 {
-			if err := p.assetStatsQ.InsertContractAssetBalances(ctx, rows); err != nil {
+		if len(balances) > 0 {
+			if err := p.assetStatsQ.InsertContractAssetBalances(ctx, balances); err != nil {
 				return errors.Wrap(err, "Error inserting asset contract stats")
 			}
 		}
