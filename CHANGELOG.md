@@ -22,6 +22,9 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 ### Updated
 - State verification only checks the contract balances of Stellar Asset Contracts, and reports differences in asset contracts, contract balances and contract stats as state verification errors in its logs.
 
+### Updated
+- The `method` label of the `horizon_http_requests_duration_seconds`, `horizon_http_requests_in_flight` and `horizon_http_requests_received` metrics reports standard HTTP methods as before and groups any other method under `OTHER`.
+
 ## 29.0.0
 
 **This release adds support for Protocol 29.**
