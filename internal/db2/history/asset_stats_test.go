@@ -613,53 +613,6 @@ func TestAssetContractExpiration(t *testing.T) {
 	)
 }
 
-func TestUpsertAssetContracts(t *testing.T) {
-	tt := test.Start(t)
-	defer tt.Finish()
-	test.ResetHorizonDB(t, tt.HorizonDB)
-	q := &Q{tt.HorizonSession()}
-
-	eurContractID := [32]byte{1}
-	eurKeyHash := [32]byte{2}
-	usdContractID := [32]byte{3}
-	usdKeyHash := [32]byte{4}
-	eur := AssetContract{
-		KeyHash:          eurKeyHash[:],
-		ContractID:       eurContractID[:],
-		AssetType:        xdr.AssetTypeAssetTypeCreditAlphanum4,
-		AssetCode:        "EUR",
-		AssetIssuer:      "GA5WBPYA5Y4WAEHXWR2UKO2UO4BUGHUQ74EUPKON2QHV4WRHOIRNKKH2",
-		ExpirationLedger: 5,
-	}
-	usd := AssetContract{
-		KeyHash:          usdKeyHash[:],
-		ContractID:       usdContractID[:],
-		AssetType:        xdr.AssetTypeAssetTypeCreditAlphanum4,
-		AssetCode:        "USD",
-		AssetIssuer:      "GA5WBPYA5Y4WAEHXWR2UKO2UO4BUGHUQ74EUPKON2QHV4WRHOIRNKKH2",
-		ExpirationLedger: 20,
-	}
-
-	tt.Assert.NoError(q.Begin(tt.Ctx))
-	tt.Assert.NoError(q.InsertAssetContracts(tt.Ctx, []AssetContract{eur}))
-	eur.ExpirationLedger = 10
-	tt.Assert.NoError(q.UpsertAssetContracts(tt.Ctx, []AssetContract{eur, usd}))
-
-	// eur was updated to expire at ledger 10, and usd was inserted
-	rowsDeleted, err := q.DeleteAssetContractsExpiredBefore(tt.Ctx, 10)
-	tt.Assert.NoError(err)
-	tt.Assert.Zero(rowsDeleted)
-	rowsDeleted, err = q.DeleteAssetContractsExpiredBefore(tt.Ctx, 11)
-	tt.Assert.NoError(err)
-	tt.Assert.Equal(int64(1), rowsDeleted)
-	// rows which expired before the given ledger are deleted even if they were not
-	// active in the previous ledger either
-	rowsDeleted, err = q.DeleteAssetContractsExpiredBefore(tt.Ctx, 100)
-	tt.Assert.NoError(err)
-	tt.Assert.Equal(int64(1), rowsDeleted)
-	tt.Assert.NoError(q.Rollback())
-}
-
 func TestGetAssetStatsFiltersAndCursor(t *testing.T) {
 	tt := test.Start(t)
 	defer tt.Finish()
@@ -1268,52 +1221,6 @@ func TestUpsertContractAssetBalances(t *testing.T) {
 	balances, err := q.GetContractAssetBalances(context.Background(), []xdr.Hash{keyHash, otherKeyHash, newKeyHash})
 	tt.Assert.NoError(err)
 	assertContractAssetBalancesEqual(t, balances, []ContractAssetBalance{balance, otherBalance, newBalance})
-
-	tt.Assert.NoError(q.Rollback())
-}
-
-func TestCountContractAssetBalancesOfAssetContracts(t *testing.T) {
-	tt := test.Start(t)
-	defer tt.Finish()
-	test.ResetHorizonDB(t, tt.HorizonDB)
-
-	q := &Q{tt.HorizonSession()}
-	tt.Assert.NoError(q.Begin(context.Background()))
-
-	assetContractID := [32]byte{1}
-	otherContractID := [32]byte{2}
-	assetContractKeyHash := [32]byte{3}
-	tt.Assert.NoError(q.InsertAssetContracts(context.Background(), []AssetContract{
-		{
-			KeyHash:          assetContractKeyHash[:],
-			ContractID:       assetContractID[:],
-			AssetType:        xdr.AssetTypeAssetTypeCreditAlphanum4,
-			AssetCode:        "EUR",
-			AssetIssuer:      "GA5WBPYA5Y4WAEHXWR2UKO2UO4BUGHUQ74EUPKON2QHV4WRHOIRNKKH2",
-			ExpirationLedger: 10,
-		},
-	}))
-
-	count, err := q.CountContractAssetBalancesOfAssetContracts(context.Background())
-	tt.Assert.NoError(err)
-	tt.Assert.Zero(count)
-
-	var balances []ContractAssetBalance
-	for i, contractID := range [][32]byte{assetContractID, assetContractID, otherContractID} {
-		keyHash := [32]byte{10 + byte(i)}
-		balances = append(balances, ContractAssetBalance{
-			KeyHash:          keyHash[:],
-			ContractID:       contractID[:],
-			Amount:           "1",
-			ExpirationLedger: 10,
-		})
-	}
-	tt.Assert.NoError(q.InsertContractAssetBalances(context.Background(), balances))
-
-	// the balance of the contract which is not an asset contract is not counted
-	count, err = q.CountContractAssetBalancesOfAssetContracts(context.Background())
-	tt.Assert.NoError(err)
-	tt.Assert.Equal(2, count)
 
 	tt.Assert.NoError(q.Rollback())
 }

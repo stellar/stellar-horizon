@@ -572,7 +572,6 @@ func (e *ExpAssetStatBalances) Scan(src interface{}) error {
 // QAssetStats defines exp_asset_stats related queries.
 type QAssetStats interface {
 	InsertAssetContracts(ctx context.Context, rows []AssetContract) error
-	UpsertAssetContracts(ctx context.Context, rows []AssetContract) error
 	UpdateAssetContractExpirations(ctx context.Context, keys []xdr.Hash, expirationLedgers []uint32) error
 	DeleteAssetContractsExpiredBefore(ctx context.Context, ledger uint32) (int64, error)
 	InsertContractAssetBalances(ctx context.Context, rows []ContractAssetBalance) error
@@ -581,7 +580,6 @@ type QAssetStats interface {
 	UpdateContractAssetBalanceExpirations(ctx context.Context, keys []xdr.Hash, expirationLedgers []uint32) error
 	GetContractAssetBalances(ctx context.Context, keys []xdr.Hash) ([]ContractAssetBalance, error)
 	DeleteContractAssetBalancesExpiredBefore(ctx context.Context, ledger uint32) ([]ContractAssetBalance, error)
-	CountContractAssetBalancesOfAssetContracts(ctx context.Context) (int, error)
 	InsertAssetStats(ctx context.Context, stats []ExpAssetStat) error
 	InsertContractAssetStats(ctx context.Context, rows []ContractAssetStatRow) error
 	InsertAssetStat(ctx context.Context, stat ExpAssetStat) (int64, error)

@@ -626,7 +626,7 @@ func (s *AssetStatsProcessorTestSuiteLedger) TestInsertAssetContract() {
 		return eurAssetStat.Equals(assetStat)
 	})).Return(int64(1), nil).Once()
 
-	s.mockQ.On("UpsertAssetContracts", s.ctx,
+	s.mockQ.On("InsertAssetContracts", s.ctx,
 		[]history.AssetContract{
 			{
 				KeyHash:          eurKeyHash[:],
@@ -798,7 +798,7 @@ func (s *AssetStatsProcessorTestSuiteLedger) TestRestoreReapsBeforeInsert() {
 		Return(int64(1), nil).Once()
 	s.mockQ.On("GetContractAssetBalances", s.ctx, []xdr.Hash{balanceKeyHash}).Run(readAfterReap).
 		Return([]history.ContractAssetBalance{}, nil).Once()
-	s.mockQ.On("UpsertAssetContracts", s.ctx, mock.MatchedBy(func(rows []history.AssetContract) bool {
+	s.mockQ.On("InsertAssetContracts", s.ctx, mock.MatchedBy(func(rows []history.AssetContract) bool {
 		return len(rows) == 1 && bytes.Equal(rows[0].KeyHash, usdKeyHash[:]) &&
 			rows[0].ExpirationLedger == uint32(restoredTTL)
 	})).Run(markUpsert).Return(nil).Once()
@@ -1142,7 +1142,7 @@ func (s *AssetStatsProcessorTestSuiteLedger) TestInsertAssetContractWithBalance(
 			btcAssetContractStat.Stat == row.Stat
 	})).Return(int64(1), nil).Once()
 
-	s.mockQ.On("UpsertAssetContracts", s.ctx,
+	s.mockQ.On("InsertAssetContracts", s.ctx,
 		[]history.AssetContract{
 			{
 				KeyHash:          eurKeyHash[:],

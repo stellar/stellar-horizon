@@ -580,7 +580,6 @@ func (s *VerifyRangeStateTestSuite) TestSuccessWithVerify() {
 		Order:  "asc",
 		Limit:  assetStatsBatchSize,
 	}).Return([]history.AssetAndContractStat{}, nil).Once()
-	clonedQ.MockQAssetStats.On("CountContractAssetBalancesOfAssetContracts", s.ctx).Return(0, nil).Once()
 
 	clonedQ.MockQClaimableBalances.On("CountClaimableBalances", s.ctx).Return(1, nil).Once()
 	clonedQ.MockQClaimableBalances.

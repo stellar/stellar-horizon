@@ -118,36 +118,6 @@ func (q *Q) InsertAssetContracts(ctx context.Context, rows []AssetContract) erro
 	return nil
 }
 
-// maxUpsertBatchSize keeps the number of query parameters in a single upsert
-// below the postgres limit of 65535.
-const maxUpsertBatchSize = 10000
-
-// UpsertAssetContracts inserts the given list of rows into the asset_contracts table,
-// replacing any row which already exists for the same contract.
-func (q *Q) UpsertAssetContracts(ctx context.Context, rows []AssetContract) error {
-	for len(rows) > 0 {
-		batch := rows[:min(len(rows), maxUpsertBatchSize)]
-		rows = rows[len(batch):]
-
-		sql := sq.Insert("asset_contracts").Columns(
-			"key_hash", "contract_id", "asset_type", "asset_code", "asset_issuer", "expiration_ledger",
-		)
-		for _, row := range batch {
-			sql = sql.Values(row.KeyHash, row.ContractID, row.AssetType, row.AssetCode, row.AssetIssuer, row.ExpirationLedger)
-		}
-		sql = sql.Suffix("ON CONFLICT (contract_id) DO UPDATE SET " +
-			"key_hash = excluded.key_hash, " +
-			"asset_type = excluded.asset_type, " +
-			"asset_code = excluded.asset_code, " +
-			"asset_issuer = excluded.asset_issuer, " +
-			"expiration_ledger = excluded.expiration_ledger")
-		if _, err := q.Exec(ctx, sql); err != nil {
-			return errors.Wrap(err, "could not upsert asset contracts")
-		}
-	}
-	return nil
-}
-
 // UpdateAssetContractExpirations will update the expiration ledgers for the given list of keys
 // (if they exist in the db).
 func (q *Q) UpdateAssetContractExpirations(ctx context.Context, keys []xdr.Hash, expirationLedgers []uint32) error {
@@ -199,6 +169,10 @@ func (q *Q) InsertContractAssetBalances(ctx context.Context, rows []ContractAsse
 
 	return nil
 }
+
+// maxUpsertBatchSize keeps the number of query parameters in a single upsert
+// below the postgres limit of 65535.
+const maxUpsertBatchSize = 10000
 
 // UpsertContractAssetBalances inserts the given list of rows into the contract_asset_balances
 // table, replacing any row which already exists for the same key.
@@ -276,16 +250,6 @@ func (q *Q) DeleteContractAssetBalancesExpiredBefore(ctx context.Context, ledger
 	var balances []ContractAssetBalance
 	err := q.Select(ctx, &balances, sql)
 	return balances, err
-}
-
-// CountContractAssetBalancesOfAssetContracts returns the number of contract_asset_balances
-// rows which belong to a contract in the asset_contracts table.
-func (q *Q) CountContractAssetBalancesOfAssetContracts(ctx context.Context) (int, error) {
-	sql := sq.Select("COUNT(*)").From("contract_asset_balances").
-		Join("asset_contracts ON contract_asset_balances.asset_contract_id = asset_contracts.contract_id")
-	var count int
-	err := q.Get(ctx, &count, sql)
-	return count, err
 }
 
 // GetContractAssetBalances fetches all contract_asset_balances rows for the

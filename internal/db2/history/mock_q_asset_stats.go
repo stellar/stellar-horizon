@@ -19,11 +19,6 @@ func (m *MockQAssetStats) InsertAssetContracts(ctx context.Context, rows []Asset
 	return a.Error(0)
 }
 
-func (m *MockQAssetStats) UpsertAssetContracts(ctx context.Context, rows []AssetContract) error {
-	a := m.Called(ctx, rows)
-	return a.Error(0)
-}
-
 func (m *MockQAssetStats) UpdateAssetContractExpirations(ctx context.Context, keys []xdr.Hash, expirationLedgers []uint32) error {
 	a := m.Called(ctx, keys, expirationLedgers)
 	return a.Error(0)
@@ -39,13 +34,13 @@ func (m *MockQAssetStats) InsertContractAssetBalances(ctx context.Context, rows 
 	return a.Error(0)
 }
 
-func (m *MockQAssetStats) UpsertContractAssetBalances(ctx context.Context, rows []ContractAssetBalance) error {
-	a := m.Called(ctx, rows)
+func (m *MockQAssetStats) RemoveContractAssetBalances(ctx context.Context, keys []xdr.Hash) error {
+	a := m.Called(ctx, keys)
 	return a.Error(0)
 }
 
-func (m *MockQAssetStats) RemoveContractAssetBalances(ctx context.Context, keys []xdr.Hash) error {
-	a := m.Called(ctx, keys)
+func (m *MockQAssetStats) UpsertContractAssetBalances(ctx context.Context, rows []ContractAssetBalance) error {
+	a := m.Called(ctx, rows)
 	return a.Error(0)
 }
 
@@ -62,11 +57,6 @@ func (m *MockQAssetStats) GetContractAssetBalances(ctx context.Context, keys []x
 func (m *MockQAssetStats) DeleteContractAssetBalancesExpiredBefore(ctx context.Context, ledger uint32) ([]ContractAssetBalance, error) {
 	a := m.Called(ctx, ledger)
 	return a.Get(0).([]ContractAssetBalance), a.Error(1)
-}
-
-func (m *MockQAssetStats) CountContractAssetBalancesOfAssetContracts(ctx context.Context) (int, error) {
-	a := m.Called(ctx)
-	return a.Get(0).(int), a.Error(1)
 }
 
 func (m *MockQAssetStats) InsertContractAssetStats(ctx context.Context, rows []ContractAssetStatRow) error {

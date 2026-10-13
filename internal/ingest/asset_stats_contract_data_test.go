@@ -8,8 +8,6 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -158,7 +156,7 @@ func (c *contractDataTest) restore(keyHash xdr.Hash, liveUntil uint32) {
 // closeLedger ingests the changes of the current ledger with the same change
 // compactor configuration and processor as live ingestion, in one db transaction.
 func (c *contractDataTest) closeLedger() {
-	compactor := ingestsdk.NewChangeCompactor(ledgerChangeCompactorConfig)
+	compactor := ingestsdk.NewChangeCompactor(ingestsdk.ChangeCompactorConfig{SuppressRemoveAfterRestoreChange: true})
 	for _, change := range c.changes {
 		require.NoError(c.t, compactor.AddChange(change))
 	}
@@ -330,9 +328,9 @@ func (c *contractDataTest) newSystem(ledger uint32) (*system, *mockHistoryArchiv
 
 // verifyState runs the state verification of a system whose history archive holds the
 // ledger entries of the model at the given ledger.
-func (c *contractDataTest) verifyState(periodic bool, ledger uint32) error {
+func (c *contractDataTest) verifyState(ledger uint32) error {
 	sys, historyAdapter := c.newSystem(ledger)
-	err := sys.verifyState(periodic, ledger, xdr.Hash{})
+	err := sys.verifyState(false, ledger, xdr.Hash{})
 	historyAdapter.AssertExpectations(c.t)
 	return err
 }
@@ -375,7 +373,7 @@ func TestContractDataIngestionMatchesVerification(t *testing.T) {
 				ledger := c.ledger - 1
 				c.checkAssetContractBalances(ledger)
 				if ledger%10 == 0 {
-					require.NoError(t, c.verifyState(false, ledger), "state verification at ledger %d", ledger)
+					require.NoError(t, c.verifyState(ledger), "state verification at ledger %d", ledger)
 				}
 			}
 		})
@@ -429,15 +427,7 @@ func contractDataMismatchCases(
 				keyHash := contractDataKeyHash(c.t, sac.BalanceToContractData(assetContractID, c.holders[1], 0))
 				return c.q.RemoveContractAssetBalances(c.ctx, []xdr.Hash{keyHash})
 			},
-			expected: []string{
-				"is missing from db",
-				"db contains 1 balances of asset contracts but HAS contains 2",
-			},
-		},
-		{
-			name:     "extra balance",
-			change:   func() error { return upsertBalance(assetContractID, c.holders[2], "5", liveUntil) },
-			expected: []string{"db contains 3 balances of asset contracts but HAS contains 2"},
+			expected: []string{"is missing from db"},
 		},
 		{
 			name: "contract stats",
@@ -456,11 +446,11 @@ func contractDataMismatchCases(
 				_, err := c.q.DeleteAssetContractsExpiredBefore(c.ctx, liveUntil+1)
 				return err
 			},
-			expected: []string{"asset contract of EUR:", "is missing from db"},
+			expected: []string{"HAS contains 1 asset contracts which are missing from db"},
 		},
 		{
 			name:     "extra asset contract",
-			change:   func() error { return c.q.UpsertAssetContracts(c.ctx, []history.AssetContract{extraAssetContract}) },
+			change:   func() error { return c.q.InsertAssetContracts(c.ctx, []history.AssetContract{extraAssetContract}) },
 			expected: []string{"db contains asset contract of USDOLLAR:"},
 		},
 		{
@@ -470,11 +460,23 @@ func contractDataMismatchCases(
 	}
 }
 
+// requireContractDataError checks that err reports a difference in contract data, which
+// is not a StateError.
+func requireContractDataError(t *testing.T, err error, expected ...string) {
+	require.Error(t, err)
+	_, isStateError := errors.Cause(err).(ingestsdk.StateError)
+	require.False(t, isStateError, "a difference in contract data is a StateError: %v", err)
+	for _, e := range expected {
+		require.Contains(t, err.Error(), e)
+	}
+}
+
 // TestCheckAssetStatsReportsContractDataMismatches changes the stored contract data in
 // different ways, and checks that the state verification of asset stats reports each
-// difference as a contractDataMismatchError. Differences in the balances of contracts
-// which are not Stellar Asset Contracts are not reported. It then checks how the
-// periodic state verification handles such a difference.
+// difference as an error which is not a StateError. Differences in the balances of
+// contracts which are not Stellar Asset Contracts are not reported. It then checks
+// that the periodic state verification does not mark the state as invalid for such a
+// difference.
 func TestCheckAssetStatsReportsContractDataMismatches(t *testing.T) {
 	c, finish := newContractDataTest(t, 1)
 	defer finish()
@@ -516,11 +518,7 @@ func TestCheckAssetStatsReportsContractDataMismatches(t *testing.T) {
 				require.NoError(t, err)
 				return
 			}
-			mismatch, ok := errors.Cause(err).(contractDataMismatchError)
-			require.True(t, ok, "expected a contractDataMismatchError, got %v", err)
-			for _, expected := range testCase.expected {
-				require.Contains(t, mismatch.Error(), expected)
-			}
+			requireContractDataError(t, err, testCase.expected...)
 		})
 	}
 
@@ -528,30 +526,22 @@ func TestCheckAssetStatsReportsContractDataMismatches(t *testing.T) {
 }
 
 // checkPeriodicStateVerification changes the stored balance of the first holder of the
-// first asset contract, and checks that the periodic state verification reports it in
-// its metrics without marking the state as invalid, while the state verification of
-// verify-range fails on it. A difference in the classic asset stats still marks the
-// state as invalid.
+// first asset contract, and checks that the state verification reports it as an error
+// while the periodic state verification does not mark the state as invalid. A
+// difference in the classic asset stats still marks the state as invalid.
 func (c *contractDataTest) checkPeriodicStateVerification(ledger, liveUntil uint32) {
 	t := c.t
-	require.NoError(t, c.verifyState(false, ledger))
+	require.NoError(t, c.verifyState(ledger))
 	require.NoError(t, c.q.UpsertContractAssetBalances(c.ctx, []history.ContractAssetBalance{
 		c.balanceRow(c.assetContracts[0], c.holders[0], "11", liveUntil),
 	}))
-	_, ok := errors.Cause(c.verifyState(false, ledger)).(contractDataMismatchError)
-	require.True(t, ok, "expected a contractDataMismatchError")
+	requireContractDataError(t, c.verifyState(ledger), "has amount 10 in HAS but 11 in db")
 
 	sys, historyAdapter := c.newSystem(ledger)
-	sys.incrementStateVerificationErrors()
 	sys.maybeVerifyState(ledger, xdr.Hash{})
 	sys.wg.Wait()
 	historyAdapter.AssertExpectations(t)
-	require.Equal(t, 1.0, testutil.ToFloat64(sys.Metrics().StateVerifyContractDataMismatchCounter))
-	require.Zero(t, sys.stateVerificationErrors)
-	// the verification completed, so it records the number of entries it checked
-	require.Equal(t, 4.0, testutil.ToFloat64(
-		sys.Metrics().StateVerifyLedgerEntriesCount.With(prometheus.Labels{"type": "contract_data"}),
-	))
+	require.Equal(t, 1, sys.stateVerificationErrors)
 	invalid, err := c.q.GetExpStateInvalid(c.ctx)
 	require.NoError(t, err)
 	require.False(t, invalid)
@@ -577,15 +567,4 @@ func (c *contractDataTest) checkPeriodicStateVerification(ledger, liveUntil uint
 	invalid, err = c.q.GetExpStateInvalid(c.ctx)
 	require.NoError(t, err)
 	require.True(t, invalid)
-}
-
-func TestContractDataMismatchErrorKeepsFirstExamples(t *testing.T) {
-	var mismatches contractDataMismatchError
-	for i := range maxContractDataMismatchExamples + 2 {
-		mismatches.addf("mismatch %d", i)
-	}
-	require.Equal(t, maxContractDataMismatchExamples+2, mismatches.count)
-	require.Len(t, mismatches.examples, maxContractDataMismatchExamples)
-	require.Equal(t, "mismatch 0", mismatches.examples[0])
-	require.Contains(t, mismatches.Error(), fmt.Sprintf("found %d mismatches", maxContractDataMismatchExamples+2))
 }

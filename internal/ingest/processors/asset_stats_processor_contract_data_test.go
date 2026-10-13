@@ -36,7 +36,7 @@ func runContractDataLedger(
 
 	q.On("GetContractAssetBalances", ctx, mock.Anything).Return(storedRows, nil).Maybe()
 
-	q.On("UpsertAssetContracts", ctx, mock.Anything).Return(nil).Maybe()
+	q.On("InsertAssetContracts", ctx, mock.Anything).Return(nil).Maybe()
 	q.On("UpdateContractAssetBalanceExpirations", ctx, mock.Anything, mock.Anything).Return(nil).Maybe()
 	q.On("UpdateAssetContractExpirations", ctx, mock.Anything, mock.Anything).Return(nil).Maybe()
 	q.On("DeleteContractAssetBalancesExpiredBefore", ctx, ledger).

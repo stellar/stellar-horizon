@@ -151,8 +151,8 @@ func (p *AssetStatsProcessor) Commit(ctx context.Context) error {
 		return errors.Wrap(err, "Error getting created asset contracts")
 	}
 	if len(assetContractRows) > 0 {
-		if err = p.assetStatsQ.UpsertAssetContracts(ctx, assetContractRows); err != nil {
-			return errors.Wrap(err, "Error upserting asset contracts")
+		if err = p.assetStatsQ.InsertAssetContracts(ctx, assetContractRows); err != nil {
+			return errors.Wrap(err, "Error inserting asset contracts")
 		}
 	}
 

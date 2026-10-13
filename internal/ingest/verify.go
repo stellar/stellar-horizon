@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/guregu/null"
@@ -208,10 +207,8 @@ func (v *StateVerifier) checkUnreadEntries() error {
 
 // verifyState is called as a go routine from pipeline post hook every 64
 // ledgers. It checks if the state is correct. If another go routine is already
-// running it exits. periodic is true when it runs that way rather than from
-// verify-range: it then only verifies the latest checkpoint, and it reports
-// differences in contract data in its logs and metrics instead of returning them.
-func (s *system) verifyState(periodic bool, checkpointSequence uint32, expectedBucketListHash xdr.Hash) error {
+// running it exits.
+func (s *system) verifyState(verifyAgainstLatestCheckpoint bool, checkpointSequence uint32, expectedBucketListHash xdr.Hash) error {
 	s.stateVerificationMutex.Lock()
 	if s.stateVerificationRunning {
 		log.Warn("State verification is already running...")
@@ -287,7 +284,7 @@ func (s *system) verifyState(periodic bool, checkpointSequence uint32, expectedB
 
 	localLog.Info("Starting state verification")
 
-	if periodic {
+	if verifyAgainstLatestCheckpoint {
 		retries := 0
 		for {
 			// Get root HAS to check if we're checking one of the latest ledgers or
@@ -512,12 +509,6 @@ func (s *system) verifyState(periodic bool, checkpointSequence uint32, expectedB
 	}
 
 	err = checkAssetStats(ctx, assetStats, contractAssetStatSet, historyQ)
-	if mismatch, ok := errors.Cause(err).(contractDataMismatchError); ok && periodic {
-		s.Metrics().StateVerifyContractDataMismatchCounter.Inc()
-		localLog.WithError(mismatch).Error("State verification found mismatches in contract data")
-		updateMetrics = true
-		return nil
-	}
 	if err != nil {
 		return errors.Wrap(err, "checkAssetStats failed")
 	}
@@ -527,33 +518,11 @@ func (s *system) verifyState(periodic bool, checkpointSequence uint32, expectedB
 	return nil
 }
 
-// contractDataMismatchError reports differences between the history archive and the
-// data derived from Stellar Asset Contract ledger entries: asset contracts, contract
-// balances and their stats. That data only feeds the contract fields of /assets, so
-// unlike a StateError it does not mark the state as invalid: the periodic state
-// verification reports it, so that it can be fixed with a state rebuild.
-type contractDataMismatchError struct {
-	// count is the number of mismatches, and examples describes the first few of them.
-	count    int
-	examples []string
-}
-
-const maxContractDataMismatchExamples = 10
-
-func (e *contractDataMismatchError) addf(format string, args ...interface{}) {
-	e.count++
-	if len(e.examples) < maxContractDataMismatchExamples {
-		e.examples = append(e.examples, fmt.Sprintf(format, args...))
-	}
-}
-
-func (e contractDataMismatchError) Error() string {
-	return fmt.Sprintf("found %d mismatches in contract data: %s", e.count, strings.Join(e.examples, "; "))
-}
-
 // checkAssetStats compares the asset stats in the db with the ones computed from the
-// history archive. A difference in the classic asset stats is a StateError, while a
-// difference in the contract data of an asset is a contractDataMismatchError.
+// history archive. A difference in the classic asset stats is a StateError. A
+// difference in the data derived from Stellar Asset Contract ledger entries (asset
+// contracts, contract balances and contract stats) is a plain error, which does not
+// mark the state as invalid, since that data only feeds the contract fields of /assets.
 func checkAssetStats(
 	ctx context.Context,
 	set processors.AssetStatSet,
@@ -571,7 +540,9 @@ func checkAssetStats(
 		return err
 	}
 
-	var mismatches contractDataMismatchError
+	// a difference in contract data is returned once the classic asset stats are
+	// verified, so that it does not hide a StateError
+	var contractDataErr error
 	var assetStats []history.AssetAndContractStat
 	page := db2.PageQuery{
 		Order: "asc",
@@ -591,7 +562,9 @@ func checkAssetStats(
 			if err = checkClassicAssetStat(classicStats, key, assetStat); err != nil {
 				return err
 			}
-			checkContractAssetStat(contractStats, key, assetStat, &mismatches)
+			if contractDataErr == nil {
+				contractDataErr = checkContractAssetStat(contractStats, key, assetStat)
+			}
 		}
 
 		page.Cursor = assetStats[len(assetStats)-1].PagingToken()
@@ -605,17 +578,13 @@ func checkAssetStats(
 			),
 		)
 	}
-	for key := range contractStats {
-		mismatches.addf("asset contract of %s is missing from db", key)
+	if contractDataErr != nil {
+		return contractDataErr
 	}
-
-	if err = checkContractBalances(ctx, balances, q, &mismatches); err != nil {
-		return err
+	if len(contractStats) > 0 {
+		return errors.Errorf("HAS contains %d asset contracts which are missing from db", len(contractStats))
 	}
-	if mismatches.count > 0 {
-		return mismatches
-	}
-	return nil
+	return checkContractBalances(ctx, balances, q)
 }
 
 // checkClassicAssetStat compares the classic asset stat in a db row with the one
@@ -654,31 +623,31 @@ func checkClassicAssetStat(
 }
 
 // checkContractAssetStat compares the asset contract and contract stats in a db row
-// with the ones computed from the history archive, removes the latter from
-// contractStats, and adds any difference to mismatches.
+// with the ones computed from the history archive, and removes the latter from
+// contractStats.
 func checkContractAssetStat(
 	contractStats map[string]expectedContractAssetStat,
 	key string,
 	assetStat history.AssetAndContractStat,
-	mismatches *contractDataMismatchError,
-) {
+) error {
 	if assetStat.ContractID == nil {
 		// an asset contract which is missing from the db is reported once
 		// all the rows in the db have been checked
-		return
+		return nil
 	}
 	fromSet, ok := contractStats[key]
 	if !ok {
-		mismatches.addf("db contains asset contract of %s which is missing from HAS", key)
-		return
+		return errors.Errorf("db contains asset contract of %s which is missing from HAS", key)
 	}
 	delete(contractStats, key)
 
 	if !bytes.Equal(fromSet.contractID, *assetStat.ContractID) {
-		mismatches.addf("asset contract of %s is %x in HAS but %x in db", key, fromSet.contractID, *assetStat.ContractID)
-	} else if fromSet.stat != assetStat.Contracts {
-		mismatches.addf("contract stats of %s are %+v in HAS but %+v in db", key, fromSet.stat, assetStat.Contracts)
+		return errors.Errorf("asset contract of %s is %x in HAS but %x in db", key, fromSet.contractID, *assetStat.ContractID)
 	}
+	if fromSet.stat != assetStat.Contracts {
+		return errors.Errorf("contract stats of %s are %+v in HAS but %+v in db", key, fromSet.stat, assetStat.Contracts)
+	}
+	return nil
 }
 
 // expectedContractAssetStat is the asset contract and contract stats of an asset,
@@ -740,12 +709,11 @@ func extractContractAssetStatsAndBalances(
 }
 
 // checkContractBalances compares the given balances, computed from the history archive,
-// with the rows in the db, and adds any difference to mismatches.
+// with the rows in the db, and returns the first difference.
 func checkContractBalances(
 	ctx context.Context,
 	balances []history.ContractAssetBalance,
 	q history.IngestionQ,
-	mismatches *contractDataMismatchError,
 ) error {
 	for i := 0; i < len(balances); {
 		end := min(i+assetStatsBatchSize, len(balances))
@@ -773,27 +741,21 @@ func checkContractBalances(
 			row, ok := byKey[key]
 			switch {
 			case !ok:
-				mismatches.addf("contract balance %x is missing from db", key)
+				return errors.Errorf("contract balance %x is missing from db", key)
 			case !bytes.Equal(row.ContractID, expected.ContractID):
-				mismatches.addf("contract balance %x has contract %x in HAS but %x in db", key, expected.ContractID, row.ContractID)
+				return errors.Errorf(
+					"contract balance %x has contract %x in HAS but %x in db", key, expected.ContractID, row.ContractID,
+				)
 			case row.ExpirationLedger != expected.ExpirationLedger:
-				mismatches.addf(
+				return errors.Errorf(
 					"contract balance %x has expiration %v in HAS but %v in db", key, expected.ExpirationLedger, row.ExpirationLedger,
 				)
 			case row.Amount != expected.Amount:
-				mismatches.addf("contract balance %x has amount %v in HAS but %v in db", key, expected.Amount, row.Amount)
+				return errors.Errorf("contract balance %x has amount %v in HAS but %v in db", key, expected.Amount, row.Amount)
 			}
 		}
 
 		i = end
-	}
-
-	count, err := q.CountContractAssetBalancesOfAssetContracts(ctx)
-	if err != nil {
-		return errors.Wrap(err, "Error counting contract asset balances")
-	}
-	if count != len(balances) {
-		mismatches.addf("db contains %d balances of asset contracts but HAS contains %d", count, len(balances))
 	}
 	return nil
 }
