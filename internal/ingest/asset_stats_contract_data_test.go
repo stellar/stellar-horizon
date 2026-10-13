@@ -568,3 +568,44 @@ func (c *contractDataTest) checkPeriodicStateVerification(ledger, liveUntil uint
 	require.NoError(t, err)
 	require.True(t, invalid)
 }
+
+// TestCheckAssetStatsRejectsClassicAssetStatsWithoutAccounts checks that a classic
+// asset stat row without accounts, which ingestion never stores, is a StateError,
+// whether or not its asset has an asset contract.
+func TestCheckAssetStatsRejectsClassicAssetStatsWithoutAccounts(t *testing.T) {
+	c, finish := newContractDataTest(t, 1)
+	defer finish()
+
+	assetContractID := c.assetContracts[0]
+	c.create(c.instances[assetContractID], c.ledger+100)
+	c.closeLedger()
+	ledger := c.ledger - 1
+	require.NoError(t, c.checkAssetStats(ledger))
+
+	asset, ok := sac.AssetFromContractData(xdr.LedgerEntry{Data: c.instances[assetContractID]}, contractDataTestPassphrase)
+	require.True(t, ok)
+	withAssetContract := history.ExpAssetStat{Balances: emptyClassicBalances}
+	withAssetContract.Balances.Authorized = "5"
+	require.NoError(t, asset.Extract(
+		&withAssetContract.AssetType, &withAssetContract.AssetCode, &withAssetContract.AssetIssuer,
+	))
+	withoutAssetContract := history.ExpAssetStat{
+		AssetType:   xdr.AssetTypeAssetTypeCreditAlphanum4,
+		AssetCode:   "GBP",
+		AssetIssuer: keypair.MustRandom().Address(),
+		Balances:    emptyClassicBalances,
+	}
+
+	for _, assetStat := range []history.ExpAssetStat{withAssetContract, withoutAssetContract} {
+		t.Run(assetStat.AssetCode, func(t *testing.T) {
+			require.NoError(t, c.q.Begin(c.ctx))
+			defer func() {
+				require.NoError(t, c.q.Rollback())
+			}()
+			_, err := c.q.InsertAssetStat(c.ctx, assetStat)
+			require.NoError(t, err)
+			_, isStateError := errors.Cause(c.checkAssetStats(ledger)).(ingestsdk.StateError)
+			require.True(t, isStateError)
+		})
+	}
+}

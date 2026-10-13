@@ -587,6 +587,16 @@ func checkAssetStats(
 	return checkContractBalances(ctx, balances, q)
 }
 
+// emptyClassicBalances are the classic balances of the db row of an asset which only
+// has an asset contract, and no classic asset stat row.
+var emptyClassicBalances = history.ExpAssetStatBalances{
+	Authorized:                      "0",
+	AuthorizedToMaintainLiabilities: "0",
+	ClaimableBalances:               "0",
+	LiquidityPools:                  "0",
+	Unauthorized:                    "0",
+}
+
 // checkClassicAssetStat compares the classic asset stat in a db row with the one
 // computed from the history archive, and removes the latter from classicStats.
 func checkClassicAssetStat(
@@ -594,14 +604,11 @@ func checkClassicAssetStat(
 	key string,
 	assetStat history.AssetAndContractStat,
 ) error {
-	// Assets which only have an asset contract have no classic asset stat row, which
-	// leaves the classic accounts of the db row at zero. Any asset with a classic asset
-	// stat row has at least one account.
-	if assetStat.Accounts.IsZero() {
-		return nil
-	}
 	fromSet, ok := classicStats[key]
 	if !ok {
+		if assetStat.ContractID != nil && assetStat.Accounts.IsZero() && assetStat.Balances == emptyClassicBalances {
+			return nil
+		}
 		return ingestsdk.NewStateError(
 			fmt.Errorf(
 				"db contains asset stat with code %s issuer %s which is missing from HAS",
