@@ -20,10 +20,8 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 - The contract balances behind the `contracts` fields of `/assets` are tracked by ledger key, so each stored balance follows the latest value of its ledger entry, and the contract stats are adjusted from the stored balances. Expired contract balances and asset contracts are removed whenever their expiration ledger has passed, rather than only in the ledger right after it.
 
 ### Updated
-- State verification only checks the contract balances of Stellar Asset Contracts, and reports differences in asset contracts, contract balances and contract stats as state verification errors in its logs.
-
-### Updated
 - The `method` label of the `horizon_http_requests_duration_seconds`, `horizon_http_requests_in_flight` and `horizon_http_requests_received` metrics reports standard HTTP methods as before and groups any other method under `OTHER`.
+- State verification only checks the contract balances of Stellar Asset Contracts, and reports differences in asset contracts, contract balances and contract stats as state verification errors in its logs.
 
 ## 29.0.0
 
