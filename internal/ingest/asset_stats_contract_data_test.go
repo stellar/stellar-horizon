@@ -441,6 +441,15 @@ func contractDataMismatchCases(
 			expected: []string{"in HAS but {ActiveBalance:31 ActiveHolders:2} in db"},
 		},
 		{
+			name: "asset contract type",
+			change: func() error {
+				_, err := c.q.ExecRaw(c.ctx, "UPDATE asset_contracts SET asset_type = ? WHERE contract_id = ?",
+					xdr.AssetTypeAssetTypeCreditAlphanum12, assetContractID[:])
+				return err
+			},
+			expected: []string{"has type AssetTypeAssetTypeCreditAlphanum4 in HAS but AssetTypeAssetTypeCreditAlphanum12 in db"},
+		},
+		{
 			name: "missing asset contract",
 			change: func() error {
 				_, err := c.q.DeleteAssetContractsExpiredBefore(c.ctx, liveUntil+1)

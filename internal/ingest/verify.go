@@ -651,16 +651,20 @@ func checkContractAssetStat(
 	if !bytes.Equal(fromSet.contractID, *assetStat.ContractID) {
 		return errors.Errorf("asset contract of %s is %x in HAS but %x in db", key, fromSet.contractID, *assetStat.ContractID)
 	}
+	if fromSet.assetType != assetStat.AssetType {
+		return errors.Errorf("asset contract of %s has type %v in HAS but %v in db", key, fromSet.assetType, assetStat.AssetType)
+	}
 	if fromSet.stat != assetStat.Contracts {
 		return errors.Errorf("contract stats of %s are %+v in HAS but %+v in db", key, fromSet.stat, assetStat.Contracts)
 	}
 	return nil
 }
 
-// expectedContractAssetStat is the asset contract and contract stats of an asset,
-// computed from the history archive.
+// expectedContractAssetStat is the asset contract, asset type and contract stats of an
+// asset, computed from the history archive.
 type expectedContractAssetStat struct {
 	contractID []byte
+	assetType  xdr.AssetType
 	stat       history.ContractStat
 }
 
@@ -700,6 +704,7 @@ func extractContractAssetStatsAndBalances(
 		}
 		contractStats[assetContract.AssetCode+":"+assetContract.AssetIssuer] = expectedContractAssetStat{
 			contractID: assetContract.ContractID,
+			assetType:  assetContract.AssetType,
 			stat:       stat,
 		}
 	}
