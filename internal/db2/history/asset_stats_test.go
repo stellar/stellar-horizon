@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"sort"
 	"testing"
 
@@ -1221,6 +1222,32 @@ func TestUpsertContractAssetBalances(t *testing.T) {
 	balances, err := q.GetContractAssetBalances(context.Background(), []xdr.Hash{keyHash, otherKeyHash, newKeyHash})
 	tt.Assert.NoError(err)
 	assertContractAssetBalancesEqual(t, balances, []ContractAssetBalance{balance, otherBalance, newBalance})
+
+	tt.Assert.NoError(q.Rollback())
+}
+
+// TestGetContractAssetBalancesWithManyKeys looks up more keys than the number of
+// parameters postgres accepts in a single query.
+func TestGetContractAssetBalancesWithManyKeys(t *testing.T) {
+	tt := test.Start(t)
+	defer tt.Finish()
+	test.ResetHorizonDB(t, tt.HorizonDB)
+
+	q := &Q{tt.HorizonSession()}
+	tt.Assert.NoError(q.Begin(context.Background()))
+
+	keys := make([]xdr.Hash, 7*maxQueryBatchSize)
+	for i := range keys {
+		binary.BigEndian.PutUint32(keys[i][:], uint32(i))
+	}
+	contractID := [32]byte{1}
+	first := ContractAssetBalance{KeyHash: keys[0][:], ContractID: contractID[:], Amount: "1", ExpirationLedger: 10}
+	last := ContractAssetBalance{KeyHash: keys[len(keys)-1][:], ContractID: contractID[:], Amount: "2", ExpirationLedger: 11}
+	tt.Assert.NoError(q.InsertContractAssetBalances(context.Background(), []ContractAssetBalance{first, last}))
+
+	balances, err := q.GetContractAssetBalances(context.Background(), keys)
+	tt.Assert.NoError(err)
+	assertContractAssetBalancesEqual(t, balances, []ContractAssetBalance{first, last})
 
 	tt.Assert.NoError(q.Rollback())
 }

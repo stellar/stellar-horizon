@@ -1,6 +1,7 @@
 package processors
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"math/big"
@@ -408,7 +409,8 @@ func (s *ContractAssetStatSet) reconcileBalances(ctx context.Context) ([]history
 		storedRow := stored[keyHash]
 		row, hasRow := s.balanceRow(keyHash, balance, storedRow)
 		if storedRow != nil {
-			if hasRow && row.Amount == storedRow.Amount && row.ExpirationLedger == storedRow.ExpirationLedger {
+			if hasRow && row.Amount == storedRow.Amount && row.ExpirationLedger == storedRow.ExpirationLedger &&
+				bytes.Equal(row.ContractID, storedRow.ContractID) {
 				continue
 			}
 			if err = s.contractAssetStats.removeRow(*storedRow); err != nil {

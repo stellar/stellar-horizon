@@ -434,6 +434,37 @@ func TestReconcileBalanceValues(t *testing.T) {
 	})
 }
 
+// TestReconcileBalanceContract covers a stored row whose contract is not the contract
+// of its ledger key. The row is rewritten, and its balance moves to the stats of the
+// contract of the key.
+func TestReconcileBalanceContract(t *testing.T) {
+	usdcID := assetContractID(t, "USDC", keypair.MustRandom().Address())
+	otherID := assetContractID(t, "EURC", keypair.MustRandom().Address())
+	r := newReconcileTest(t)
+
+	keyHash := r.update(usdcID, [32]byte{1},
+		sac.BalanceToContractData(usdcID, [32]byte{1}, 50),
+		sac.BalanceToContractData(usdcID, [32]byte{1}, 50),
+	)
+	r.store(keyHash, otherID, "50", 160)
+
+	upserts, removals := r.reconcile()
+	assert.Empty(t, removals)
+	assert.Equal(t, []history.ContractAssetBalance{
+		{KeyHash: keyHash[:], ContractID: usdcID[:], Amount: "50", ExpirationLedger: 160},
+	}, upserts)
+	assert.ElementsMatch(t, r.set.contractAssetStats.rows(), []history.ContractAssetStatRow{
+		{
+			ContractID: usdcID[:],
+			Stat:       history.ContractStat{ActiveBalance: "50", ActiveHolders: 1},
+		},
+		{
+			ContractID: otherID[:],
+			Stat:       history.ContractStat{ActiveBalance: "-50", ActiveHolders: -1},
+		},
+	})
+}
+
 func TestRemoveContractData(t *testing.T) {
 	usdcIssuer := keypair.MustRandom().Address()
 	usdcAsset := xdr.MustNewCreditAsset("USDC", usdcIssuer)

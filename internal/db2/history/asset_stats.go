@@ -170,15 +170,15 @@ func (q *Q) InsertContractAssetBalances(ctx context.Context, rows []ContractAsse
 	return nil
 }
 
-// maxUpsertBatchSize keeps the number of query parameters in a single upsert
+// maxQueryBatchSize keeps the number of query parameters in a single query
 // below the postgres limit of 65535.
-const maxUpsertBatchSize = 10000
+const maxQueryBatchSize = 10000
 
 // UpsertContractAssetBalances inserts the given list of rows into the contract_asset_balances
 // table, replacing any row which already exists for the same key.
 func (q *Q) UpsertContractAssetBalances(ctx context.Context, rows []ContractAssetBalance) error {
 	for len(rows) > 0 {
-		batch := rows[:min(len(rows), maxUpsertBatchSize)]
+		batch := rows[:min(len(rows), maxQueryBatchSize)]
 		rows = rows[len(batch):]
 
 		sql := sq.Insert("contract_asset_balances").Columns(
@@ -255,15 +255,24 @@ func (q *Q) DeleteContractAssetBalancesExpiredBefore(ctx context.Context, ledger
 // GetContractAssetBalances fetches all contract_asset_balances rows for the
 // given list of key hashes.
 func (q *Q) GetContractAssetBalances(ctx context.Context, keys []xdr.Hash) ([]ContractAssetBalance, error) {
-	keyBytes := make([][]byte, len(keys))
-	for i := range keys {
-		keyBytes[i] = keys[i][:]
-	}
-	sql := sq.Select("contract_asset_balances.*").From("contract_asset_balances").
-		Where(map[string]interface{}{"key_hash": keyBytes})
 	var balances []ContractAssetBalance
-	err := q.Select(ctx, &balances, sql)
-	return balances, err
+	for len(keys) > 0 {
+		batch := keys[:min(len(keys), maxQueryBatchSize)]
+		keys = keys[len(batch):]
+
+		keyBytes := make([][]byte, len(batch))
+		for i := range batch {
+			keyBytes[i] = batch[i][:]
+		}
+		sql := sq.Select("contract_asset_balances.*").From("contract_asset_balances").
+			Where(map[string]interface{}{"key_hash": keyBytes})
+		var rows []ContractAssetBalance
+		if err := q.Select(ctx, &rows, sql); err != nil {
+			return nil, err
+		}
+		balances = append(balances, rows...)
+	}
+	return balances, nil
 }
 
 // RemoveContractAssetBalances removes rows from the contract_asset_balances table
