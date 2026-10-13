@@ -533,7 +533,7 @@ func checkAssetStats(
 	for _, assetStat := range set.All() {
 		// no need to handle the native asset because asset stats only
 		// include non-native assets.
-		classicStats[assetStat.AssetCode+":"+assetStat.AssetIssuer] = assetStat
+		classicStats[classicAssetStatKey(assetStat)] = assetStat
 	}
 	contractStats, balances, err := extractContractAssetStatsAndBalances(contractAssetStatSet)
 	if err != nil {
@@ -559,7 +559,7 @@ func checkAssetStats(
 
 		for _, assetStat := range assetStats {
 			key := assetStat.AssetCode + ":" + assetStat.AssetIssuer
-			if err = checkClassicAssetStat(classicStats, key, assetStat); err != nil {
+			if err = checkClassicAssetStat(classicStats, assetStat); err != nil {
 				return err
 			}
 			if contractDataErr == nil {
@@ -597,13 +597,20 @@ var emptyClassicBalances = history.ExpAssetStatBalances{
 	Unauthorized:                    "0",
 }
 
+// classicAssetStatKey returns the key of a classic asset stat. It includes the asset type,
+// like the join of GetAssetStats, so that the db row of an asset contract whose asset
+// type differs from the classic asset stat of its asset is never matched with it.
+func classicAssetStatKey(assetStat history.ExpAssetStat) string {
+	return fmt.Sprintf("%d:%s:%s", assetStat.AssetType, assetStat.AssetCode, assetStat.AssetIssuer)
+}
+
 // checkClassicAssetStat compares the classic asset stat in a db row with the one
 // computed from the history archive, and removes the latter from classicStats.
 func checkClassicAssetStat(
 	classicStats map[string]history.ExpAssetStat,
-	key string,
 	assetStat history.AssetAndContractStat,
 ) error {
+	key := classicAssetStatKey(assetStat.ExpAssetStat)
 	fromSet, ok := classicStats[key]
 	if !ok {
 		if assetStat.ContractID != nil && assetStat.Accounts.IsZero() && assetStat.Balances == emptyClassicBalances {

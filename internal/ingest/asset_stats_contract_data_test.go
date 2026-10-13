@@ -18,6 +18,7 @@ import (
 	"github.com/stellar/go-stellar-sdk/support/errors"
 	"github.com/stellar/go-stellar-sdk/xdr"
 
+	"github.com/stellar/stellar-horizon/internal/db2"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/ingest/processors"
 	"github.com/stellar/stellar-horizon/internal/test"
@@ -615,6 +616,76 @@ func TestCheckAssetStatsRejectsClassicAssetStatsWithoutAccounts(t *testing.T) {
 			require.NoError(t, err)
 			_, isStateError := errors.Cause(c.checkAssetStats(ledger)).(ingestsdk.StateError)
 			require.True(t, isStateError)
+		})
+	}
+}
+
+// TestCheckAssetStatsMatchesClassicAssetStatsByAssetType checks that an asset contract
+// whose asset type differs from the classic asset stat of its asset is reported as a
+// difference in contract data, whichever of the two db rows of the asset comes first.
+func TestCheckAssetStatsMatchesClassicAssetStatsByAssetType(t *testing.T) {
+	ctx := context.Background()
+	issuer := keypair.MustRandom().Address()
+	asset := xdr.MustNewCreditAsset("EUR", issuer)
+	contractID, err := asset.ContractID(contractDataTestPassphrase)
+	require.NoError(t, err)
+	instance, err := sac.AssetToContractData(false, "EUR", issuer, contractID)
+	require.NoError(t, err)
+
+	set := processors.NewAssetStatSet()
+	require.NoError(t, set.AddTrustline(ingestsdk.Change{
+		Type: xdr.LedgerEntryTypeTrustline,
+		Post: &xdr.LedgerEntry{Data: xdr.LedgerEntryData{
+			Type: xdr.LedgerEntryTypeTrustline,
+			TrustLine: &xdr.TrustLineEntry{
+				AccountId: xdr.MustAddress(keypair.MustRandom().Address()),
+				Balance:   123,
+				Asset:     asset.ToTrustLineAsset(),
+				Flags:     xdr.Uint32(xdr.TrustLineFlagsAuthorizedFlag),
+			},
+		}},
+	}))
+	contractSet := processors.NewContractAssetStatSet(&mockDBQ{}, contractDataTestPassphrase, 100)
+	require.NoError(t, contractSet.AddContractData(ingestsdk.Change{
+		Type: xdr.LedgerEntryTypeContractData,
+		Post: &xdr.LedgerEntry{Data: instance},
+	}))
+	ttl := xdr.LedgerEntry{Data: ttlEntryData(contractDataKeyHash(t, instance), 200)}
+	require.NoError(t, contractSet.AddTTL(ingestsdk.Change{Type: xdr.LedgerEntryTypeTtl, Post: &ttl}))
+
+	// the join of GetAssetStats returns separate rows for the classic asset stat and
+	// for an asset contract with a different asset type
+	classicRow := history.AssetAndContractStat{ExpAssetStat: set.All()[0]}
+	contractIDBytes := contractID[:]
+	contractRow := history.AssetAndContractStat{
+		ExpAssetStat: history.ExpAssetStat{
+			AssetType:   xdr.AssetTypeAssetTypeCreditAlphanum12,
+			AssetCode:   "EUR",
+			AssetIssuer: issuer,
+			Balances:    emptyClassicBalances,
+		},
+		ContractID: &contractIDBytes,
+		Contracts:  history.ContractStat{ActiveBalance: "0", ActiveHolders: 0},
+	}
+
+	for name, rows := range map[string][]history.AssetAndContractStat{
+		"classic row first":  {classicRow, contractRow},
+		"contract row first": {contractRow, classicRow},
+	} {
+		t.Run(name, func(t *testing.T) {
+			q := &mockDBQ{}
+			q.MockQAssetStats.On("GetAssetStats", ctx, "", "", db2.PageQuery{
+				Order: "asc",
+				Limit: assetStatsBatchSize,
+			}).Return(rows, nil).Once()
+			q.MockQAssetStats.On("GetAssetStats", ctx, "", "", db2.PageQuery{
+				Cursor: rows[1].PagingToken(),
+				Order:  "asc",
+				Limit:  assetStatsBatchSize,
+			}).Return([]history.AssetAndContractStat{}, nil).Once()
+			requireContractDataError(t, checkAssetStats(ctx, set, contractSet, q),
+				"has type AssetTypeAssetTypeCreditAlphanum4 in HAS but AssetTypeAssetTypeCreditAlphanum12 in db")
+			q.MockQAssetStats.AssertExpectations(t)
 		})
 	}
 }
