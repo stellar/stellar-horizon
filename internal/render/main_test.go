@@ -17,14 +17,16 @@ func TestNegotiate(t *testing.T) {
 		Header               string
 		ExpectedResponseType string
 	}{
-		// Obeys the Accept header's prioritization
-		{"application/hal+json", MimeHal},
+		// Streams when the Accept header asks for text/event-stream
+		{"text/event-stream", MimeEventStream},
 		{"text/event-stream,application/hal+json", MimeEventStream},
+		// Responds with raw bytes when it asks for application/octet-stream
+		{"application/octet-stream", MimeRaw},
 		// Defaults to HAL
-		{"text/event-stream;q=0.5,application/hal+json", MimeHal},
+		{"application/hal+json", MimeHal},
+		{"application/json, text/plain, */*", MimeHal},
+		{"text/plain", MimeHal},
 		{"", MimeHal},
-		// Returns empty string for invalid type
-		{"text/plain", ""},
 	}
 	for _, tc := range testCases {
 		t.Run("", func(t *testing.T) {

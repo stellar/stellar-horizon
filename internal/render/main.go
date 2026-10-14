@@ -2,28 +2,20 @@ package render
 
 import (
 	"net/http"
-
-	"github.com/adjust/goautoneg"
-	"github.com/stellar/go-stellar-sdk/support/log"
+	"strings"
 )
 
-// Negotiate inspects the Accept header of the provided request and determines
-// what the most appropriate response type should be.  Defaults to HAL.
+// Negotiate returns the media type to respond to the provided request with:
+// MimeEventStream if its Accept header asks for a stream, MimeRaw if it asks
+// for raw bytes, and MimeHal otherwise.
 func Negotiate(r *http.Request) string {
-	ctx := r.Context()
-	alternatives := []string{MimeHal, MimeJSON, MimeEventStream, MimeRaw}
 	accept := r.Header.Get("Accept")
-
-	if accept == "" {
+	switch {
+	case strings.Contains(accept, MimeEventStream):
+		return MimeEventStream
+	case strings.Contains(accept, MimeRaw):
+		return MimeRaw
+	default:
 		return MimeHal
 	}
-
-	result := goautoneg.Negotiate(r.Header.Get("Accept"), alternatives)
-
-	log.Ctx(ctx).WithFields(log.F{
-		"content_type": result,
-		"accept":       accept,
-	}).Debug("Negotiated content type")
-
-	return result
 }

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/middleware"
@@ -90,8 +89,7 @@ func loggerMiddleware(serverMetrics *ServerMetrics) func(next http.Handler) http
 
 			// Checking `Accept` header from user request because if the streaming connection
 			// is reset before sending the first event no Content-Type header is sent in a response.
-			acceptHeader := r.Header.Get("Accept")
-			streaming := strings.Contains(acceptHeader, render.MimeEventStream)
+			streaming := render.Negotiate(r) == render.MimeEventStream
 			route := supportHttp.GetChiRoutePattern(r)
 
 			requestLabels := prometheus.Labels{
