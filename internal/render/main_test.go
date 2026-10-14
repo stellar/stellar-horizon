@@ -22,11 +22,18 @@ func TestNegotiate(t *testing.T) {
 		{"text/event-stream,application/hal+json", MimeEventStream},
 		// Responds with raw bytes when it asks for application/octet-stream
 		{"application/octet-stream", MimeRaw},
+		// Ignores media range parameters, including q-values
+		{"text/event-stream; charset=utf-8", MimeEventStream},
+		{"application/hal+json, text/event-stream;q=0.5", MimeEventStream},
 		// Defaults to HAL
 		{"application/hal+json", MimeHal},
 		{"application/json, text/plain, */*", MimeHal},
 		{"text/plain", MimeHal},
 		{"", MimeHal},
+		// Matches whole media types only
+		{"text/event-streaming", MimeHal},
+		{"application/octet-stream-custom", MimeHal},
+		{"application/json;profile=text/event-stream", MimeHal},
 	}
 	for _, tc := range testCases {
 		t.Run("", func(t *testing.T) {
