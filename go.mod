@@ -48,7 +48,7 @@ require (
 require (
 	github.com/creachadair/jrpc2 v1.2.0
 	github.com/fsouza/fake-gcs-server v1.49.2
-	github.com/stellar/go-stellar-sdk v0.7.2
+	github.com/stellar/go-stellar-sdk v0.7.4-0.20261014050248-990270d32ebe
 )
 
 require (
@@ -182,5 +182,3 @@ require (
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/stellar/go-stellar-sdk => github.com/sisuresh/go v0.0.0-20261008104555-663a89a12043
