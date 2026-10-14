@@ -78,9 +78,8 @@ func getTestArchive() (historyarchive.ArchiveInterface, error) {
 		},
 	}
 
-	// The archive serves bucketEntry as the checkpoint's only bucket. The
-	// checkpoint change reader checks every bucket's hash and fails the read
-	// on a mismatch, so the HAS lists that bucket's hash and no other bucket.
+	// The checkpoint change reader checks every bucket's hash, so the HAS lists
+	// bucketEntry's hash and no other bucket.
 	var bucket bytes.Buffer
 	if err := xdr.MarshalFramed(&bucket, bucketEntry); err != nil {
 		return nil, err

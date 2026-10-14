@@ -53,9 +53,8 @@ func readLedgerCloseMetasFromFile(t *testing.T, path string) []xdr.LedgerCloseMe
 	return ledgers
 }
 
-// ingestCoreLCMFile runs every LedgerCloseMeta in path through all ingestion
-// processors against its own isolated test database, so parallel sub-tests
-// don't conflict on DB transactions or migration resets.
+// ingestCoreLCMFile ingests every LedgerCloseMeta in path into its own test
+// database, so parallel sub-tests don't conflict.
 func ingestCoreLCMFile(t *testing.T, path string) *history.Q {
 	t.Helper()
 	testDB := dbtest.Postgres(t)
@@ -153,8 +152,8 @@ func TestCoreLCMIngestion(t *testing.T) {
 }
 
 // TestCoreLCMMuxedContractDestination checks that SAC transfers and mints to a
-// muxed contract address (CAP-0084) keep the destination's muxed id, both in
-// the operation's asset_balance_changes and on the contract_credited effect.
+// muxed contract (CAP-0084) keep the muxed id in asset_balance_changes and on
+// the contract_credited effect.
 func TestCoreLCMMuxedContractDestination(t *testing.T) {
 	const (
 		sender   = "GCE4HENKZ3ZIHQY4VEYCVX5ZE5LNDIN3FH4MHZCWFKXQZGQIOGAO77CN"

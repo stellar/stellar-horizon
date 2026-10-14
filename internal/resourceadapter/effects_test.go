@@ -137,8 +137,7 @@ func TestNewEffect_EffectContractCredited_MuxedContract(t *testing.T) {
 	tt := assert.New(t)
 	ctx, _ := test.ContextWithLogBuffer()
 
-	// The details the effects processor stores for a SAC transfer to a
-	// CAP-0084 muxed contract. contract_muxed_id is a string so that ids above
+	// A SAC transfer to a muxed contract. contract_muxed_id is a string so that ids above
 	// 2^53 survive JSON.
 	details := `{
 		"amount":            "40.0000000",

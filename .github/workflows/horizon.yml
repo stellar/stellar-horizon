@@ -11,11 +11,7 @@ jobs:
     uses: ./.github/workflows/integration-tests.yml
     with:
       protocol_version: '29'
-      # Until a Protocol 30 stellar-core release is published, this leg runs the
-      # P29 release that networks run today. Once one is, point it at the new
-      # core and rpc builds at protocol 29: the point is verifying the updated
-      # binaries still serve the previous protocol (the real configuration
-      # during the upgrade window).
+      # Move to the new core and rpc builds at protocol 29 once they are released.
       core_deb_version: '29.0.0-3589.4eb833373.jammy~buildtests'
       core_docker_img: 'stellar/stellar-core:29.0.0-3589.4eb833373.jammy'
       stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0'
@@ -29,15 +25,10 @@ jobs:
     uses: ./.github/workflows/integration-tests.yml
     with:
       protocol_version: '30'
-      # The stellar-core 30.0.0 release candidate (0e49751aa), where protocol 30
-      # is the current protocol with CAP-0084 and CAP-0087
-      # (stellar/stellar-core#5478) and CAP-0088 (#5423), so every ledger after
-      # the upgrade uses a millisecond close-time StellarValue arm. It requires
-      # the 95 contract cost params in
-      # internal/integration/testdata/unlimited-config-v30.xdr.
+      # stellar-core 30.0.0 release candidate.
       core_deb_version: '30.0.0-3642.0e49751aa.noble~buildtests'
       core_docker_img: 'stellar/unsafe-stellar-core:30.0.0-3642.0e49751aa.noble'
-      # No protocol-30 stellar-rpc image yet: NewTest() AMBER-skips RPC tests.
+      # No protocol 30 stellar-rpc image yet, so the RPC tests are skipped.
       stellar_rpc_docker_img: ''
 
   verify-range:
