@@ -5,6 +5,9 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Changed
+- Content negotiation only checks the `Accept` header for `text/event-stream`, to stream, and for `application/octet-stream`, to return the raw value of an account data entry. All other requests get a HAL response, including requests whose `Accept` header lists only unsupported media types, which previously got `406 Not Acceptable`. Removed the `github.com/adjust/goautoneg` dependency ([#248](https://github.com/stellar/stellar-horizon/pull/248)).
+
 ### Fixed
 - The asset ingestion filter now matches rules on ledger entry changes and on Soroban data in the envelope, in addition to operation bodies. These transactions are now ingested when they involve a whitelisted asset:
   - path payments routed through the asset
