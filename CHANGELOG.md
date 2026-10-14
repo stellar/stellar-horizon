@@ -5,6 +5,9 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Changed
+- The HTTP listeners accept at most 64 KB of request line and headers, down from the net/http default of 1 MB, and respond `431 Request Header Fields Too Large` to larger requests ([#249](https://github.com/stellar/stellar-horizon/pull/249)).
+
 ### Fixed
 - The asset ingestion filter now matches rules on ledger entry changes and on Soroban data in the envelope, in addition to operation bodies. These transactions are now ingested when they involve a whitelisted asset:
   - path payments routed through the asset
