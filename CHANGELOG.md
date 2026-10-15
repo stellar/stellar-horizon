@@ -19,6 +19,7 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 - The asset ingestion filter now matches rules on the inner operations of fee-bump transactions. Earlier versions collected operations only from TxV0 and Tx envelopes, so a fee-bump transaction was not ingested even when its inner operations referenced a whitelisted asset.
 
 ### Updated
+- Responses are now gzipped for axios 0.x (js-stellar-sdk before 11.0) and Guzzle (PHP SDK) clients even though they send no `Accept-Encoding`, since both always decode gzip. Their large list pages are about 90% smaller.
 - The `method` label of the `horizon_http_requests_duration_seconds`, `horizon_http_requests_in_flight` and `horizon_http_requests_received` metrics reports standard HTTP methods as before and groups any other method under `OTHER`.
 
 ## 29.0.0

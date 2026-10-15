@@ -108,6 +108,7 @@ func (r *Router) addMiddleware(config *RouterConfig,
 		})
 	}
 	r.Use(recoverMiddleware)
+	r.Use(gzipForDecodingClients)
 	r.Use(chimiddleware.Compress(flate.DefaultCompression, "application/hal+json"))
 
 	c := cors.New(cors.Options{
