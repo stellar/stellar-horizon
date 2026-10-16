@@ -84,7 +84,8 @@ func methodLabel(method string) string {
 // uncompressed.
 func gzipForDecodingClients(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Accept-Encoding") == "" {
+		// Only when the header is absent: an empty Accept-Encoding asks for no encoding.
+		if _, ok := r.Header["Accept-Encoding"]; !ok {
 			ua := r.Header.Get("User-Agent")
 			if strings.HasPrefix(ua, "axios/0.") || strings.HasPrefix(ua, "GuzzleHttp/") {
 				r.Header.Set("Accept-Encoding", "gzip")
