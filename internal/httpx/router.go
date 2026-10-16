@@ -84,6 +84,11 @@ func NewRouter(config *RouterConfig, serverMetrics *ServerMetrics, ledgerState *
 	return &result, nil
 }
 
+// compressedContentTypes are the response types gzipped or deflated for clients
+// that accept it. SSE streams flush after every event, and the compressor flushes
+// with them, so compressing streams doesn't hold events back.
+var compressedContentTypes = []string{"application/hal+json", "text/event-stream"}
+
 func (r *Router) addMiddleware(config *RouterConfig,
 	rateLimitter *throttled.HTTPRateLimiter,
 	serverMetrics *ServerMetrics) {
@@ -109,7 +114,7 @@ func (r *Router) addMiddleware(config *RouterConfig,
 	}
 	r.Use(recoverMiddleware)
 	r.Use(gzipForDecodingClients)
-	r.Use(chimiddleware.Compress(flate.DefaultCompression, "application/hal+json"))
+	r.Use(chimiddleware.Compress(flate.DefaultCompression, compressedContentTypes...))
 
 	c := cors.New(cors.Options{
 		AllowedOrigins:         []string{},
