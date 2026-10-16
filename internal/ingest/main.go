@@ -35,7 +35,7 @@ import (
 const (
 	// MaxSupportedProtocolVersion defines the maximum supported version of
 	// the Stellar protocol.
-	MaxSupportedProtocolVersion uint32 = 28
+	MaxSupportedProtocolVersion uint32 = 29
 
 	// CurrentVersion reflects the latest version of the ingestion
 	// algorithm. This value is stored in KV store and is used to decide
@@ -354,7 +354,7 @@ func NewSystem(config Config) (System, error) {
 
 	historyQ := &history.Q{config.HistorySession.Clone()}
 	historyAdapter := newHistoryArchiveAdapter(archive, config.NetworkPassphrase)
-	filters := filters.NewFilters()
+	filters := filters.NewFilters(config.NetworkPassphrase)
 	loadtestSnapshot := &loadTestSnapshot{HistoryQ: historyQ}
 
 	maxLedgersPerFlush := config.MaxLedgerPerFlush

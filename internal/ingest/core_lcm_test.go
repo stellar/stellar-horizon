@@ -117,7 +117,7 @@ func TestCoreLCMIngestion(t *testing.T) {
 						},
 						historyQ: historyQ,
 						session:  historyQ,
-						filters:  filters.NewFilters(),
+						filters:  filters.NewFilters(coreTestNetworkPassphrase),
 					}
 
 					// Run the full pipeline (change + transaction processors) on

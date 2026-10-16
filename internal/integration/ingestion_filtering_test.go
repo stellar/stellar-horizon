@@ -10,6 +10,7 @@ import (
 	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
 	hProtocol "github.com/stellar/go-stellar-sdk/protocols/horizon"
 	"github.com/stellar/go-stellar-sdk/txnbuild"
+	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-horizon/internal/ingest/filters"
 	"github.com/stellar/stellar-horizon/internal/test/integration"
 )
@@ -165,6 +166,51 @@ func TestFilteringAssetWhiteList(t *testing.T) {
 			Amount:      "10",
 			Asset:       whitelistedAsset,
 		},
+	)
+	_, err = itest.Client().TransactionDetail(txResp.Hash)
+	tt.NoError(err)
+
+	// Offers so a path payment can route SEK -> PTS -> XLM, and SEK to spend.
+	itest.MustSubmitOperations(itest.MasterAccount(), itest.Master(),
+		&txnbuild.ManageSellOffer{
+			Selling: whitelistedAsset,
+			Buying:  nonWhitelistedAsset,
+			Amount:  "100",
+			Price:   xdr.Price{N: 1, D: 1},
+		},
+		&txnbuild.ManageSellOffer{
+			Selling: txnbuild.NativeAsset{},
+			Buying:  whitelistedAsset,
+			Amount:  "100",
+			Price:   xdr.Price{N: 1, D: 1},
+		},
+		&txnbuild.Payment{
+			Destination: defaultAllowedAccount.GetAccountID(),
+			Amount:      "50",
+			Asset:       nonWhitelistedAsset,
+		},
+	)
+
+	// A path payment that only routes through the whitelisted asset is stored.
+	txResp = itest.MustSubmitOperations(defaultAllowedAccount, defaultAllowedAccountKey,
+		&txnbuild.PathPaymentStrictSend{
+			SendAsset:   nonWhitelistedAsset,
+			SendAmount:  "10",
+			Destination: itest.Master().Address(),
+			DestAsset:   txnbuild.NativeAsset{},
+			DestMin:     "1",
+			Path:        []txnbuild.Asset{whitelistedAsset},
+		},
+	)
+	_, err = itest.Client().TransactionDetail(txResp.Hash)
+	tt.NoError(err)
+
+	// A claim of a claimable balance denominated in the whitelisted asset is
+	// stored, even though the claim operation only carries the balance id.
+	claim := itest.MustCreateClaimableBalance(itest.Master(), whitelistedAsset, "10",
+		txnbuild.NewClaimant(defaultAllowedAccount.GetAccountID(), nil))
+	txResp = itest.MustSubmitOperations(defaultAllowedAccount, defaultAllowedAccountKey,
+		&txnbuild.ClaimClaimableBalance{BalanceID: claim.BalanceID},
 	)
 	_, err = itest.Client().TransactionDetail(txResp.Hash)
 	tt.NoError(err)
