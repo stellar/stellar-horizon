@@ -78,6 +78,23 @@ func methodLabel(method string) string {
 	}
 }
 
+// gzipForDecodingClients has the compressor gzip responses for clients that send
+// no Accept-Encoding but always decode gzip anyway: axios 0.x (js-stellar-sdk
+// before 11.0) and Guzzle (the PHP SDK). Without it they download large list pages
+// uncompressed.
+func gzipForDecodingClients(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Only when the header is absent: an empty Accept-Encoding asks for no encoding.
+		if _, ok := r.Header["Accept-Encoding"]; !ok {
+			ua := r.Header.Get("User-Agent")
+			if strings.HasPrefix(ua, "axios/0.") || strings.HasPrefix(ua, "GuzzleHttp/") {
+				r.Header.Set("Accept-Encoding", "gzip")
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // loggerMiddleware logs http requests and responses to the logging subsystem of horizon.
 func loggerMiddleware(serverMetrics *ServerMetrics) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
