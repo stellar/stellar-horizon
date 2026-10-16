@@ -124,11 +124,11 @@ func (q *Q) UpdateAssetContractExpirations(ctx context.Context, keys []xdr.Hash,
 	return q.updateExpirations(ctx, "asset_contracts", keys, expirationLedgers)
 }
 
-// DeleteAssetContractsExpiringAt deletes all contract asset contract rows which are active
-// at `ledger` and expired at `ledger+1`
-func (q *Q) DeleteAssetContractsExpiringAt(ctx context.Context, ledger uint32) (int64, error) {
+// DeleteAssetContractsExpiredBefore deletes all asset contract rows whose expiration
+// ledger is less than `ledger`, i.e. rows which are no longer active at `ledger`.
+func (q *Q) DeleteAssetContractsExpiredBefore(ctx context.Context, ledger uint32) (int64, error) {
 	sql := sq.Delete("asset_contracts").
-		Where(map[string]interface{}{"expiration_ledger": ledger})
+		Where(sq.Lt{"expiration_ledger": ledger})
 	result, err := q.Exec(ctx, sql)
 	if err != nil {
 		return 0, err
@@ -170,41 +170,35 @@ func (q *Q) InsertContractAssetBalances(ctx context.Context, rows []ContractAsse
 	return nil
 }
 
-const maxUpdateBatchSize = 30000
+// maxQueryBatchSize keeps the number of query parameters in a single query
+// below the postgres limit of 65535.
+const maxQueryBatchSize = 10000
 
-// UpdateContractAssetBalanceAmounts will update the expiration ledgers for the given list of keys
-// (if they exist in the db).
-func (q *Q) UpdateContractAssetBalanceAmounts(ctx context.Context, keys []xdr.Hash, amounts []string) error {
-	for len(keys) > 0 {
-		var args []interface{}
-		var values []string
+// UpsertContractAssetBalances inserts the given list of rows into the contract_asset_balances
+// table, replacing any row which already exists for the same key.
+func (q *Q) UpsertContractAssetBalances(ctx context.Context, rows []ContractAssetBalance) error {
+	for len(rows) > 0 {
+		batch := rows[:min(len(rows), maxQueryBatchSize)]
+		rows = rows[len(batch):]
 
-		for i := 0; len(keys) > 0 && i < maxUpdateBatchSize; i++ {
-			args = append(args, keys[0][:], amounts[0])
-			values = append(values, "(cast(? as bytea), cast(? as numeric))")
-			keys = keys[1:]
-			amounts = amounts[1:]
-		}
-
-		sql := fmt.Sprintf(`
-			UPDATE contract_asset_balances
-			SET
-			  amount = myvalues.amount
-			FROM (
-			  VALUES
-				%s
-			) AS myvalues (key_hash, amount)
-			WHERE contract_asset_balances.key_hash = myvalues.key_hash`,
-			strings.Join(values, ","),
+		sql := sq.Insert("contract_asset_balances").Columns(
+			"key_hash", "asset_contract_id", "amount", "expiration_ledger",
 		)
-
-		_, err := q.ExecRaw(ctx, sql, args...)
-		if err != nil {
-			return err
+		for _, row := range batch {
+			sql = sql.Values(row.KeyHash, row.ContractID, row.Amount, row.ExpirationLedger)
+		}
+		sql = sql.Suffix("ON CONFLICT (key_hash) DO UPDATE SET " +
+			"asset_contract_id = excluded.asset_contract_id, " +
+			"amount = excluded.amount, " +
+			"expiration_ledger = excluded.expiration_ledger")
+		if _, err := q.Exec(ctx, sql); err != nil {
+			return errors.Wrap(err, "could not upsert contract asset balances")
 		}
 	}
 	return nil
 }
+
+const maxUpdateBatchSize = 30000
 
 // UpdateContractAssetBalanceExpirations will update the expiration ledgers for the given list of keys
 // (if they exist in the db).
@@ -247,11 +241,12 @@ func (q *Q) updateExpirations(ctx context.Context, table string, keys []xdr.Hash
 	return nil
 }
 
-// DeleteContractAssetBalancesExpiringAt deletes and returns all contract asset balances which are active
-// at `ledger` and expired at `ledger+1`
-func (q *Q) DeleteContractAssetBalancesExpiringAt(ctx context.Context, ledger uint32) ([]ContractAssetBalance, error) {
+// DeleteContractAssetBalancesExpiredBefore deletes and returns all contract asset balances
+// whose expiration ledger is less than `ledger`, i.e. balances which are no longer active
+// at `ledger`.
+func (q *Q) DeleteContractAssetBalancesExpiredBefore(ctx context.Context, ledger uint32) ([]ContractAssetBalance, error) {
 	sql := sq.Delete("contract_asset_balances").
-		Where(map[string]interface{}{"expiration_ledger": ledger}).Suffix("RETURNING *")
+		Where(sq.Lt{"expiration_ledger": ledger}).Suffix("RETURNING *")
 	var balances []ContractAssetBalance
 	err := q.Select(ctx, &balances, sql)
 	return balances, err
@@ -260,15 +255,24 @@ func (q *Q) DeleteContractAssetBalancesExpiringAt(ctx context.Context, ledger ui
 // GetContractAssetBalances fetches all contract_asset_balances rows for the
 // given list of key hashes.
 func (q *Q) GetContractAssetBalances(ctx context.Context, keys []xdr.Hash) ([]ContractAssetBalance, error) {
-	keyBytes := make([][]byte, len(keys))
-	for i := range keys {
-		keyBytes[i] = keys[i][:]
-	}
-	sql := sq.Select("contract_asset_balances.*").From("contract_asset_balances").
-		Where(map[string]interface{}{"key_hash": keyBytes})
 	var balances []ContractAssetBalance
-	err := q.Select(ctx, &balances, sql)
-	return balances, err
+	for len(keys) > 0 {
+		batch := keys[:min(len(keys), maxQueryBatchSize)]
+		keys = keys[len(batch):]
+
+		keyBytes := make([][]byte, len(batch))
+		for i := range batch {
+			keyBytes[i] = batch[i][:]
+		}
+		sql := sq.Select("contract_asset_balances.*").From("contract_asset_balances").
+			Where(map[string]interface{}{"key_hash": keyBytes})
+		var rows []ContractAssetBalance
+		if err := q.Select(ctx, &rows, sql); err != nil {
+			return nil, err
+		}
+		balances = append(balances, rows...)
+	}
+	return balances, nil
 }
 
 // RemoveContractAssetBalances removes rows from the contract_asset_balances table

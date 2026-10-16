@@ -354,8 +354,7 @@ func (s *system) verifyState(verifyAgainstLatestCheckpoint bool, checkpointSeque
 	verifier := NewStateVerifier(stateReader)
 
 	assetStats := processors.NewAssetStatSet()
-	createdExpirationEntries := map[xdr.Hash]uint32{}
-	var contractDataEntries []xdr.LedgerEntry
+	contractAssetStatSet := processors.NewContractAssetStatSet(historyQ, s.config.NetworkPassphrase, ledgerSequence)
 	total := int64(0)
 	for {
 		var entries []xdr.LedgerEntry
@@ -409,7 +408,12 @@ func (s *system) verifyState(verifyAgainstLatestCheckpoint bool, checkpointSeque
 				if err = verifier.Write(entry); err != nil {
 					return err
 				}
-				contractDataEntries = append(contractDataEntries, entry)
+				if err = contractAssetStatSet.AddContractData(ingestsdk.Change{
+					Type: xdr.LedgerEntryTypeContractData,
+					Post: &entry,
+				}); err != nil {
+					return errors.Wrap(err, "Error ingesting contract data")
+				}
 				totalByType["contract_data"]++
 			case xdr.LedgerEntryTypeTtl:
 				// we don't store all expiration entries in the db,
@@ -418,8 +422,12 @@ func (s *system) verifyState(verifyAgainstLatestCheckpoint bool, checkpointSeque
 					return err
 				}
 				totalByType["ttl"]++
-				ttl := entry.Data.MustTtl()
-				createdExpirationEntries[ttl.KeyHash] = uint32(ttl.LiveUntilLedgerSeq)
+				if err = contractAssetStatSet.AddTTL(ingestsdk.Change{
+					Type: xdr.LedgerEntryTypeTtl,
+					Post: &entry,
+				}); err != nil {
+					return errors.Wrap(err, "Error ingesting ttl")
+				}
 				totalByType["expiration"]++
 			default:
 				return errors.New("GetLedgerEntries return unexpected type")
@@ -458,24 +466,6 @@ func (s *system) verifyState(verifyAgainstLatestCheckpoint bool, checkpointSeque
 
 		total += int64(len(entries))
 		localLog.WithField("total", total).Info("Batch added to StateVerifier")
-	}
-
-	contractAssetStatSet := processors.NewContractAssetStatSet(
-		historyQ,
-		s.config.NetworkPassphrase,
-		map[xdr.Hash]uint32{},
-		createdExpirationEntries,
-		map[xdr.Hash][2]uint32{},
-		ledgerSequence,
-	)
-	for i := range contractDataEntries {
-		entry := contractDataEntries[i]
-		if err = contractAssetStatSet.AddContractData(ingestsdk.Change{
-			Type: xdr.LedgerEntryTypeContractData,
-			Post: &entry,
-		}); err != nil {
-			return errors.Wrap(err, "Error ingesting contract data")
-		}
 	}
 
 	localLog.WithField("total", total).Info("Finished writing to StateVerifier")
@@ -528,23 +518,35 @@ func (s *system) verifyState(verifyAgainstLatestCheckpoint bool, checkpointSeque
 	return nil
 }
 
+// checkAssetStats compares the asset stats in the db with the ones computed from the
+// history archive. Any difference, in the classic asset stats or in the data derived
+// from Stellar Asset Contract ledger entries (asset contracts, contract balances and
+// contract stats), is a StateError. Only the balances of Stellar Asset Contracts are
+// compared, because any contract can write entries which look like contract balances.
 func checkAssetStats(
 	ctx context.Context,
 	set processors.AssetStatSet,
 	contractAssetStatSet *processors.ContractAssetStatSet,
 	q history.IngestionQ,
 ) error {
-	all, balances, err := extractAssetStatsAndBalances(set, contractAssetStatSet)
+	classicStats := map[string]history.ExpAssetStat{}
+	for _, assetStat := range set.All() {
+		// no need to handle the native asset because asset stats only
+		// include non-native assets.
+		classicStats[classicAssetStatKey(assetStat)] = assetStat
+	}
+	contractStats, balances, err := extractContractAssetStatsAndBalances(contractAssetStatSet)
 	if err != nil {
 		return err
 	}
 
+	var assetStats []history.AssetAndContractStat
 	page := db2.PageQuery{
 		Order: "asc",
 		Limit: assetStatsBatchSize,
 	}
 	for {
-		assetStats, err := q.GetAssetStats(ctx, "", "", page)
+		assetStats, err = q.GetAssetStats(ctx, "", "", page)
 		if err != nil {
 			return errors.Wrap(err, "could not fetch asset stats from db")
 		}
@@ -554,185 +556,225 @@ func checkAssetStats(
 
 		for _, assetStat := range assetStats {
 			key := assetStat.AssetCode + ":" + assetStat.AssetIssuer
-			fromSet, ok := all[key]
-			if !ok {
-				return ingestsdk.NewStateError(
-					fmt.Errorf(
-						"db contains asset stat with code %s issuer %s which is missing from HAS",
-						assetStat.AssetCode, assetStat.AssetIssuer,
-					),
-				)
+			if err = checkClassicAssetStat(classicStats, assetStat); err != nil {
+				return err
 			}
-			delete(all, key)
-
-			if !fromSet.Equals(assetStat) {
-				return ingestsdk.NewStateError(
-					fmt.Errorf(
-						"db asset stat with code %s issuer %s does not match asset stat from HAS: expected=%v actual=%v",
-						assetStat.AssetCode, assetStat.AssetIssuer, fromSet, assetStat,
-					),
-				)
+			if err = checkContractAssetStat(contractStats, key, assetStat); err != nil {
+				return err
 			}
 		}
 
 		page.Cursor = assetStats[len(assetStats)-1].PagingToken()
 	}
 
-	if len(all) > 0 {
+	if len(classicStats) > 0 {
 		return ingestsdk.NewStateError(
 			fmt.Errorf(
 				"HAS contains %d more asset stats than db",
-				len(all),
+				len(classicStats),
 			),
 		)
 	}
+	if len(contractStats) > 0 {
+		return ingestsdk.NewStateError(
+			fmt.Errorf("HAS contains %d asset contracts which are missing from db", len(contractStats)),
+		)
+	}
+	return checkContractBalances(ctx, balances, q)
+}
 
-	if err := checkContractBalances(ctx, balances, q); err != nil {
-		return err
+// emptyClassicBalances are the classic balances of the db row of an asset which only
+// has an asset contract, and no classic asset stat row.
+var emptyClassicBalances = history.ExpAssetStatBalances{
+	Authorized:                      "0",
+	AuthorizedToMaintainLiabilities: "0",
+	ClaimableBalances:               "0",
+	LiquidityPools:                  "0",
+	Unauthorized:                    "0",
+}
+
+// classicAssetStatKey returns the key of a classic asset stat. It includes the asset type,
+// like the join of GetAssetStats, so that the db row of an asset contract whose asset
+// type differs from the classic asset stat of its asset is never matched with it.
+func classicAssetStatKey(assetStat history.ExpAssetStat) string {
+	return fmt.Sprintf("%d:%s:%s", assetStat.AssetType, assetStat.AssetCode, assetStat.AssetIssuer)
+}
+
+// checkClassicAssetStat compares the classic asset stat in a db row with the one
+// computed from the history archive, and removes the latter from classicStats.
+func checkClassicAssetStat(
+	classicStats map[string]history.ExpAssetStat,
+	assetStat history.AssetAndContractStat,
+) error {
+	key := classicAssetStatKey(assetStat.ExpAssetStat)
+	fromSet, ok := classicStats[key]
+	if !ok {
+		if assetStat.ContractID != nil && assetStat.Accounts.IsZero() && assetStat.Balances == emptyClassicBalances {
+			return nil
+		}
+		return ingestsdk.NewStateError(
+			fmt.Errorf(
+				"db contains asset stat with code %s issuer %s which is missing from HAS",
+				assetStat.AssetCode, assetStat.AssetIssuer,
+			),
+		)
+	}
+	delete(classicStats, key)
+
+	if !fromSet.Equals(assetStat.ExpAssetStat) {
+		return ingestsdk.NewStateError(
+			fmt.Errorf(
+				"db asset stat with code %s issuer %s does not match asset stat from HAS: expected=%v actual=%v",
+				assetStat.AssetCode, assetStat.AssetIssuer, fromSet, assetStat.ExpAssetStat,
+			),
+		)
 	}
 	return nil
 }
 
-func extractAssetStatsAndBalances(set processors.AssetStatSet, contractAssetStatSet *processors.ContractAssetStatSet) (map[string]history.AssetAndContractStat, []history.ContractAssetBalance, error) {
-	all := map[string]history.AssetAndContractStat{}
-	for _, assetStat := range set.All() {
-		// no need to handle the native asset because asset stats only
-		// include non-native assets.
-		all[assetStat.AssetCode+":"+assetStat.AssetIssuer] = history.AssetAndContractStat{
-			ExpAssetStat: assetStat,
-			Contracts: history.ContractStat{
-				ActiveBalance: "0",
-				ActiveHolders: 0,
-			},
-		}
+// checkContractAssetStat compares the asset contract and contract stats in a db row
+// with the ones computed from the history archive, and removes the latter from
+// contractStats.
+func checkContractAssetStat(
+	contractStats map[string]expectedContractAssetStat,
+	key string,
+	assetStat history.AssetAndContractStat,
+) error {
+	if assetStat.ContractID == nil {
+		// an asset contract which is missing from the db is reported once
+		// all the rows in the db have been checked
+		return nil
 	}
+	fromSet, ok := contractStats[key]
+	if !ok {
+		return ingestsdk.NewStateError(errors.Errorf("db contains asset contract of %s which is missing from HAS", key))
+	}
+	delete(contractStats, key)
 
-	contractToStats := map[xdr.ContractId]history.ContractAssetStatRow{}
-	for _, row := range contractAssetStatSet.GetContractStats() {
+	if !bytes.Equal(fromSet.contractID, *assetStat.ContractID) {
+		return ingestsdk.NewStateError(errors.Errorf(
+			"asset contract of %s is %x in HAS but %x in db", key, fromSet.contractID, *assetStat.ContractID,
+		))
+	}
+	if fromSet.assetType != assetStat.AssetType {
+		return ingestsdk.NewStateError(errors.Errorf(
+			"asset contract of %s has type %v in HAS but %v in db", key, fromSet.assetType, assetStat.AssetType,
+		))
+	}
+	if fromSet.stat != assetStat.Contracts {
+		return ingestsdk.NewStateError(errors.Errorf(
+			"contract stats of %s are %+v in HAS but %+v in db", key, fromSet.stat, assetStat.Contracts,
+		))
+	}
+	return nil
+}
+
+// expectedContractAssetStat is the asset contract, asset type and contract stats of an
+// asset, computed from the history archive.
+type expectedContractAssetStat struct {
+	contractID []byte
+	assetType  xdr.AssetType
+	stat       history.ContractStat
+}
+
+// extractContractAssetStatsAndBalances returns, by asset, the asset contract and
+// contract stats computed from the history archive, along with the balances held in
+// those asset contracts. Balances of other contracts are left out: any contract can
+// write entries which look like Stellar Asset Contract balances, and horizon does not
+// serve them.
+func extractContractAssetStatsAndBalances(
+	contractAssetStatSet *processors.ContractAssetStatSet,
+) (map[string]expectedContractAssetStat, []history.ContractAssetBalance, error) {
+	createdBalances, contractStatRows := contractAssetStatSet.GetCreatedBalancesAndStats()
+	contractToStats := map[xdr.ContractId]history.ContractStat{}
+	for _, row := range contractStatRows {
 		var contractID xdr.ContractId
 		copy(contractID[:], row.ContractID)
-		contractToStats[contractID] = row
+		contractToStats[contractID] = row.Stat
 	}
 
 	assetContracts, err := contractAssetStatSet.GetCreatedAssetContracts()
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "Error getting created asset contracts")
 	}
+	contractStats := map[string]expectedContractAssetStat{}
+	assetContractIDs := map[xdr.ContractId]bool{}
 	for _, assetContract := range assetContracts {
-		key := assetContract.AssetCode + ":" + assetContract.AssetIssuer
-		entry, ok := all[key]
+		var contractID xdr.ContractId
+		copy(contractID[:], assetContract.ContractID)
+		assetContractIDs[contractID] = true
+
+		stat, ok := contractToStats[contractID]
 		if !ok {
-			assetType := xdr.AssetTypeAssetTypeCreditAlphanum4
-			if len(assetContract.AssetCode) > 4 {
-				assetType = xdr.AssetTypeAssetTypeCreditAlphanum12
-			}
-			entry = history.AssetAndContractStat{
-				ExpAssetStat: history.ExpAssetStat{
-					AssetType:   assetType,
-					AssetCode:   assetContract.AssetCode,
-					AssetIssuer: assetContract.AssetIssuer,
-					Accounts:    history.ExpAssetStatAccounts{},
-					Balances: history.ExpAssetStatBalances{
-						Authorized:                      "0",
-						AuthorizedToMaintainLiabilities: "0",
-						ClaimableBalances:               "0",
-						LiquidityPools:                  "0",
-						Unauthorized:                    "0",
-					},
-				},
-			}
-		}
-		contractID := assetContract.ContractID
-		entry.ContractID = &contractID
-		var contractIDHash xdr.ContractId
-		copy(contractIDHash[:], assetContract.ContractID)
-		contractStats, ok := contractToStats[contractIDHash]
-		if !ok {
-			entry.Contracts = history.ContractStat{
+			stat = history.ContractStat{
 				ActiveBalance: "0",
 				ActiveHolders: 0,
 			}
-		} else {
-			entry.Contracts = contractStats.Stat
 		}
-		all[key] = entry
+		contractStats[assetContract.AssetCode+":"+assetContract.AssetIssuer] = expectedContractAssetStat{
+			contractID: assetContract.ContractID,
+			assetType:  assetContract.AssetType,
+			stat:       stat,
+		}
 	}
 
-	// only check contract asset balances which belong to stellar asset contracts
-	// because other balances may be forged.
-	var filteredBalances []history.ContractAssetBalance
-	for _, balance := range contractAssetStatSet.GetCreatedBalances() {
+	var balances []history.ContractAssetBalance
+	for _, balance := range createdBalances {
 		var contractID xdr.ContractId
 		copy(contractID[:], balance.ContractID)
-		if _, ok := contractToStats[contractID]; ok {
-			filteredBalances = append(filteredBalances, balance)
+		if assetContractIDs[contractID] {
+			balances = append(balances, balance)
 		}
 	}
-	return all, filteredBalances, nil
+	return contractStats, balances, nil
 }
 
+// checkContractBalances compares the given balances, computed from the history archive,
+// with the rows in the db, and returns the first difference.
 func checkContractBalances(
 	ctx context.Context,
 	balances []history.ContractAssetBalance,
 	q history.IngestionQ,
 ) error {
 	for i := 0; i < len(balances); {
-		end := i + assetStatsBatchSize
-		if end > len(balances) {
-			end = len(balances)
-		}
-
+		end := min(i+assetStatsBatchSize, len(balances))
 		subset := balances[i:end]
-		var keys []xdr.Hash
-		byKey := map[xdr.Hash]history.ContractAssetBalance{}
+		keys := make([]xdr.Hash, 0, len(subset))
 		for _, balance := range subset {
 			var key xdr.Hash
 			copy(key[:], balance.KeyHash)
 			keys = append(keys, key)
-			byKey[key] = balance
 		}
 
 		rows, err := q.GetContractAssetBalances(ctx, keys)
 		if err != nil {
 			return err
 		}
-
+		byKey := make(map[xdr.Hash]history.ContractAssetBalance, len(rows))
 		for _, row := range rows {
 			var key xdr.Hash
 			copy(key[:], row.KeyHash)
-			expected := byKey[key]
+			byKey[key] = row
+		}
 
-			if !bytes.Equal(row.ContractID, expected.ContractID) {
-				return ingestsdk.NewStateError(
-					fmt.Errorf(
-						"contract balance %v has contract %v in HAS but is %v in db",
-						key,
-						expected.ContractID,
-						row.ContractID,
-					),
-				)
-			}
-
-			if row.ExpirationLedger != expected.ExpirationLedger {
-				return ingestsdk.NewStateError(
-					fmt.Errorf(
-						"contract balance %v has expiration %v in HAS but is %v in db",
-						key,
-						expected.ExpirationLedger,
-						row.ExpirationLedger,
-					),
-				)
-			}
-
-			if row.Amount != expected.Amount {
-				return ingestsdk.NewStateError(
-					fmt.Errorf(
-						"contract balance %v has amount %v in HAS but is %v in db",
-						key,
-						expected.Amount,
-						row.Amount,
-					),
-				)
+		for j, expected := range subset {
+			key := keys[j]
+			row, ok := byKey[key]
+			switch {
+			case !ok:
+				return ingestsdk.NewStateError(errors.Errorf("contract balance %x is missing from db", key))
+			case !bytes.Equal(row.ContractID, expected.ContractID):
+				return ingestsdk.NewStateError(errors.Errorf(
+					"contract balance %x has contract %x in HAS but %x in db", key, expected.ContractID, row.ContractID,
+				))
+			case row.ExpirationLedger != expected.ExpirationLedger:
+				return ingestsdk.NewStateError(errors.Errorf(
+					"contract balance %x has expiration %v in HAS but %v in db", key, expected.ExpirationLedger, row.ExpirationLedger,
+				))
+			case row.Amount != expected.Amount:
+				return ingestsdk.NewStateError(errors.Errorf(
+					"contract balance %x has amount %v in HAS but %v in db", key, expected.Amount, row.Amount,
+				))
 			}
 		}
 

@@ -17,11 +17,13 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 - The admin API rejects malformed asset whitelist entries that are not already stored. It stores each valid entry in canonical form. The response lists every rejected entry.
 - Operators running with an asset filter can re-run historical range ingestion to back-fill transactions that earlier versions skipped. `db reingest range` first deletes all history in the range, then ingests it again through the filter config stored now. Do this only when the filter config has not changed since the range was first ingested. Otherwise transactions the current config does not keep are deleted, and `db detect-gaps` does not report them.
 - The asset ingestion filter now matches rules on the inner operations of fee-bump transactions. Earlier versions collected operations only from TxV0 and Tx envelopes, so a fee-bump transaction was not ingested even when its inner operations referenced a whitelisted asset.
+- The contract balances behind the `contracts` fields of `/assets` are tracked by ledger key, so each stored balance follows the latest value of its ledger entry, and the contract stats are adjusted from the stored balances. Expired contract balances and asset contracts are removed whenever their expiration ledger has passed, rather than only in the ledger right after it.
 
 ### Updated
 - SSE streams are now compressed for clients that send `Accept-Encoding: gzip` or `deflate`, like other responses. A 200-event stream is about 80-90% smaller; clients that don't accept compression get the same response as before.
 - Responses are now gzipped for axios 0.x (js-stellar-sdk before 11.0) and Guzzle (PHP SDK) clients even though they send no `Accept-Encoding`, since both always decode gzip. Their large list pages are about 90% smaller.
 - The `method` label of the `horizon_http_requests_duration_seconds`, `horizon_http_requests_in_flight` and `horizon_http_requests_received` metrics reports standard HTTP methods as before and groups any other method under `OTHER`.
+- State verification compares the asset contracts, contract balances and contract stats behind the `contracts` fields of `/assets` with the history archive, only for Stellar Asset Contracts, and a difference marks the ingestion state invalid, like a difference in any other ingested data.
 
 ## 29.0.0
 
