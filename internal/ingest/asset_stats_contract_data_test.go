@@ -470,12 +470,10 @@ func contractDataMismatchCases(
 	}
 }
 
-// requireContractDataError checks that err reports a difference in contract data, which
-// is not a StateError.
-func requireContractDataError(t *testing.T, err error, expected ...string) {
-	require.Error(t, err)
+// requireStateError checks that err is a StateError which mentions each expected string.
+func requireStateError(t *testing.T, err error, expected ...string) {
 	_, isStateError := errors.Cause(err).(ingestsdk.StateError)
-	require.False(t, isStateError, "a difference in contract data is a StateError: %v", err)
+	require.True(t, isStateError, "expected a StateError, got %v", err)
 	for _, e := range expected {
 		require.Contains(t, err.Error(), e)
 	}
@@ -483,10 +481,9 @@ func requireContractDataError(t *testing.T, err error, expected ...string) {
 
 // TestCheckAssetStatsReportsContractDataMismatches changes the stored contract data in
 // different ways, and checks that the state verification of asset stats reports each
-// difference as an error which is not a StateError. Differences in the balances of
-// contracts which are not Stellar Asset Contracts are not reported. It then checks
-// that the periodic state verification does not mark the state as invalid for such a
-// difference.
+// difference as a StateError. Differences in the balances of contracts which are not
+// Stellar Asset Contracts are not reported. It then checks that the mismatch marks the
+// ingestion state invalid.
 func TestCheckAssetStatsReportsContractDataMismatches(t *testing.T) {
 	c, finish := newContractDataTest(t, 1)
 	defer finish()
@@ -528,53 +525,29 @@ func TestCheckAssetStatsReportsContractDataMismatches(t *testing.T) {
 				require.NoError(t, err)
 				return
 			}
-			requireContractDataError(t, err, testCase.expected...)
+			requireStateError(t, err, testCase.expected...)
 		})
 	}
 
-	c.checkPeriodicStateVerification(ledger, liveUntil)
+	c.checkContractDataMismatchInvalidatesState(ledger, liveUntil)
 }
 
-// checkPeriodicStateVerification changes the stored balance of the first holder of the
-// first asset contract, and checks that the state verification reports it as an error
-// while the periodic state verification does not mark the state as invalid. A
-// difference in the classic asset stats still marks the state as invalid.
-func (c *contractDataTest) checkPeriodicStateVerification(ledger, liveUntil uint32) {
+// checkContractDataMismatchInvalidatesState changes the stored balance of the first
+// holder of the first asset contract, and checks that the state verification reports it
+// as a StateError and that, run from the ingestion system, it marks the state invalid.
+func (c *contractDataTest) checkContractDataMismatchInvalidatesState(ledger, liveUntil uint32) {
 	t := c.t
 	require.NoError(t, c.verifyState(ledger))
 	require.NoError(t, c.q.UpsertContractAssetBalances(c.ctx, []history.ContractAssetBalance{
 		c.balanceRow(c.assetContracts[0], c.holders[0], "11", liveUntil),
 	}))
-	requireContractDataError(t, c.verifyState(ledger), "has amount 10 in HAS but 11 in db")
+	requireStateError(t, c.verifyState(ledger), "has amount 10 in HAS but 11 in db")
 
 	sys, historyAdapter := c.newSystem(ledger)
 	sys.maybeVerifyState(ledger, xdr.Hash{})
 	sys.wg.Wait()
 	historyAdapter.AssertExpectations(t)
-	require.Equal(t, 1, sys.stateVerificationErrors)
 	invalid, err := c.q.GetExpStateInvalid(c.ctx)
-	require.NoError(t, err)
-	require.False(t, invalid)
-
-	_, err = c.q.InsertAssetStat(c.ctx, history.ExpAssetStat{
-		AssetType:   xdr.AssetTypeAssetTypeCreditAlphanum4,
-		AssetCode:   "GBP",
-		AssetIssuer: keypair.MustRandom().Address(),
-		Accounts:    history.ExpAssetStatAccounts{Authorized: 1},
-		Balances: history.ExpAssetStatBalances{
-			Authorized:                      "1",
-			AuthorizedToMaintainLiabilities: "0",
-			ClaimableBalances:               "0",
-			LiquidityPools:                  "0",
-			Unauthorized:                    "0",
-		},
-	})
-	require.NoError(t, err)
-	sys, historyAdapter = c.newSystem(ledger)
-	sys.maybeVerifyState(ledger, xdr.Hash{})
-	sys.wg.Wait()
-	historyAdapter.AssertExpectations(t)
-	invalid, err = c.q.GetExpStateInvalid(c.ctx)
 	require.NoError(t, err)
 	require.True(t, invalid)
 }
@@ -622,7 +595,7 @@ func TestCheckAssetStatsRejectsClassicAssetStatsWithoutAccounts(t *testing.T) {
 
 // TestCheckAssetStatsMatchesClassicAssetStatsByAssetType checks that an asset contract
 // whose asset type differs from the classic asset stat of its asset is reported as a
-// difference in contract data, whichever of the two db rows of the asset comes first.
+// StateError, whichever of the two db rows of the asset comes first.
 func TestCheckAssetStatsMatchesClassicAssetStatsByAssetType(t *testing.T) {
 	ctx := context.Background()
 	issuer := keypair.MustRandom().Address()
@@ -682,8 +655,8 @@ func TestCheckAssetStatsMatchesClassicAssetStatsByAssetType(t *testing.T) {
 				Cursor: rows[1].PagingToken(),
 				Order:  "asc",
 				Limit:  assetStatsBatchSize,
-			}).Return([]history.AssetAndContractStat{}, nil).Once()
-			requireContractDataError(t, checkAssetStats(ctx, set, contractSet, q),
+			}).Return([]history.AssetAndContractStat{}, nil).Maybe()
+			requireStateError(t, checkAssetStats(ctx, set, contractSet, q),
 				"has type AssetTypeAssetTypeCreditAlphanum4 in HAS but AssetTypeAssetTypeCreditAlphanum12 in db")
 			q.MockQAssetStats.AssertExpectations(t)
 		})

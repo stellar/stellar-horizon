@@ -519,10 +519,10 @@ func (s *system) verifyState(verifyAgainstLatestCheckpoint bool, checkpointSeque
 }
 
 // checkAssetStats compares the asset stats in the db with the ones computed from the
-// history archive. A difference in the classic asset stats is a StateError. A
-// difference in the data derived from Stellar Asset Contract ledger entries (asset
-// contracts, contract balances and contract stats) is a plain error, which does not
-// mark the state as invalid, since that data only feeds the contract fields of /assets.
+// history archive. Any difference, in the classic asset stats or in the data derived
+// from Stellar Asset Contract ledger entries (asset contracts, contract balances and
+// contract stats), is a StateError. Only the balances of Stellar Asset Contracts are
+// compared, because any contract can write entries which look like contract balances.
 func checkAssetStats(
 	ctx context.Context,
 	set processors.AssetStatSet,
@@ -540,9 +540,6 @@ func checkAssetStats(
 		return err
 	}
 
-	// a difference in contract data is returned once the classic asset stats are
-	// verified, so that it does not hide a StateError
-	var contractDataErr error
 	var assetStats []history.AssetAndContractStat
 	page := db2.PageQuery{
 		Order: "asc",
@@ -562,8 +559,8 @@ func checkAssetStats(
 			if err = checkClassicAssetStat(classicStats, assetStat); err != nil {
 				return err
 			}
-			if contractDataErr == nil {
-				contractDataErr = checkContractAssetStat(contractStats, key, assetStat)
+			if err = checkContractAssetStat(contractStats, key, assetStat); err != nil {
+				return err
 			}
 		}
 
@@ -578,11 +575,10 @@ func checkAssetStats(
 			),
 		)
 	}
-	if contractDataErr != nil {
-		return contractDataErr
-	}
 	if len(contractStats) > 0 {
-		return errors.Errorf("HAS contains %d asset contracts which are missing from db", len(contractStats))
+		return ingestsdk.NewStateError(
+			fmt.Errorf("HAS contains %d asset contracts which are missing from db", len(contractStats)),
+		)
 	}
 	return checkContractBalances(ctx, balances, q)
 }
@@ -651,18 +647,24 @@ func checkContractAssetStat(
 	}
 	fromSet, ok := contractStats[key]
 	if !ok {
-		return errors.Errorf("db contains asset contract of %s which is missing from HAS", key)
+		return ingestsdk.NewStateError(errors.Errorf("db contains asset contract of %s which is missing from HAS", key))
 	}
 	delete(contractStats, key)
 
 	if !bytes.Equal(fromSet.contractID, *assetStat.ContractID) {
-		return errors.Errorf("asset contract of %s is %x in HAS but %x in db", key, fromSet.contractID, *assetStat.ContractID)
+		return ingestsdk.NewStateError(errors.Errorf(
+			"asset contract of %s is %x in HAS but %x in db", key, fromSet.contractID, *assetStat.ContractID,
+		))
 	}
 	if fromSet.assetType != assetStat.AssetType {
-		return errors.Errorf("asset contract of %s has type %v in HAS but %v in db", key, fromSet.assetType, assetStat.AssetType)
+		return ingestsdk.NewStateError(errors.Errorf(
+			"asset contract of %s has type %v in HAS but %v in db", key, fromSet.assetType, assetStat.AssetType,
+		))
 	}
 	if fromSet.stat != assetStat.Contracts {
-		return errors.Errorf("contract stats of %s are %+v in HAS but %+v in db", key, fromSet.stat, assetStat.Contracts)
+		return ingestsdk.NewStateError(errors.Errorf(
+			"contract stats of %s are %+v in HAS but %+v in db", key, fromSet.stat, assetStat.Contracts,
+		))
 	}
 	return nil
 }
@@ -760,17 +762,19 @@ func checkContractBalances(
 			row, ok := byKey[key]
 			switch {
 			case !ok:
-				return errors.Errorf("contract balance %x is missing from db", key)
+				return ingestsdk.NewStateError(errors.Errorf("contract balance %x is missing from db", key))
 			case !bytes.Equal(row.ContractID, expected.ContractID):
-				return errors.Errorf(
+				return ingestsdk.NewStateError(errors.Errorf(
 					"contract balance %x has contract %x in HAS but %x in db", key, expected.ContractID, row.ContractID,
-				)
+				))
 			case row.ExpirationLedger != expected.ExpirationLedger:
-				return errors.Errorf(
+				return ingestsdk.NewStateError(errors.Errorf(
 					"contract balance %x has expiration %v in HAS but %v in db", key, expected.ExpirationLedger, row.ExpirationLedger,
-				)
+				))
 			case row.Amount != expected.Amount:
-				return errors.Errorf("contract balance %x has amount %v in HAS but %v in db", key, expected.Amount, row.Amount)
+				return ingestsdk.NewStateError(errors.Errorf(
+					"contract balance %x has amount %v in HAS but %v in db", key, expected.Amount, row.Amount,
+				))
 			}
 		}
 

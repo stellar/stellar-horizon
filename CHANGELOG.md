@@ -21,7 +21,7 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Updated
 - The `method` label of the `horizon_http_requests_duration_seconds`, `horizon_http_requests_in_flight` and `horizon_http_requests_received` metrics reports standard HTTP methods as before and groups any other method under `OTHER`.
-- State verification only checks the contract balances of Stellar Asset Contracts, and reports differences in asset contracts, contract balances and contract stats as state verification errors in its logs.
+- State verification compares the asset contracts, contract balances and contract stats behind the `contracts` fields of `/assets` with the history archive, only for Stellar Asset Contracts, and a difference marks the ingestion state invalid, like a difference in any other ingested data.
 
 ## 29.0.0
 
