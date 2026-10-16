@@ -2,7 +2,6 @@ package processors
 
 import (
 	"context"
-	"crypto/sha256"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,10 +14,17 @@ import (
 )
 
 func getKeyHashForBalance(t *testing.T, assetContractId, holderID [32]byte) xdr.Hash {
-	ledgerKey := sac.ContractBalanceLedgerKey(assetContractId, holderID)
-	bin, err := ledgerKey.MarshalBinary()
+	keyHash, err := getLedgerKeyHash(sac.ContractBalanceLedgerKey(assetContractId, holderID))
 	assert.NoError(t, err)
-	return sha256.Sum256(bin)
+	return keyHash
+}
+
+func getKeyHash(ledgerEntry xdr.LedgerEntry) (xdr.Hash, error) {
+	ledgerKey, err := ledgerEntry.LedgerKey()
+	if err != nil {
+		return xdr.Hash{}, err
+	}
+	return getLedgerKeyHash(ledgerKey)
 }
 
 func TestAddContractData(t *testing.T) {
@@ -39,9 +45,6 @@ func TestAddContractData(t *testing.T) {
 	set := NewContractAssetStatSet(
 		&history.MockQAssetStats{},
 		"passphrase",
-		map[xdr.Hash]uint32{},
-		map[xdr.Hash]uint32{},
-		map[xdr.Hash][2]uint32{},
 		150,
 	)
 
@@ -147,10 +150,12 @@ func TestAddContractData(t *testing.T) {
 	assert.NoError(t, err)
 
 	// negative balances will be ignored
+	negativeBalanceKeyHash := getKeyHashForBalance(t, etherID, [32]byte{3})
+	set.createdExpirationEntries[negativeBalanceKeyHash] = 150
 	err = set.AddContractData(ingest.Change{
 		Type: xdr.LedgerEntryTypeContractData,
 		Post: &xdr.LedgerEntry{
-			Data: sac.BalanceInt128ToContractData(etherID, [32]byte{1}, xdr.Int128Parts{Hi: -1, Lo: 0}),
+			Data: sac.BalanceInt128ToContractData(etherID, [32]byte{3}, xdr.Int128Parts{Hi: -1, Lo: 0}),
 		},
 	})
 	assert.NoError(t, err)
@@ -167,8 +172,6 @@ func TestAddContractData(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	assert.Empty(t, set.updatedBalances)
-	assert.Empty(t, set.removedBalances)
 	createdAssetContracts, err := set.GetCreatedAssetContracts()
 	assert.NoError(t, err)
 	assert.Equal(t, []history.AssetContract{
@@ -189,6 +192,7 @@ func TestAddContractData(t *testing.T) {
 			ExpirationLedger: 150,
 		},
 	}, createdAssetContracts)
+	createdBalances, statRows := set.GetCreatedBalancesAndStats()
 	assert.Equal(t, []history.ContractAssetBalance{
 		{
 			KeyHash:          uniBalanceKeyHash[:],
@@ -202,8 +206,8 @@ func TestAddContractData(t *testing.T) {
 			Amount:           "150",
 			ExpirationLedger: 150,
 		},
-	}, set.createdBalances)
-	assert.ElementsMatch(t, set.GetContractStats(), []history.ContractAssetStatRow{
+	}, createdBalances)
+	assert.ElementsMatch(t, statRows, []history.ContractAssetStatRow{
 		{
 			ContractID: uniID[:],
 			Stat: history.ContractStat{
@@ -221,7 +225,7 @@ func TestAddContractData(t *testing.T) {
 	})
 }
 
-func TestGetCreatedAssetContractsRequiresExpiration(t *testing.T) {
+func TestGetCreatedAssetContractsSkipsMissingExpiration(t *testing.T) {
 	usdcIssuer := keypair.MustRandom().Address()
 	usdcAsset := xdr.MustNewCreditAsset("USDC", usdcIssuer)
 	usdcID, err := usdcAsset.ContractID("passphrase")
@@ -230,9 +234,6 @@ func TestGetCreatedAssetContractsRequiresExpiration(t *testing.T) {
 	set := NewContractAssetStatSet(
 		&history.MockQAssetStats{},
 		"passphrase",
-		map[xdr.Hash]uint32{},
-		map[xdr.Hash]uint32{},
-		map[xdr.Hash][2]uint32{},
 		150,
 	)
 
@@ -251,163 +252,217 @@ func TestGetCreatedAssetContractsRequiresExpiration(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
+	rows, err := set.GetCreatedAssetContracts()
+	assert.NoError(t, err)
+	assert.Len(t, rows, 1)
+
 	delete(set.createdExpirationEntries, usdcAssetKeyHash)
-	_, err = set.GetCreatedAssetContracts()
-	assert.ErrorContains(t, err, "could not find expiration ledger entry for asset contract")
+	rows, err = set.GetCreatedAssetContracts()
+	assert.NoError(t, err)
+	assert.Empty(t, rows)
 }
 
-func TestUpdateContractBalance(t *testing.T) {
-	usdcIssuer := keypair.MustRandom().Address()
-	usdcAsset := xdr.MustNewCreditAsset("USDC", usdcIssuer)
-	usdcID, err := usdcAsset.ContractID("passphrase")
+func assetContractID(t *testing.T, code, issuer string) xdr.ContractId {
+	contractID, err := xdr.MustNewCreditAsset(code, issuer).ContractID("passphrase")
 	assert.NoError(t, err)
-	etherIssuer := keypair.MustRandom().Address()
-	etherAsset := xdr.MustNewCreditAsset("ETHER", etherIssuer)
-	etherID, err := etherAsset.ContractID("passphrase")
-	assert.NoError(t, err)
-	btcAsset := xdr.MustNewCreditAsset("BTC", etherIssuer)
-	btcID, err := btcAsset.ContractID("passphrase")
-	assert.NoError(t, err)
-	uniAsset := xdr.MustNewCreditAsset("UNI", etherIssuer)
-	uniID, err := uniAsset.ContractID("passphrase")
-	assert.NoError(t, err)
+	return contractID
+}
 
+// reconcileTest adds updates of contract balance entries to a ContractAssetStatSet,
+// along with the rows the db holds for them.
+type reconcileTest struct {
+	t      *testing.T
+	mockQ  *history.MockQAssetStats
+	set    *ContractAssetStatSet
+	keys   []xdr.Hash
+	stored []history.ContractAssetBalance
+}
+
+func newReconcileTest(t *testing.T) *reconcileTest {
 	mockQ := &history.MockQAssetStats{}
-	set := NewContractAssetStatSet(
-		mockQ,
-		"passphrase",
-		map[xdr.Hash]uint32{},
-		map[xdr.Hash]uint32{},
-		map[xdr.Hash][2]uint32{},
-		150,
-	)
-	expectedBalances := map[xdr.Hash]string{}
-
-	keyHash := getKeyHashForBalance(t, usdcID, [32]byte{})
-	set.updatedExpirationEntries[keyHash] = [2]uint32{160, 170}
-	expectedBalances[keyHash] = "100"
-	err = set.AddContractData(ingest.Change{
-		Type: xdr.LedgerEntryTypeContractData,
-		Pre: &xdr.LedgerEntry{
-			Data: sac.BalanceToContractData(usdcID, [32]byte{}, 50),
-		},
-		Post: &xdr.LedgerEntry{
-			Data: sac.BalanceToContractData(usdcID, [32]byte{}, 100),
-		},
-	})
-	assert.NoError(t, err)
-
-	keyHash = getKeyHashForBalance(t, usdcID, [32]byte{2})
-	expectedBalances[keyHash] = "100"
-	err = set.AddContractData(ingest.Change{
-		Type: xdr.LedgerEntryTypeContractData,
-		Pre: &xdr.LedgerEntry{
-			Data: sac.BalanceToContractData(usdcID, [32]byte{2}, 30),
-		},
-		Post: &xdr.LedgerEntry{
-			Data: sac.BalanceToContractData(usdcID, [32]byte{2}, 100),
-		},
-	})
-	assert.NoError(t, err)
-
-	keyHash = getKeyHashForBalance(t, etherID, [32]byte{})
-	expectedBalances[keyHash] = "50"
-	err = set.AddContractData(ingest.Change{
-		Type: xdr.LedgerEntryTypeContractData,
-		Pre: &xdr.LedgerEntry{
-			Data: sac.BalanceToContractData(etherID, [32]byte{}, 200),
-		},
-		Post: &xdr.LedgerEntry{
-			Data: sac.BalanceToContractData(etherID, [32]byte{}, 50),
-		},
-	})
-	assert.NoError(t, err)
-
-	// negative balances will be ignored
-	err = set.AddContractData(ingest.Change{
-		Type: xdr.LedgerEntryTypeContractData,
-		Pre: &xdr.LedgerEntry{
-			Data: sac.BalanceToContractData(etherID, [32]byte{}, 200),
-		},
-		Post: &xdr.LedgerEntry{
-			Data: sac.BalanceInt128ToContractData(etherID, [32]byte{1}, xdr.Int128Parts{Hi: -1, Lo: 0}),
-		},
-	})
-	assert.NoError(t, err)
-
-	// negative balances will be ignored
-	err = set.AddContractData(ingest.Change{
-		Type: xdr.LedgerEntryTypeContractData,
-		Pre: &xdr.LedgerEntry{
-			Data: sac.BalanceInt128ToContractData(etherID, [32]byte{1}, xdr.Int128Parts{Hi: -1, Lo: 0}),
-		},
-		Post: &xdr.LedgerEntry{
-			Data: sac.BalanceToContractData(etherID, [32]byte{}, 200),
-		},
-	})
-	assert.NoError(t, err)
-
-	// balances where the amount doesn't change will be ignored
-	err = set.AddContractData(ingest.Change{
-		Type: xdr.LedgerEntryTypeContractData,
-		Pre: &xdr.LedgerEntry{
-			Data: sac.BalanceToContractData(btcID, [32]byte{2}, 300),
-		},
-		Post: &xdr.LedgerEntry{
-			Data: sac.BalanceToContractData(btcID, [32]byte{2}, 300),
-		},
-	})
-	assert.NoError(t, err)
-
-	keyHash = getKeyHashForBalance(t, uniID, [32]byte{4})
-	set.updatedExpirationEntries[keyHash] = [2]uint32{150, 170}
-	expectedBalances[keyHash] = "75"
-	err = set.AddContractData(ingest.Change{
-		Type: xdr.LedgerEntryTypeContractData,
-		Pre: &xdr.LedgerEntry{
-			Data: sac.BalanceToContractData(uniID, [32]byte{4}, 50),
-		},
-		Post: &xdr.LedgerEntry{
-			Data: sac.BalanceToContractData(uniID, [32]byte{4}, 75),
-		},
-	})
-	assert.NoError(t, err)
-
-	assert.Empty(t, set.createdAssetContracts)
-	assert.Empty(t, set.removedBalances)
-	assert.Empty(t, set.createdExpirationEntries)
-	for key, amt := range set.updatedBalances {
-		assert.Equal(t, expectedBalances[key], amt.String())
-		delete(expectedBalances, key)
+	return &reconcileTest{
+		t:     t,
+		mockQ: mockQ,
+		set: NewContractAssetStatSet(
+			mockQ,
+			"passphrase",
+			150,
+		),
 	}
-	assert.Empty(t, expectedBalances)
+}
 
-	result := set.GetContractStats()
-	assert.ElementsMatch(t, result, []history.ContractAssetStatRow{
+func (r *reconcileTest) update(contractID xdr.ContractId, holder [32]byte, pre, post xdr.LedgerEntryData) xdr.Hash {
+	keyHash := getKeyHashForBalance(r.t, contractID, holder)
+	r.keys = append(r.keys, keyHash)
+	assert.NoError(r.t, r.set.AddContractData(ingest.Change{
+		Type: xdr.LedgerEntryTypeContractData,
+		Pre:  &xdr.LedgerEntry{Data: pre},
+		Post: &xdr.LedgerEntry{Data: post},
+	}))
+	return keyHash
+}
+
+func (r *reconcileTest) store(keyHash xdr.Hash, contractID xdr.ContractId, amount string, expirationLedger uint32) {
+	r.stored = append(r.stored, history.ContractAssetBalance{
+		KeyHash:          keyHash[:],
+		ContractID:       contractID[:],
+		Amount:           amount,
+		ExpirationLedger: expirationLedger,
+	})
+}
+
+func (r *reconcileTest) reconcile() ([]history.ContractAssetBalance, []xdr.Hash) {
+	ctx := context.Background()
+	r.mockQ.On("GetContractAssetBalances", ctx, r.keys).Return(r.stored, nil).Once()
+	upserts, removals, err := r.set.reconcileBalances(ctx)
+	assert.NoError(r.t, err)
+	assert.Empty(r.t, r.set.createdAssetContracts)
+	r.mockQ.AssertExpectations(r.t)
+	return upserts, removals
+}
+
+func TestReconcileBalanceAmounts(t *testing.T) {
+	usdcID := assetContractID(t, "USDC", keypair.MustRandom().Address())
+	etherIssuer := keypair.MustRandom().Address()
+	etherID := assetContractID(t, "ETHER", etherIssuer)
+	btcID := assetContractID(t, "BTC", etherIssuer)
+	uniID := assetContractID(t, "UNI", etherIssuer)
+	r := newReconcileTest(t)
+
+	// the amount and ttl change
+	usdcKeyHash := r.update(usdcID, [32]byte{},
+		sac.BalanceToContractData(usdcID, [32]byte{}, 50),
+		sac.BalanceToContractData(usdcID, [32]byte{}, 100),
+	)
+	r.set.updatedExpirationEntries[usdcKeyHash] = [2]uint32{160, 170}
+	r.store(usdcKeyHash, usdcID, "50", 160)
+
+	// the amount changes and the ttl is kept from the stored row
+	usdcKeyHash2 := r.update(usdcID, [32]byte{2},
+		sac.BalanceToContractData(usdcID, [32]byte{2}, 30),
+		sac.BalanceToContractData(usdcID, [32]byte{2}, 100),
+	)
+	r.store(usdcKeyHash2, usdcID, "30", 165)
+
+	etherKeyHash := r.update(etherID, [32]byte{},
+		sac.BalanceToContractData(etherID, [32]byte{}, 200),
+		sac.BalanceToContractData(etherID, [32]byte{}, 50),
+	)
+	r.store(etherKeyHash, etherID, "200", 165)
+
+	// balances where the amount and ttl don't change are ignored
+	btcKeyHash := r.update(btcID, [32]byte{2},
+		sac.BalanceToContractData(btcID, [32]byte{2}, 300),
+		sac.BalanceToContractData(btcID, [32]byte{2}, 300),
+	)
+	r.store(btcKeyHash, btcID, "300", 165)
+
+	uniKeyHash := r.update(uniID, [32]byte{4},
+		sac.BalanceToContractData(uniID, [32]byte{4}, 50),
+		sac.BalanceToContractData(uniID, [32]byte{4}, 75),
+	)
+	r.set.updatedExpirationEntries[uniKeyHash] = [2]uint32{150, 170}
+	r.store(uniKeyHash, uniID, "50", 150)
+
+	upserts, removals := r.reconcile()
+	assert.Empty(t, removals)
+	assert.Equal(t, []history.ContractAssetBalance{
+		{KeyHash: usdcKeyHash[:], ContractID: usdcID[:], Amount: "100", ExpirationLedger: 170},
+		{KeyHash: usdcKeyHash2[:], ContractID: usdcID[:], Amount: "100", ExpirationLedger: 165},
+		{KeyHash: etherKeyHash[:], ContractID: etherID[:], Amount: "50", ExpirationLedger: 165},
+		{KeyHash: uniKeyHash[:], ContractID: uniID[:], Amount: "75", ExpirationLedger: 170},
+	}, upserts)
+	assert.ElementsMatch(t, r.set.contractAssetStats.rows(), []history.ContractAssetStatRow{
 		{
 			ContractID: usdcID[:],
-			Stat: history.ContractStat{
-				ActiveBalance: "120",
-				ActiveHolders: 0,
-			},
+			Stat:       history.ContractStat{ActiveBalance: "120", ActiveHolders: 0},
 		},
 		{
 			ContractID: etherID[:],
-			Stat: history.ContractStat{
-				ActiveBalance: "-150",
-				ActiveHolders: 0,
-			},
+			Stat:       history.ContractStat{ActiveBalance: "-150", ActiveHolders: 0},
 		},
 		{
 			ContractID: uniID[:],
-			Stat: history.ContractStat{
-				ActiveBalance: "25",
-				ActiveHolders: 0,
-			},
+			Stat:       history.ContractStat{ActiveBalance: "25", ActiveHolders: 0},
 		},
 	})
+}
 
-	mockQ.AssertExpectations(t)
+// TestReconcileBalanceValues covers updates which change whether the value of an
+// entry is a balance. The row follows the latest value, whatever the previous one was.
+func TestReconcileBalanceValues(t *testing.T) {
+	etherIssuer := keypair.MustRandom().Address()
+	etherID := assetContractID(t, "ETHER", etherIssuer)
+	btcID := assetContractID(t, "BTC", etherIssuer)
+	negative := xdr.Int128Parts{Hi: -1, Lo: 0}
+	r := newReconcileTest(t)
+
+	// a value which is not a valid balance removes the row
+	etherKeyHash := r.update(etherID, [32]byte{1},
+		sac.BalanceToContractData(etherID, [32]byte{1}, 40),
+		sac.BalanceInt128ToContractData(etherID, [32]byte{1}, negative),
+	)
+	r.store(etherKeyHash, etherID, "40", 165)
+
+	// a valid balance replacing a value which was not one is stored when its ttl is known
+	btcKeyHash := r.update(btcID, [32]byte{5},
+		sac.BalanceInt128ToContractData(btcID, [32]byte{5}, negative),
+		sac.BalanceToContractData(btcID, [32]byte{5}, 10),
+	)
+	r.set.updatedExpirationEntries[btcKeyHash] = [2]uint32{160, 180}
+
+	// and skipped when it is not
+	r.update(btcID, [32]byte{6},
+		sac.BalanceInt128ToContractData(btcID, [32]byte{6}, negative),
+		sac.BalanceToContractData(btcID, [32]byte{6}, 10),
+	)
+
+	upserts, removals := r.reconcile()
+	assert.Equal(t, []xdr.Hash{etherKeyHash}, removals)
+	assert.Equal(t, []history.ContractAssetBalance{
+		{KeyHash: btcKeyHash[:], ContractID: btcID[:], Amount: "10", ExpirationLedger: 180},
+	}, upserts)
+	assert.ElementsMatch(t, r.set.contractAssetStats.rows(), []history.ContractAssetStatRow{
+		{
+			ContractID: etherID[:],
+			Stat:       history.ContractStat{ActiveBalance: "-40", ActiveHolders: -1},
+		},
+		{
+			ContractID: btcID[:],
+			Stat:       history.ContractStat{ActiveBalance: "10", ActiveHolders: 1},
+		},
+	})
+}
+
+// TestReconcileBalanceContract covers a stored row whose contract is not the contract
+// of its ledger key. The row is rewritten, and its balance moves to the stats of the
+// contract of the key.
+func TestReconcileBalanceContract(t *testing.T) {
+	usdcID := assetContractID(t, "USDC", keypair.MustRandom().Address())
+	otherID := assetContractID(t, "EURC", keypair.MustRandom().Address())
+	r := newReconcileTest(t)
+
+	keyHash := r.update(usdcID, [32]byte{1},
+		sac.BalanceToContractData(usdcID, [32]byte{1}, 50),
+		sac.BalanceToContractData(usdcID, [32]byte{1}, 50),
+	)
+	r.store(keyHash, otherID, "50", 160)
+
+	upserts, removals := r.reconcile()
+	assert.Empty(t, removals)
+	assert.Equal(t, []history.ContractAssetBalance{
+		{KeyHash: keyHash[:], ContractID: usdcID[:], Amount: "50", ExpirationLedger: 160},
+	}, upserts)
+	assert.ElementsMatch(t, r.set.contractAssetStats.rows(), []history.ContractAssetStatRow{
+		{
+			ContractID: usdcID[:],
+			Stat:       history.ContractStat{ActiveBalance: "50", ActiveHolders: 1},
+		},
+		{
+			ContractID: otherID[:],
+			Stat:       history.ContractStat{ActiveBalance: "-50", ActiveHolders: -1},
+		},
+	})
 }
 
 func TestRemoveContractData(t *testing.T) {
@@ -420,9 +475,6 @@ func TestRemoveContractData(t *testing.T) {
 	set := NewContractAssetStatSet(
 		mockQ,
 		"passphrase",
-		map[xdr.Hash]uint32{},
-		map[xdr.Hash]uint32{},
-		map[xdr.Hash][2]uint32{},
 		150,
 	)
 
@@ -452,8 +504,6 @@ func TestRemoveContractData(t *testing.T) {
 		},
 	})
 	assert.NoError(t, err)
-
-	assert.Equal(t, []xdr.Hash{keyHash, keyHash1, keyHash2}, set.removedBalances)
 	assert.Empty(t, set.createdAssetContracts)
 
 	// keyHash1 has no stored row, so it contributes nothing to the stats
@@ -463,9 +513,12 @@ func TestRemoveContractData(t *testing.T) {
 			{KeyHash: keyHash[:], ContractID: usdcID[:], Amount: "50", ExpirationLedger: 170},
 			{KeyHash: keyHash2[:], ContractID: usdcID[:], Amount: "34", ExpirationLedger: 170},
 		}, nil).Once()
-	assert.NoError(t, set.ingestRemovedBalances(ctx))
+	upserts, removals, err := set.reconcileBalances(ctx)
+	assert.NoError(t, err)
+	assert.Empty(t, upserts)
+	assert.Equal(t, []xdr.Hash{keyHash, keyHash2}, removals)
 
-	assert.ElementsMatch(t, set.GetContractStats(), []history.ContractAssetStatRow{
+	assert.ElementsMatch(t, set.contractAssetStats.rows(), []history.ContractAssetStatRow{
 		{
 			ContractID: usdcID[:],
 			Stat: history.ContractStat{
@@ -492,19 +545,14 @@ func TestIngestExpiredBalances(t *testing.T) {
 	set := NewContractAssetStatSet(
 		mockQ,
 		"passphrase",
-		map[xdr.Hash]uint32{},
-		map[xdr.Hash]uint32{},
-		map[xdr.Hash][2]uint32{},
 		150,
 	)
 
 	usdcKeyHash := getKeyHashForBalance(t, usdcID, [32]byte{})
 	usdcKeyHash1 := getKeyHashForBalance(t, usdcID, [32]byte{1})
 	ethKeyHash := getKeyHashForBalance(t, etherID, [32]byte{})
-	ethKeyHash1 := getKeyHashForBalance(t, etherID, [32]byte{1})
-	set.updatedExpirationEntries[ethKeyHash1] = [2]uint32{149, 180}
 	ctx := context.Background()
-	mockQ.On("DeleteContractAssetBalancesExpiringAt", ctx, set.currentLedger-1).
+	mockQ.On("DeleteContractAssetBalancesExpiredBefore", ctx, set.currentLedger).
 		Return([]history.ContractAssetBalance{
 			{
 				KeyHash:          usdcKeyHash[:],
@@ -516,7 +564,7 @@ func TestIngestExpiredBalances(t *testing.T) {
 				KeyHash:          usdcKeyHash1[:],
 				ContractID:       usdcID[:],
 				Amount:           "200",
-				ExpirationLedger: 149,
+				ExpirationLedger: 120,
 			},
 			{
 				KeyHash:          ethKeyHash[:],
@@ -524,16 +572,10 @@ func TestIngestExpiredBalances(t *testing.T) {
 				Amount:           "8",
 				ExpirationLedger: 149,
 			},
-			{
-				KeyHash:          ethKeyHash1[:],
-				ContractID:       etherID[:],
-				Amount:           "67",
-				ExpirationLedger: 149,
-			},
 		}, nil).Once()
 
 	assert.NoError(t, set.ingestExpiredBalances(ctx))
-	assert.ElementsMatch(t, set.GetContractStats(), []history.ContractAssetStatRow{
+	assert.ElementsMatch(t, set.contractAssetStats.rows(), []history.ContractAssetStatRow{
 		{
 			ContractID: usdcID[:],
 			Stat: history.ContractStat{

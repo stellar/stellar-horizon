@@ -573,13 +573,13 @@ func (e *ExpAssetStatBalances) Scan(src interface{}) error {
 type QAssetStats interface {
 	InsertAssetContracts(ctx context.Context, rows []AssetContract) error
 	UpdateAssetContractExpirations(ctx context.Context, keys []xdr.Hash, expirationLedgers []uint32) error
-	DeleteAssetContractsExpiringAt(ctx context.Context, ledger uint32) (int64, error)
+	DeleteAssetContractsExpiredBefore(ctx context.Context, ledger uint32) (int64, error)
 	InsertContractAssetBalances(ctx context.Context, rows []ContractAssetBalance) error
+	UpsertContractAssetBalances(ctx context.Context, rows []ContractAssetBalance) error
 	RemoveContractAssetBalances(ctx context.Context, keys []xdr.Hash) error
-	UpdateContractAssetBalanceAmounts(ctx context.Context, keys []xdr.Hash, amounts []string) error
 	UpdateContractAssetBalanceExpirations(ctx context.Context, keys []xdr.Hash, expirationLedgers []uint32) error
 	GetContractAssetBalances(ctx context.Context, keys []xdr.Hash) ([]ContractAssetBalance, error)
-	DeleteContractAssetBalancesExpiringAt(ctx context.Context, ledger uint32) ([]ContractAssetBalance, error)
+	DeleteContractAssetBalancesExpiredBefore(ctx context.Context, ledger uint32) ([]ContractAssetBalance, error)
 	InsertAssetStats(ctx context.Context, stats []ExpAssetStat) error
 	InsertContractAssetStats(ctx context.Context, rows []ContractAssetStatRow) error
 	InsertAssetStat(ctx context.Context, stat ExpAssetStat) (int64, error)
