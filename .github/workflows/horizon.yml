@@ -6,15 +6,12 @@ on:
   pull_request:
 
 jobs:
-  integration-p28-pkg:
-    name: Integration tests (P28)
+  integration-p29-pkg:
+    name: Integration tests (P29)
     uses: ./.github/workflows/integration-tests.yml
     with:
-      protocol_version: '28'
-      # The P28 leg runs the NEW core and rpc builds at protocol 28 — the point
-      # is verifying the updated binaries still serve the previous protocol
-      # (the real configuration during the upgrade window), not re-testing
-      # already-shipped versions against each other.
+      protocol_version: '29'
+      # Move to the new core and rpc builds at protocol 29 once they are released.
       core_deb_version: '29.0.0-3589.4eb833373.jammy~buildtests'
       core_docker_img: 'stellar/stellar-core:29.0.0-3589.4eb833373.jammy'
       stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0'
@@ -23,23 +20,16 @@ jobs:
       # latest-go/latest-pg job.
       full_matrix: ${{ github.event_name == 'push' }}
 
-  integration-p29-pkg:
-    name: Integration tests (P29)
+  integration-p30-pkg:
+    name: Integration tests (P30)
     uses: ./.github/workflows/integration-tests.yml
     with:
-      protocol_version: '29'
-      core_deb_version: '29.0.0-3589.4eb833373.jammy~buildtests'
-      core_docker_img: 'stellar/stellar-core:29.0.0-3589.4eb833373.jammy'
-      stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0'
-      full_matrix: ${{ github.event_name == 'push' }}
-
-  # integration-p29-src:
-  #   name: Integration tests (P29, core from source)
-  #   uses: ./.github/workflows/integration-tests.yml
-  #   with:
-  #     protocol_version: '29'
-  #     core_git_ref: 'master'
-  #     stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0'
+      protocol_version: '30'
+      # stellar-core 30.0.0 release candidate.
+      core_deb_version: '30.0.0-3642.0e49751aa.noble~buildtests'
+      core_docker_img: 'stellar/unsafe-stellar-core:30.0.0-3642.0e49751aa.noble'
+      # No protocol 30 stellar-rpc image yet, so the RPC tests are skipped.
+      stellar_rpc_docker_img: ''
 
   verify-range:
     name: Test (and push) verify-range image

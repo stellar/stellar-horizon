@@ -5,6 +5,9 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Added
+- Added Protocol 30 support and bumped `MaxSupportedProtocolVersion` to 30 ([#237](https://github.com/stellar/stellar-horizon/pull/237)). A Stellar Asset Contract `transfer` or `mint` to a muxed contract (`W...`) gives the `contract_credited` effect `contract_muxed` and `contract_muxed_id` fields.
+
 ### Fixed
 - The asset ingestion filter now matches rules on the inner operations of fee-bump transactions. Earlier versions collected operations only from TxV0 and Tx envelopes, so a fee-bump transaction was not ingested even when its inner operations referenced a whitelisted asset.
 
