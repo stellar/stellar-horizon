@@ -17,14 +17,16 @@ func TestNegotiate(t *testing.T) {
 		Header               string
 		ExpectedResponseType string
 	}{
-		// Streams when the Accept header asks for text/event-stream
+		// Responds with the first media type listed that Horizon serves
 		{"text/event-stream", MimeEventStream},
 		{"text/event-stream,application/hal+json", MimeEventStream},
-		// Responds with raw bytes when it asks for application/octet-stream
+		{"application/hal+json, text/event-stream", MimeHal},
+		{"application/json, text/event-stream", MimeHal},
+		{"*/*, text/event-stream", MimeEventStream},
 		{"application/octet-stream", MimeRaw},
 		// Ignores media range parameters, including q-values
 		{"text/event-stream; charset=utf-8", MimeEventStream},
-		{"application/hal+json, text/event-stream;q=0.5", MimeEventStream},
+		{"text/event-stream;q=0.5, application/hal+json", MimeEventStream},
 		// Defaults to HAL
 		{"application/hal+json", MimeHal},
 		{"application/json, text/plain, */*", MimeHal},
