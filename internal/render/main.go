@@ -2,28 +2,23 @@ package render
 
 import (
 	"net/http"
-
-	"github.com/adjust/goautoneg"
-	"github.com/stellar/go-stellar-sdk/support/log"
+	"strings"
 )
 
-// Negotiate inspects the Accept header of the provided request and determines
-// what the most appropriate response type should be.  Defaults to HAL.
+// Negotiate returns the media type to respond to the provided request with:
+// the first media type listed in its Accept header that Horizon serves
+// (MimeEventStream, MimeRaw, or MimeHal, which also covers application/json),
+// or MimeHal if it lists none. Media range parameters, including q-values, are
+// ignored.
 func Negotiate(r *http.Request) string {
-	ctx := r.Context()
-	alternatives := []string{MimeHal, MimeJSON, MimeEventStream, MimeRaw}
-	accept := r.Header.Get("Accept")
-
-	if accept == "" {
-		return MimeHal
+	for mediaRange := range strings.SplitSeq(r.Header.Get("Accept"), ",") {
+		mediaType, _, _ := strings.Cut(mediaRange, ";")
+		switch mediaType = strings.TrimSpace(mediaType); mediaType {
+		case MimeEventStream, MimeRaw:
+			return mediaType
+		case MimeHal, "application/json":
+			return MimeHal
+		}
 	}
-
-	result := goautoneg.Negotiate(r.Header.Get("Accept"), alternatives)
-
-	log.Ctx(ctx).WithFields(log.F{
-		"content_type": result,
-		"accept":       accept,
-	}).Debug("Negotiated content type")
-
-	return result
+	return MimeHal
 }

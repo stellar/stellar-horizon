@@ -17,14 +17,25 @@ func TestNegotiate(t *testing.T) {
 		Header               string
 		ExpectedResponseType string
 	}{
-		// Obeys the Accept header's prioritization
-		{"application/hal+json", MimeHal},
+		// Responds with the first media type listed that Horizon serves
+		{"text/event-stream", MimeEventStream},
 		{"text/event-stream,application/hal+json", MimeEventStream},
+		{"application/hal+json, text/event-stream", MimeHal},
+		{"application/json, text/event-stream", MimeHal},
+		{"*/*, text/event-stream", MimeEventStream},
+		{"application/octet-stream", MimeRaw},
+		// Ignores media range parameters, including q-values
+		{"text/event-stream; charset=utf-8", MimeEventStream},
+		{"text/event-stream;q=0.5, application/hal+json", MimeEventStream},
 		// Defaults to HAL
-		{"text/event-stream;q=0.5,application/hal+json", MimeHal},
+		{"application/hal+json", MimeHal},
+		{"application/json, text/plain, */*", MimeHal},
+		{"text/plain", MimeHal},
 		{"", MimeHal},
-		// Returns empty string for invalid type
-		{"text/plain", ""},
+		// Matches whole media types only
+		{"text/event-streaming", MimeHal},
+		{"application/octet-stream-custom", MimeHal},
+		{"application/json;profile=text/event-stream", MimeHal},
 	}
 	for _, tc := range testCases {
 		t.Run("", func(t *testing.T) {
