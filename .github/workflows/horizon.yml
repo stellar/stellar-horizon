@@ -11,9 +11,10 @@ jobs:
     uses: ./.github/workflows/integration-tests.yml
     with:
       protocol_version: '29'
-      # Move to the new core and rpc builds at protocol 29 once they are released.
-      core_deb_version: '29.0.0-3589.4eb833373.jammy~buildtests'
-      core_docker_img: 'stellar/stellar-core:29.0.0-3589.4eb833373.jammy'
+      # Both legs run stellar-core 30.0.0; this one checks it at protocol 29.
+      # Move stellar_rpc_docker_img to the stellar-rpc 30 build once it exists.
+      core_deb_version: '30.0.0-3642.0e49751aa.noble~buildtests'
+      core_docker_img: 'stellar/stellar-core:30.0.0-3642.0e49751aa.noble'
       stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0'
       # The full go/postgres matrix runs only on pushes to main since they're
       # non-blocking and happen in the background. Everyday PRs get the single 
@@ -25,9 +26,8 @@ jobs:
     uses: ./.github/workflows/integration-tests.yml
     with:
       protocol_version: '30'
-      # stellar-core 30.0.0 release candidate.
       core_deb_version: '30.0.0-3642.0e49751aa.noble~buildtests'
-      core_docker_img: 'stellar/unsafe-stellar-core:30.0.0-3642.0e49751aa.noble'
+      core_docker_img: 'stellar/stellar-core:30.0.0-3642.0e49751aa.noble'
       # No protocol 30 stellar-rpc image yet, so the RPC tests are skipped.
       stellar_rpc_docker_img: ''
 
@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       GO_VERSION: 1.25.0
-      STELLAR_CORE_VERSION: 29.0.0-3589.4eb833373.noble
+      STELLAR_CORE_VERSION: 30.0.0-3642.0e49751aa.noble
     steps:
       - uses: actions/checkout@v3
         with:
