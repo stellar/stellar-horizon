@@ -51,9 +51,14 @@ const (
 
 	// defaultWriteTimeout applies when the connection timeout is not set.
 	defaultWriteTimeout = 60 * time.Second
+
+	// maxHeaderBytes bounds the size of request headers, which net/http
+	// otherwise allows up to 1MB. Requests to Horizon need far less.
+	maxHeaderBytes = 64 * 1024
 )
 
-// newHTTPServer builds a listener bounded on read, write, and idle timeouts.
+// newHTTPServer builds a listener bounded on read, write, and idle timeouts,
+// and on request header size.
 //
 // The write timeout is derived from the connection timeout rather than fixed.
 // --connection-timeout defaults to 55s, but operators raise it behind load
@@ -72,11 +77,12 @@ func newHTTPServer(addr string, handler http.Handler, connectionTimeout time.Dur
 		writeTimeout = connectionTimeout + writeTimeoutBuffer
 	}
 	return &http.Server{
-		Addr:         addr,
-		Handler:      handler,
-		ReadTimeout:  serverReadTimeout,
-		WriteTimeout: writeTimeout,
-		IdleTimeout:  serverIdleTimeout,
+		Addr:           addr,
+		Handler:        handler,
+		ReadTimeout:    serverReadTimeout,
+		WriteTimeout:   writeTimeout,
+		IdleTimeout:    serverIdleTimeout,
+		MaxHeaderBytes: maxHeaderBytes,
 	}
 }
 

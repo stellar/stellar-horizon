@@ -64,7 +64,38 @@ func newWrapResponseWriter(w http.ResponseWriter, r *http.Request) middleware.Wr
 	return mw
 }
 
-// loggerMiddleware logs http requests and resposnes to the logging subsytem of horizon.
+// methodLabel returns the value of the "method" label in the HTTP request
+// metrics. Standard HTTP methods are reported as is and any other method is
+// reported as "OTHER", so the label has a fixed set of values.
+func methodLabel(method string) string {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut,
+		http.MethodPatch, http.MethodDelete, http.MethodConnect,
+		http.MethodOptions, http.MethodTrace:
+		return method
+	default:
+		return "OTHER"
+	}
+}
+
+// gzipForDecodingClients has the compressor gzip responses for clients that send
+// no Accept-Encoding but always decode gzip anyway: axios 0.x (js-stellar-sdk
+// before 11.0) and Guzzle (the PHP SDK). Without it they download large list pages
+// uncompressed.
+func gzipForDecodingClients(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Only when the header is absent: an empty Accept-Encoding asks for no encoding.
+		if _, ok := r.Header["Accept-Encoding"]; !ok {
+			ua := r.Header.Get("User-Agent")
+			if strings.HasPrefix(ua, "axios/0.") || strings.HasPrefix(ua, "GuzzleHttp/") {
+				r.Header.Set("Accept-Encoding", "gzip")
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// loggerMiddleware logs http requests and responses to the logging subsystem of horizon.
 func loggerMiddleware(serverMetrics *ServerMetrics) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -76,14 +107,13 @@ func loggerMiddleware(serverMetrics *ServerMetrics) func(next http.Handler) http
 
 			// Checking `Accept` header from user request because if the streaming connection
 			// is reset before sending the first event no Content-Type header is sent in a response.
-			acceptHeader := r.Header.Get("Accept")
-			streaming := strings.Contains(acceptHeader, render.MimeEventStream)
+			streaming := render.Negotiate(r) == render.MimeEventStream
 			route := supportHttp.GetChiRoutePattern(r)
 
 			requestLabels := prometheus.Labels{
 				"route":     route,
 				"streaming": strconv.FormatBool(streaming),
-				"method":    r.Method,
+				"method":    methodLabel(r.Method),
 			}
 			serverMetrics.RequestsInFlightGauge.With(requestLabels).Inc()
 			defer serverMetrics.RequestsInFlightGauge.With(requestLabels).Dec()
@@ -172,7 +202,7 @@ func logEndOfRequest(ctx context.Context, r *http.Request, route string, request
 		"status":    strconv.FormatInt(int64(mw.Status()), 10),
 		"route":     route,
 		"streaming": strconv.FormatBool(streaming),
-		"method":    r.Method,
+		"method":    methodLabel(r.Method),
 	}).Observe(float64(duration.Seconds()))
 }
 

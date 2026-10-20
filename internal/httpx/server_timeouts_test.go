@@ -20,3 +20,8 @@ func TestNewHTTPServerFallsBackWhenConnectionTimeoutUnset(t *testing.T) {
 	srv := newHTTPServer(":0", http.NewServeMux(), 0)
 	assert.Equal(t, defaultWriteTimeout, srv.WriteTimeout)
 }
+
+func TestNewHTTPServerLimitsRequestHeaderSize(t *testing.T) {
+	srv := newHTTPServer(":0", http.NewServeMux(), 0)
+	assert.Equal(t, maxHeaderBytes, srv.MaxHeaderBytes)
+}

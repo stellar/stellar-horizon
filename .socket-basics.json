@@ -1,0 +1,13 @@
+{
+  "workspace": ".",
+  "go_sast_enabled": true,
+  "rust_sast_enabled": true,
+  "go_disabled_rules": "go-error-not-checked",
+  "sast_ignore_overrides": "go-command-execution:internal/scripts/build_release_artifacts/main.go,go-file-path-traversal:internal/flags.go,go-file-path-traversal:internal/ingest/main.go,go-file-path-traversal:internal/ingest/processor_runner.go,go-decompression-bomb:internal/db2/schema/bindata.go,go-profiling-endpoint-exposed:cmd/ingest.go,go-weak-random:internal/ingest/loadtest.go,rust-panic-in-production:internal/integration/contracts/bulk/src/lib.rs,rust-panic-in-production:internal/integration/contracts/increment/src/lib.rs",
+  "secret_scanning_enabled": true,
+  "console_tabular_enabled": true,
+  "dockerfiles": "docker/Dockerfile,docker/Dockerfile.core-testing,docker/Dockerfile.dev,docker/Dockerfile.stable,docker/verify-range/Dockerfile,internal/scripts/check_release_hash/Dockerfile",
+  "socket_tier_1_enabled": false,
+  "trivy_vuln_enabled": false,
+  "trufflehog_exclude_dir": "vendor,target,.git,sac_test"
+}
