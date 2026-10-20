@@ -83,7 +83,7 @@ func ingestCoreLCMFile(t *testing.T, path string) *history.Q {
 		},
 		historyQ: historyQ,
 		session:  historyQ,
-		filters:  filters.NewFilters(),
+		filters:  filters.NewFilters(coreTestNetworkPassphrase),
 	}
 
 	// Run the full pipeline (change + transaction processors) on

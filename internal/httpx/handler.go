@@ -38,7 +38,7 @@ func (handler ObjectActionHandler) ServeHTTP(
 	r *http.Request,
 ) {
 	switch render.Negotiate(r) {
-	case render.MimeHal, render.MimeJSON:
+	case render.MimeHal:
 		response, err := handler.Action.GetResource(w, r)
 		if err != nil {
 			problem.Render(r.Context(), w, err)
@@ -81,7 +81,7 @@ func (handler streamableObjectActionHandler) ServeHTTP(
 	r *http.Request,
 ) {
 	switch render.Negotiate(r) {
-	case render.MimeHal, render.MimeJSON:
+	case render.MimeHal:
 		response, err := handler.action.GetResource(w, r)
 		if err != nil {
 			problem.Render(r.Context(), w, err)
@@ -275,7 +275,7 @@ func (handler pageActionHandler) renderStream(w http.ResponseWriter, r *http.Req
 
 func (handler pageActionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch render.Negotiate(r) {
-	case render.MimeHal, render.MimeJSON:
+	case render.MimeHal:
 		handler.renderPage(w, r)
 		return
 	case render.MimeEventStream:
