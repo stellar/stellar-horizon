@@ -11,6 +11,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/stellar/go-stellar-sdk/strkey"
 	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
@@ -72,7 +73,7 @@ func (sys *System) RegisterMetrics(registry *prometheus.Registry) {
 func (sys *System) Submit(
 	ctx context.Context,
 	rawTx string,
-	envelope xdr.TransactionEnvelope,
+	envelope xdr.TransactionEnvelopeView,
 	hash string,
 ) (resultReadCh <-chan Result) {
 	sys.Init()
@@ -80,19 +81,18 @@ func (sys *System) Submit(
 	resultReadCh = resultCh
 
 	db := sys.DB(ctx)
-	// The database doesn't (yet) store muxed accounts, so we query
-	// the corresponding AccountId
-	sourceAccount := envelope.SourceAccount().ToAccountId()
-	sourceAddress := sourceAccount.Address()
+	envelopeType, sourceAddress, seqNum, minSeqNum, err := readEnvelope(envelope)
+	if err != nil {
+		sys.finish(ctx, hash, resultCh, Result{Err: err})
+		return
+	}
 
 	sys.Log.Ctx(ctx).WithFields(log.F{
 		"hash":    hash,
-		"tx_type": envelope.Type.String(),
+		"tx_type": envelopeType.String(),
 		"tx":      rawTx,
 	}).Info("Processing transaction")
 
-	seqNum := envelope.SeqNum()
-	minSeqNum := envelope.MinSeqNum()
 	// Ensure sequence numbers make sense
 	if seqNum < 0 || (minSeqNum != nil && (*minSeqNum < 0 || *minSeqNum >= seqNum)) {
 		sys.finish(ctx, hash, resultCh, Result{Err: ErrBadSequence})
@@ -128,7 +128,7 @@ func (sys *System) Submit(
 		// Even if a transaction is successfully submitted to core, Horizon ingestion might
 		// be lagging behind leading to txBAD_SEQ. This function will block a txsub request
 		// until the request times out or account sequence is bumped to txn sequence.
-		if err = sys.waitUntilAccountSequence(ctx, db, sourceAddress, uint64(envelope.SeqNum())); err != nil {
+		if err = sys.waitUntilAccountSequence(ctx, db, sourceAddress, uint64(seqNum)); err != nil {
 			sys.finish(ctx, hash, resultCh, Result{Err: err})
 			return
 		}
@@ -150,6 +150,36 @@ func (sys *System) Submit(
 	// until we see an ingestion in the db.
 	sys.Pending.Add(hash, resultCh)
 	return
+}
+
+// readEnvelope reads the envelope type, and the source account and sequence
+// numbers of its transaction, which for a fee bump is the inner transaction.
+// The source is unmuxed because the database doesn't (yet) store muxed accounts.
+func readEnvelope(envelope xdr.TransactionEnvelopeView) (typ xdr.EnvelopeType, source string, seq int64, minSeq *int64, err error) {
+	err = xdr.TryVoid(func() {
+		typ = envelope.MustType()
+		var key xdr.Uint256View
+		key, seq, minSeq = mustReadTransaction(envelope.MustTransaction())
+		source = strkey.MustEncode(strkey.VersionByteAccountID, key.MustRaw())
+	})
+	return typ, source, seq, minSeq, err
+}
+
+func mustReadTransaction(tx xdr.TransactionView) (key xdr.Uint256View, seq int64, minSeq *int64) {
+	account := tx.MustSourceAccount()
+	if account.MustType() == xdr.CryptoKeyTypeKeyTypeMuxedEd25519 {
+		key = account.MustMed25519().MustEd25519()
+	} else {
+		key = account.MustEd25519()
+	}
+	seq = tx.MustSeqNum().MustValue()
+	if cond := tx.MustCond(); cond.MustType() == xdr.PreconditionTypePrecondV2 {
+		if v, ok := cond.MustV2().MustMinSeqNum().MustUnwrap(); ok {
+			value := v.MustValue()
+			minSeq = &value
+		}
+	}
+	return key, seq, minSeq
 }
 
 // waitUntilAccountSequence blocks until either the context times out or the sequence number of the
