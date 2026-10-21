@@ -310,6 +310,19 @@ func (s *OperationsProcessorTestSuiteLedger) TestOperationTypeInvokeHostFunction
 
 		transferContractEvent := contractevents.GenerateEvent(contractevents.EventTypeTransfer, randomAccount, zeroContractStrKey, "", randomAsset, big.NewInt(10000000), passphrase, &idMemo)
 
+		muxedContractTo := xdr.ScAddress{
+			Type: xdr.ScAddressTypeScAddressTypeMuxedContract,
+			MuxedContract: &xdr.MuxedContract{
+				Id:         111,
+				ContractId: contractId,
+			},
+		}
+		transferArgs := xdr.ScVec{
+			{Type: xdr.ScValTypeScvAddress, Address: &xdr.ScAddress{Type: xdr.ScAddressTypeScAddressTypeAccount, AccountId: xdr.MustAddressPtr(randomAccount)}},
+			{Type: xdr.ScValTypeScvAddress, Address: &muxedContractTo},
+			{Type: xdr.ScValTypeScvI128, I128: &xdr.Int128Parts{Lo: 10000000}},
+		}
+
 		tx = ingest.LedgerTransaction{
 			Envelope: xdr.TransactionEnvelope{
 				Type: xdr.EnvelopeTypeEnvelopeTypeTx,
@@ -350,8 +363,8 @@ func (s *OperationsProcessorTestSuiteLedger) TestOperationTypeInvokeHostFunction
 									Type:       xdr.ScAddressTypeScAddressTypeContract,
 									ContractId: &xdr.ContractId{0x1, 0x2},
 								},
-								FunctionName: "foo",
-								Args:         xdr.ScVec{},
+								FunctionName: "transfer",
+								Args:         transferArgs,
 							},
 						},
 					},
@@ -362,6 +375,12 @@ func (s *OperationsProcessorTestSuiteLedger) TestOperationTypeInvokeHostFunction
 
 		details, err := wrapper.Details()
 		s.Require().NoError(err)
+
+		detailsFunctionParams := details["parameters"].([]map[string]string)
+		s.Assert().Len(detailsFunctionParams, 5)
+		s.assertInvokeHostFunctionParameter(detailsFunctionParams, 2, "Address", transferArgs[0])
+		s.assertInvokeHostFunctionParameter(detailsFunctionParams, 3, "Address", transferArgs[1])
+		s.assertInvokeHostFunctionParameter(detailsFunctionParams, 4, "I128", transferArgs[2])
 
 		s.Assert().Len(details["asset_balance_changes"], 1)
 		assetBalanceChanged := details["asset_balance_changes"].([]map[string]interface{})[0]

@@ -5,6 +5,13 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## 30.0.0
+
+**This release adds support for Protocol 30.**
+
+### Added
+- Added Protocol 30 support and bumped `MaxSupportedProtocolVersion` to 30 ([#237](https://github.com/stellar/stellar-horizon/pull/237)). A Stellar Asset Contract `transfer` or `mint` to a muxed contract (`W...`) gives the `contract_credited` effect `contract_muxed` and `contract_muxed_id` fields.
+
 ### Fixed
 - The asset ingestion filter now matches rules on ledger entry changes and on Soroban data in the envelope, in addition to operation bodies. These transactions are now ingested when they involve a whitelisted asset:
   - path payments routed through the asset
