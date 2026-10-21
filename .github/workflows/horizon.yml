@@ -11,11 +11,11 @@ jobs:
     uses: ./.github/workflows/integration-tests.yml
     with:
       protocol_version: '29'
-      # Both legs run stellar-core 30.0.0; this one checks it at protocol 29.
-      # Move stellar_rpc_docker_img to the stellar-rpc 30 build once it exists.
+      # Both legs run stellar-core 30.0.0 and stellar-rpc 30.0.0; this one
+      # checks them at protocol 29.
       core_deb_version: '30.0.0-3642.0e49751aa.noble~buildtests'
       core_docker_img: 'stellar/stellar-core:30.0.0-3642.0e49751aa.noble'
-      stellar_rpc_docker_img: 'stellar/stellar-rpc:29.0.0'
+      stellar_rpc_docker_img: 'stellar/stellar-rpc:30.0.0-220'
       # The full go/postgres matrix runs only on pushes to main since they're
       # non-blocking and happen in the background. Everyday PRs get the single 
       # latest-go/latest-pg job.
@@ -28,8 +28,7 @@ jobs:
       protocol_version: '30'
       core_deb_version: '30.0.0-3642.0e49751aa.noble~buildtests'
       core_docker_img: 'stellar/stellar-core:30.0.0-3642.0e49751aa.noble'
-      # No protocol 30 stellar-rpc image yet, so the RPC tests are skipped.
-      stellar_rpc_docker_img: ''
+      stellar_rpc_docker_img: 'stellar/stellar-rpc:30.0.0-220'
 
   verify-range:
     name: Test (and push) verify-range image
