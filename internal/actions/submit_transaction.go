@@ -2,6 +2,7 @@ package actions
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"mime"
 	"net/http"
@@ -20,7 +21,7 @@ import (
 )
 
 type NetworkSubmitter interface {
-	Submit(ctx context.Context, rawTx string, envelope xdr.TransactionEnvelope, hash string) <-chan txsub.Result
+	Submit(ctx context.Context, rawTx string, envelope xdr.TransactionEnvelopeView, hash string) <-chan txsub.Result
 }
 
 type SubmitTransactionHandler struct {
@@ -28,37 +29,35 @@ type SubmitTransactionHandler struct {
 	NetworkPassphrase string
 	DisableTxSub      bool
 	CoreStateGetter
-	SkipTxMeta    bool
-	DecodeOptions xdr.DecodeOptions // Decoded output size limit for XDR unmarshaling of user-supplied input
+	SkipTxMeta bool
 }
 
 type envelopeInfo struct {
-	hash      string
-	innerHash string
-	raw       string
-	parsed    xdr.TransactionEnvelope
+	hash     string
+	raw      string
+	envelope xdr.TransactionEnvelopeView
 }
 
-func extractEnvelopeInfo(raw string, passphrase string, decodeOptions xdr.DecodeOptions) (envelopeInfo, error) {
+func extractEnvelopeInfo(raw string, passphrase string) (envelopeInfo, error) {
 	result := envelopeInfo{raw: raw}
-	err := xdr.SafeUnmarshalBase64WithOptions(raw, &result.parsed, decodeOptions)
+	b, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil {
+		return result, errors.Wrap(err, "decoding base64")
+	}
+	result.envelope = xdr.TransactionEnvelopeView(b)
+	if err = xdr.ValidateExact(result.envelope); err != nil {
+		return result, errors.Wrap(err, "validating envelope")
+	}
+
+	hasher, err := network.NewTransactionViewHasher(passphrase)
 	if err != nil {
 		return result, err
 	}
-
-	var hash [32]byte
-	hash, err = network.HashTransactionInEnvelope(result.parsed, passphrase)
+	hash, err := hasher.Hash(result.envelope)
 	if err != nil {
 		return result, err
 	}
 	result.hash = hex.EncodeToString(hash[:])
-	if result.parsed.IsFeeBump() {
-		hash, err = network.HashTransaction(result.parsed.FeeBump.Tx.InnerTx.V1.Tx, passphrase)
-		if err != nil {
-			return result, err
-		}
-		result.innerHash = hex.EncodeToString(hash[:])
-	}
 	return result, nil
 }
 
@@ -172,7 +171,7 @@ func (handler SubmitTransactionHandler) GetResource(w HeaderWriter, r *http.Requ
 		return nil, err
 	}
 
-	info, err := extractEnvelopeInfo(raw, handler.NetworkPassphrase, handler.DecodeOptions)
+	info, err := extractEnvelopeInfo(raw, handler.NetworkPassphrase)
 	if err != nil {
 		return nil, &problem.P{
 			Type:   "transaction_malformed",
@@ -194,7 +193,7 @@ func (handler SubmitTransactionHandler) GetResource(w HeaderWriter, r *http.Requ
 		return nil, hProblem.StaleHistory
 	}
 
-	submission := handler.Submitter.Submit(r.Context(), info.raw, info.parsed, info.hash)
+	submission := handler.Submitter.Submit(r.Context(), info.raw, info.envelope, info.hash)
 
 	select {
 	case result := <-submission:
