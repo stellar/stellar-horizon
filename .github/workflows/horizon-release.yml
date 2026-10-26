@@ -7,6 +7,8 @@ on:
 jobs:
 
   publish-artifacts:
+    # Tags synced into a private clone should not create releases there.
+    if: github.repository == 'stellar/stellar-horizon'
     runs-on: ubuntu-24.04
     name: Upload artifacts to GitHub release
     steps:
