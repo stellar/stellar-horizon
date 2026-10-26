@@ -8,7 +8,7 @@ on:
   workflow_call:
     inputs:
       horizon_git_ref:
-        description: 'Git ref (branch, tag, or SHA) of stellar/stellar-horizon to run tests on. Required when running from separate repo, branch tip otherwise.'
+        description: 'Git ref (branch, tag, or SHA) of the repo that holds this workflow to run tests on. Required when running from separate repo, branch tip otherwise.'
         required: false
         type: string
       protocol_version:
