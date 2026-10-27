@@ -8,6 +8,8 @@ on:
 
 jobs:
   update-completed-sprint:
+    # Private clones don't have the project app's secrets.
+    if: github.repository == 'stellar/stellar-horizon'
     runs-on: ubuntu-latest
     steps:
       - name: Generate token

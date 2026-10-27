@@ -19,6 +19,8 @@ permissions:
 
 jobs:
   socket-basics:
+    # Scans of a private clone would send Socket results for unreleased fixes.
+    if: github.repository == 'stellar/stellar-horizon'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
