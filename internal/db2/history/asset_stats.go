@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	sq "github.com/Masterminds/squirrel"
+	"github.com/lib/pq"
 
 	"github.com/stellar/go-stellar-sdk/support/db"
 	"github.com/stellar/go-stellar-sdk/support/errors"
@@ -286,9 +287,7 @@ func (q *Q) RemoveContractAssetBalances(ctx context.Context, keys []xdr.Hash) er
 	}
 
 	_, err := q.Exec(ctx, sq.Delete("contract_asset_balances").
-		Where(map[string]interface{}{
-			"key_hash": keyBytes,
-		}))
+		Where("key_hash = ANY(?)", pq.ByteaArray(keyBytes)))
 	return err
 }
 

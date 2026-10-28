@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 
 	sq "github.com/Masterminds/squirrel"
+	"github.com/lib/pq"
 	"github.com/stellar/go-stellar-sdk/support/errors"
 	"github.com/stellar/go-stellar-sdk/xdr"
 )
@@ -118,7 +119,7 @@ func (q *Q) RemoveAccountData(ctx context.Context, keys []AccountDataKey) (int64
 	}
 
 	sql := sq.Delete("accounts_data").
-		Where(sq.Eq{"ledger_key": lkeys})
+		Where("ledger_key = ANY(?)", pq.Array(lkeys))
 	result, err := q.Exec(ctx, sql)
 	if err != nil {
 		return 0, err

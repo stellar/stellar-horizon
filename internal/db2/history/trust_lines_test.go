@@ -1,10 +1,12 @@
 package history
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/guregu/null"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-horizon/internal/test"
@@ -189,6 +191,27 @@ func TestRemoveTrustLine(t *testing.T) {
 	rows, err = q.RemoveTrustLines(tt.Ctx, []string{eurTrustLine.LedgerKey})
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), rows)
+}
+
+// TestRemoveTrustLinesManyKeys removes a trust line given many keys in one call.
+func TestRemoveTrustLinesManyKeys(t *testing.T) {
+	tt := test.Start(t)
+	defer tt.Finish()
+	test.ResetHorizonDB(t, tt.HorizonDB)
+	q := &Q{tt.HorizonSession()}
+
+	require.NoError(t, q.UpsertTrustLines(tt.Ctx, []TrustLine{eurTrustLine, usdTrustLine}))
+
+	rows, err := q.RemoveTrustLines(tt.Ctx, withUnknownKeys(eurTrustLine.LedgerKey, func(i int) string {
+		return fmt.Sprintf("unknown-%d", i)
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), rows)
+
+	lines, err := q.GetTrustLinesByKeys(tt.Ctx, []string{eurTrustLine.LedgerKey, usdTrustLine.LedgerKey})
+	require.NoError(t, err)
+	require.Len(t, lines, 1)
+	assert.Equal(t, usdTrustLine.LedgerKey, lines[0].LedgerKey)
 }
 
 func TestGetSortedTrustLinesByAccountsID(t *testing.T) {
