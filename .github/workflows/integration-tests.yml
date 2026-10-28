@@ -36,6 +36,10 @@ on:
         required: false
         type: boolean
         default: false
+    secrets:
+      INTERNAL_GO_MODULES_APP_PRIVATE_KEY:
+        description: 'Private key of the GitHub App that can read stellar/go-stellar-sdk-internal, passed only by the internal repo. Other callers leave it out.'
+        required: false
 
 jobs:
   integration:
@@ -110,6 +114,8 @@ jobs:
       - uses: ./.github/actions/setup-go
         with:
           go-version: ${{ matrix.go }}
+          internal-go-modules-app-id: ${{ vars.INTERNAL_GO_MODULES_APP_ID }}
+          internal-go-modules-private-key: ${{ secrets.INTERNAL_GO_MODULES_APP_PRIVATE_KEY }}
 
       # --- Build stellar-core from source when core_git_ref is provided ---
       - name: Build Stellar Core from source
