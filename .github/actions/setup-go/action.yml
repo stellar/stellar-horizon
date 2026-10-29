@@ -3,6 +3,12 @@ description: 'Installs go and restores/saves the build/module cache'
 inputs:
   go-version:
     required: true
+  internal-go-modules-app-id:
+    description: 'See ../internal-go-modules'
+    required: false
+  internal-go-modules-private-key:
+    description: 'See ../internal-go-modules'
+    required: false
 runs:
   using: "composite"
   steps:
@@ -11,6 +17,12 @@ runs:
     with:
       go-version: ${{ inputs.go-version }}
       stable: ${{ !(contains(inputs.go-version, 'beta') || contains(inputs.go-version, 'rc')) }}
+
+  - id: internal-go-modules
+    uses: ./.github/actions/internal-go-modules
+    with:
+      app-id: ${{ inputs.internal-go-modules-app-id }}
+      private-key: ${{ inputs.internal-go-modules-private-key }}
 
   # Restore original modification time of files based on the date of the most
   # recent commit that modified them as mtimes affect the Go test cache.
@@ -53,3 +65,8 @@ runs:
   - if: github.ref_protected
     shell: bash
     run: sudo rm -rf ~/.cache/go-build ~/go/pkg/mod
+
+  # Download every module while the SDK token is valid. It expires after an hour.
+  - if: steps.internal-go-modules.outputs.gitconfig != ''
+    shell: bash
+    run: go mod download
