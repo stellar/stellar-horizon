@@ -5,6 +5,9 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Updated
+- `POST /transactions` and `POST /transactions_async` no longer decode the submitted transaction envelope. They validate it and read its hash, source account and sequence numbers through XDR views. A well-formed envelope is no longer rejected because its decoded form would exceed 1 MB; stellar-core's size limits apply instead. An envelope that stellar-core could not decode, because it is nested deeper than core allows or has extra bytes after it, is rejected as `transaction_malformed`. A line break after the base64 envelope is now ignored, as stellar-core ignores it.
+
 ## 30.0.0
 
 **This release adds support for Protocol 30.**

@@ -2,6 +2,8 @@ package actions
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -13,7 +15,9 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/stellar/go-stellar-sdk/gxdr"
 	"github.com/stellar/go-stellar-sdk/network"
+	"github.com/stellar/go-stellar-sdk/randxdr"
 	"github.com/stellar/go-stellar-sdk/support/render/problem"
 	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-horizon/internal/corestate"
@@ -45,7 +49,7 @@ type networkSubmitterMock struct {
 	mock.Mock
 }
 
-func (m *networkSubmitterMock) Submit(ctx context.Context, rawTx string, envelope xdr.TransactionEnvelope, hash string) <-chan txsub.Result {
+func (m *networkSubmitterMock) Submit(context.Context, string, xdr.TransactionEnvelopeView, string) <-chan txsub.Result {
 	a := m.Called()
 	return a.Get(0).(chan txsub.Result)
 }
@@ -214,90 +218,32 @@ func TestDisableTxSubFlagSubmission(t *testing.T) {
 	assert.Equal(t, p, err)
 }
 
-// buildOversizedEnvelopeXDR creates a valid XDR TransactionEnvelope that, when
-// decoded, exceeds the 1 MB memory limit. It does this by embedding 3122
-// void-to-void ScMapEntry entries (each ~336 bytes in Go's representation).
-func buildOversizedEnvelopeXDR(t *testing.T) string {
-	t.Helper()
-
-	entries := make([]xdr.ScMapEntry, 3122)
-	for i := range entries {
-		entries[i] = xdr.ScMapEntry{
-			Key: xdr.ScVal{Type: xdr.ScValTypeScvVoid},
-			Val: xdr.ScVal{Type: xdr.ScValTypeScvVoid},
-		}
-	}
-
-	scMap := xdr.ScMap(entries)
-	scMapPtr := &scMap
-	contractHash := xdr.ContractId{}
-	contractAddr := xdr.ScAddress{
-		Type:       xdr.ScAddressTypeScAddressTypeContract,
-		ContractId: &contractHash,
-	}
-	txB64, err := xdr.MarshalBase64(xdr.TransactionEnvelope{
-		Type: xdr.EnvelopeTypeEnvelopeTypeTx,
-		V1: &xdr.TransactionV1Envelope{
-			Tx: xdr.Transaction{
-				SourceAccount: xdr.MuxedAccount{
-					Type:    xdr.CryptoKeyTypeKeyTypeEd25519,
-					Ed25519: &xdr.Uint256{},
-				},
-				Operations: []xdr.Operation{
-					{
-						Body: xdr.OperationBody{
-							Type: xdr.OperationTypeInvokeHostFunction,
-							InvokeHostFunctionOp: &xdr.InvokeHostFunctionOp{
-								HostFunction: xdr.HostFunction{
-									Type: xdr.HostFunctionTypeHostFunctionTypeInvokeContract,
-									InvokeContract: &xdr.InvokeContractArgs{
-										ContractAddress: contractAddr,
-										FunctionName:    "f",
-										Args: []xdr.ScVal{
-											{
-												Type: xdr.ScValTypeScvMap,
-												Map:  &scMapPtr,
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	})
+func TestExtractEnvelopeInfoTrailingBytes(t *testing.T) {
+	raw, err := base64.StdEncoding.DecodeString(TxXDR)
 	require.NoError(t, err)
-	return txB64
+	_, err = extractEnvelopeInfo(base64.StdEncoding.EncodeToString(append(raw, 0, 0, 0, 0)), network.PublicNetworkPassphrase)
+	require.Error(t, err)
 }
 
-func TestSubmitTransactionXDRDecodeLimitExceeded(t *testing.T) {
-	txB64 := buildOversizedEnvelopeXDR(t)
+func TestExtractEnvelopeInfoRandomEnvelopes(t *testing.T) {
+	gen := randxdr.NewGenerator()
+	types := map[xdr.EnvelopeType]int{}
+	for i := range 100 {
+		shape := &gxdr.TransactionEnvelope{}
+		gen.Next(shape, randxdr.LedgerCloseMetaPresets)
+		var envelope xdr.TransactionEnvelope
+		require.NoError(t, gxdr.Convert(shape, &envelope))
+		raw, err := xdr.MarshalBase64(envelope)
+		require.NoError(t, err)
 
-	handler := SubmitTransactionHandler{
-		NetworkPassphrase: network.PublicNetworkPassphrase,
-		DecodeOptions:     xdr.DecodeOptions{MaxMemoryBytes: 1024 * 1024},
+		info, err := extractEnvelopeInfo(raw, network.PublicNetworkPassphrase)
+		require.NoError(t, err, "iteration %d", i)
+		hash, err := network.HashTransactionInEnvelope(envelope, network.PublicNetworkPassphrase)
+		require.NoError(t, err)
+		require.Equal(t, hex.EncodeToString(hash[:]), info.hash, "iteration %d", i)
+		types[envelope.Type]++
 	}
-
-	form := url.Values{}
-	form.Set("tx", txB64)
-
-	request, err := http.NewRequest(
-		"POST",
-		"https://horizon.stellar.org/transactions",
-		strings.NewReader(form.Encode()),
-	)
-	require.NoError(t, err)
-	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-
-	w := httptest.NewRecorder()
-	_, err = handler.GetResource(w, request)
-	assert.Error(t, err)
-	assert.IsType(t, &problem.P{}, err)
-	p := err.(*problem.P)
-	assert.Equal(t, "transaction_malformed", p.Type)
-	assert.Equal(t, http.StatusBadRequest, p.Status)
+	require.Len(t, types, 3)
 }
 
 func TestSubmissionSorobanDiagnosticEvents(t *testing.T) {
