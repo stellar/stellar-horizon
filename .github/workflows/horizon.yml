@@ -20,6 +20,8 @@ jobs:
       # non-blocking and happen in the background. Everyday PRs get the single 
       # latest-go/latest-pg job.
       full_matrix: ${{ github.event_name == 'push' }}
+    secrets:
+      INTERNAL_GO_MODULES_APP_PRIVATE_KEY: ${{ secrets.INTERNAL_GO_MODULES_APP_PRIVATE_KEY }}
 
   integration-p30-pkg:
     name: Integration tests (P30)
@@ -29,10 +31,12 @@ jobs:
       core_deb_version: '30.0.0-3642.0e49751aa.noble~buildtests'
       core_docker_img: 'stellar/stellar-core:30.0.0-3642.0e49751aa.noble'
       stellar_rpc_docker_img: 'stellar/stellar-rpc:30.0.0-220'
+    secrets:
+      INTERNAL_GO_MODULES_APP_PRIVATE_KEY: ${{ secrets.INTERNAL_GO_MODULES_APP_PRIVATE_KEY }}
 
   verify-range:
     name: Test (and push) verify-range image
-    # The image builds horizon from a clone of the public repo, so a private clone
+    # The image builds horizon from a clone of the public repo, so the internal repo
     # could only test commits that are already public.
     if: github.repository == 'stellar/stellar-horizon'
     runs-on: ubuntu-24.04
