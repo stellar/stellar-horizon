@@ -5,6 +5,7 @@ package txsub
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"testing"
 	"time"
@@ -17,8 +18,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
+	"github.com/stellar/go-stellar-sdk/gxdr"
+	"github.com/stellar/go-stellar-sdk/randxdr"
 	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-horizon/internal/db2/history"
 	"github.com/stellar/stellar-horizon/internal/test"
@@ -32,7 +36,7 @@ type SystemTestSuite struct {
 	system        *System
 	noResults     Result
 	successTx     Result
-	successXDR    xdr.TransactionEnvelope
+	successXDR    xdr.TransactionEnvelopeView
 	badSeq        SubmissionResult
 	unmuxedSource xdr.AccountId
 }
@@ -108,7 +112,8 @@ func (suite *SystemTestSuite) SetupTest() {
 			},
 		},
 	}
-	assert.NoError(suite.T(), xdr.SafeUnmarshalBase64(suite.successTx.Transaction.TxEnvelope, &suite.successXDR))
+	suite.successXDR, err = tx.MarshalBinary()
+	assert.NoError(suite.T(), err)
 
 	suite.badSeq = SubmissionResult{
 		Err: ErrBadSequence,
@@ -457,8 +462,8 @@ func (suite *SystemTestSuite) TestTick_FinishesTransactions() {
 func (suite *SystemTestSuite) TestTickFinishFeeBumpTransaction() {
 	innerTxEnvelope := "AAAAAAMDAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYwAAAAAAAABhAAAAAQAAAAAAAAACAAAAAAAAAAQAAAAAAAAAAQAAAAAAAAALAAAAAAAAAGIAAAAAAAAAAQICAgIAAAADFBQUAA=="
 	innerHash := "e98869bba8bce08c10b78406202127f3888c25454cd37b02600862452751f526"
-	var parsedInnerTx xdr.TransactionEnvelope
-	assert.NoError(suite.T(), xdr.SafeUnmarshalBase64(innerTxEnvelope, &parsedInnerTx))
+	innerTx, err := base64.StdEncoding.DecodeString(innerTxEnvelope)
+	assert.NoError(suite.T(), err)
 
 	feeBumpTx := Result{
 		Transaction: history.Transaction{
@@ -480,7 +485,7 @@ func (suite *SystemTestSuite) TestTickFinishFeeBumpTransaction() {
 		Return(sql.ErrNoRows).Once()
 	suite.db.On("NoRows", sql.ErrNoRows).Return(true).Twice()
 
-	l := suite.system.Submit(suite.ctx, innerTxEnvelope, parsedInnerTx, innerHash)
+	l := suite.system.Submit(suite.ctx, innerTxEnvelope, innerTx, innerHash)
 	assert.Equal(suite.T(), 0, len(l))
 	assert.Equal(suite.T(), 1, len(suite.system.Pending.Pending()))
 
@@ -532,4 +537,26 @@ func (suite *SystemTestSuite) TestTick_RemovesStaleSubmissions() {
 
 func TestSystemTestSuite(t *testing.T) {
 	suite.Run(t, new(SystemTestSuite))
+}
+
+func TestReadEnvelopeRandomEnvelopes(t *testing.T) {
+	gen := randxdr.NewGenerator()
+	types := map[xdr.EnvelopeType]int{}
+	for i := range 100 {
+		shape := &gxdr.TransactionEnvelope{}
+		gen.Next(shape, randxdr.LedgerCloseMetaPresets)
+		var envelope xdr.TransactionEnvelope
+		require.NoError(t, gxdr.Convert(shape, &envelope))
+		raw, err := envelope.MarshalBinary()
+		require.NoError(t, err)
+
+		envelopeType, sourceAddress, seqNum, minSeqNum, err := readEnvelope(raw)
+		require.NoError(t, err, "iteration %d", i)
+		assert.Equal(t, envelope.Type, envelopeType, "iteration %d", i)
+		assert.Equal(t, envelope.SourceAccount().ToAccountId().Address(), sourceAddress, "iteration %d", i)
+		assert.Equal(t, envelope.SeqNum(), seqNum, "iteration %d", i)
+		assert.Equal(t, envelope.MinSeqNum(), minSeqNum, "iteration %d", i)
+		types[envelope.Type]++
+	}
+	require.Len(t, types, 3)
 }
