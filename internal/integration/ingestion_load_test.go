@@ -44,6 +44,54 @@ func loadTestNetworkPassphraseFor(protocolVersion uint32) string {
 	return loadTestNetworkPassphrase
 }
 
+func loadTestLedgersPath(version uint32) string {
+	return filepath.Join("testdata", fmt.Sprintf("load-test-ledgers-v%d.xdr.zstd", version))
+}
+
+func loadTestFixturesPath(version uint32) string {
+	return filepath.Join("testdata", fmt.Sprintf("load-test-fixtures-v%d.xdr.zstd", version))
+}
+
+// loadTestFixtureVersion returns the protocol version of the load-test
+// testdata to use for a network running protocolVersion. It returns
+// protocolVersion when both the ledgers and the fixtures files exist for it.
+// Otherwise it falls back, on a best-effort basis, to the newest older version
+// that has both, so a core that supports a protocol with no generated testdata
+// yet (for example a vnext build) can still run these tests. Regenerate the
+// testdata for the new protocol with TestGenerateLedgers.
+func loadTestFixtureVersion(t *testing.T, protocolVersion uint32) uint32 {
+	for v := protocolVersion; v > 0; v-- {
+		if !fileExists(loadTestLedgersPath(v)) || !fileExists(loadTestFixturesPath(v)) {
+			continue
+		}
+		if v != protocolVersion {
+			t.Logf("no load-test testdata for protocol %d; falling back to protocol %d testdata (%s)",
+				protocolVersion, v, loadTestLedgersPath(v))
+		}
+		return v
+	}
+	t.Fatalf("no load-test testdata for protocol %d or any older protocol", protocolVersion)
+	return 0
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func TestLoadTestFixtureVersion(t *testing.T) {
+	// An exact match is used as is.
+	require.Equal(t, uint32(26), loadTestFixtureVersion(t, 26))
+
+	// A protocol with no testdata falls back to the newest older version that
+	// has both the ledgers and the fixtures files.
+	got := loadTestFixtureVersion(t, 1000)
+	require.GreaterOrEqual(t, got, uint32(30))
+	require.Less(t, got, uint32(1000))
+	require.FileExists(t, loadTestLedgersPath(got))
+	require.FileExists(t, loadTestFixturesPath(got))
+}
+
 func TestLoadTestLedgerBackend(t *testing.T) {
 	if integration.GetCoreMaxSupportedProtocol() < 25 {
 		t.Skip("This test run does not support less than Protocol 25")
@@ -69,7 +117,7 @@ func TestLoadTestLedgerBackend(t *testing.T) {
 
 	replayConfig := loadtest.LedgerBackendConfig{
 		NetworkPassphrase:   "invalid passphrase",
-		LedgersFilePaths:    []string{filepath.Join("testdata", fmt.Sprintf("load-test-ledgers-v%d.xdr.zstd", itest.Config().ProtocolVersion))},
+		LedgersFilePaths:    []string{loadTestLedgersPath(loadTestFixtureVersion(t, itest.Config().ProtocolVersion))},
 		LedgerCloseDuration: 3 * time.Second / 2,
 		LedgerBackend:       newCaptiveCore(itest),
 	}
@@ -333,7 +381,7 @@ func TestIngestLoadTestCmd(t *testing.T) {
 		NetworkPassphrase: loadTestNetworkPassphraseFor(integration.GetCoreMaxSupportedProtocol()),
 	})
 
-	ledgersFilePath := filepath.Join("testdata", fmt.Sprintf("load-test-ledgers-v%d.xdr.zstd", itest.Config().ProtocolVersion))
+	ledgersFilePath := loadTestLedgersPath(loadTestFixtureVersion(t, itest.Config().ProtocolVersion))
 	var generatedLedgers []xdr.LedgerCloseMeta
 
 	readFile(t, ledgersFilePath,
@@ -456,12 +504,17 @@ func TestIngestLoadTestCmdWithFixtures(t *testing.T) {
 	})
 
 	ledgersFilePath := os.Getenv("LOADTEST_LEDGERS_FILE_PATH")
-	if ledgersFilePath == "" {
-		ledgersFilePath = filepath.Join("testdata", fmt.Sprintf("load-test-ledgers-v%d.xdr.zstd", itest.Config().ProtocolVersion))
-	}
 	fixturesFilePath := os.Getenv("LOADTEST_FIXTURES_FILE_PATH")
-	if fixturesFilePath == "" {
-		fixturesFilePath = filepath.Join("testdata", fmt.Sprintf("load-test-fixtures-v%d.xdr.zstd", itest.Config().ProtocolVersion))
+	if ledgersFilePath == "" || fixturesFilePath == "" {
+		// Resolve one version for both files so the ledgers always replay on
+		// top of the fixtures they were generated with.
+		fixtureVersion := loadTestFixtureVersion(t, itest.Config().ProtocolVersion)
+		if ledgersFilePath == "" {
+			ledgersFilePath = loadTestLedgersPath(fixtureVersion)
+		}
+		if fixturesFilePath == "" {
+			fixturesFilePath = loadTestFixturesPath(fixtureVersion)
+		}
 	}
 
 	var generatedLedgers []xdr.LedgerCloseMeta
@@ -533,7 +586,7 @@ func TestIngestLoadTestRestoreCmd(t *testing.T) {
 		NetworkPassphrase: loadTestNetworkPassphraseFor(integration.GetCoreMaxSupportedProtocol()),
 	})
 
-	ledgersFilePath := filepath.Join("testdata", fmt.Sprintf("load-test-ledgers-v%d.xdr.zstd", itest.Config().ProtocolVersion))
+	ledgersFilePath := loadTestLedgersPath(loadTestFixtureVersion(t, itest.Config().ProtocolVersion))
 	var generatedLedgers []xdr.LedgerCloseMeta
 
 	readFile(t, ledgersFilePath,
