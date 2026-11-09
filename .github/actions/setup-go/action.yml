@@ -3,7 +3,7 @@ description: 'Installs go and restores/saves the build/module cache'
 inputs:
   go-version:
     required: true
-  internal-go-modules-app-id:
+  internal-go-modules-client-id:
     description: 'See ../internal-go-modules'
     required: false
   internal-go-modules-private-key:
@@ -21,7 +21,7 @@ runs:
   - id: internal-go-modules
     uses: ./.github/actions/internal-go-modules
     with:
-      app-id: ${{ inputs.internal-go-modules-app-id }}
+      client-id: ${{ inputs.internal-go-modules-client-id }}
       private-key: ${{ inputs.internal-go-modules-private-key }}
 
   # Restore original modification time of files based on the date of the most
