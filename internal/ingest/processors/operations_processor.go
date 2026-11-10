@@ -206,7 +206,12 @@ func (operation *transactionOperationWrapper) getLiquidityPoolAndProductDelta(lp
 	if err != nil {
 		return nil, nil, err
 	}
+	return liquidityPoolAndProductDelta(changes, lpID)
+}
 
+// liquidityPoolAndProductDelta finds the liquidity pool in the changes of an operation.
+// If lpID is nil, it uses the first liquidity pool change.
+func liquidityPoolAndProductDelta(changes []ingest.Change, lpID *xdr.PoolId) (*xdr.LiquidityPoolEntry, *liquidityPoolDelta, error) {
 	for _, c := range changes {
 		if c.Type != xdr.LedgerEntryTypeLiquidityPool {
 			continue

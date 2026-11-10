@@ -156,68 +156,65 @@ func (p *TradeProcessor) Flush(ctx context.Context, session db.SessionInterface)
 }
 
 func (p *TradeProcessor) findTradeSellPrice(
-	transaction ingest.LedgerTransaction,
-	opidx int,
+	entries operationEntries,
 	trade xdr.ClaimAtom,
 ) (int64, int64, error) {
 	if trade.Type == xdr.ClaimAtomTypeClaimAtomTypeLiquidityPool {
 		return int64(trade.AmountBought()), int64(trade.AmountSold()), nil
 	}
 
-	key := xdr.LedgerKey{}
-	if err := key.SetOffer(trade.SellerId(), uint64(trade.OfferId())); err != nil {
-		return 0, 0, errors.Wrap(err, "Could not create offer ledger key")
+	offer, ok := entries.offers[trade.OfferId()]
+	if !ok {
+		return 0, 0, errors.Errorf("could not find change for trade offer %d", trade.OfferId())
 	}
 
-	change, err := p.findOperationChange(transaction, opidx, key)
-	if err != nil {
-		return 0, 0, errors.Wrap(err, "could not find change for trade offer")
-	}
-
-	return int64(change.Pre.Data.Offer.Price.N), int64(change.Pre.Data.Offer.Price.D), nil
+	return int64(offer.Price.N), int64(offer.Price.D), nil
 }
 
-func (p *TradeProcessor) findOperationChange(tx ingest.LedgerTransaction, opidx int, key xdr.LedgerKey) (ingest.Change, error) {
+// operationEntries contains the offers and liquidity pools that one operation
+// changed, in their state before the operation.
+type operationEntries struct {
+	offers map[xdr.Int64]xdr.OfferEntry
+	pools  map[xdr.PoolId]ingest.Change
+}
+
+func newOperationEntries(tx ingest.LedgerTransaction, opidx int) (operationEntries, error) {
 	changes, err := tx.GetOperationChanges(uint32(opidx))
 	if err != nil {
-		return ingest.Change{}, errors.Wrap(err, "could not determine changes for operation")
+		return operationEntries{}, errors.Wrap(err, "could not determine changes for operation")
 	}
 
-	var change ingest.Change
-	for i := len(changes) - 1; i >= 0; i-- {
-		change = changes[i]
-		if change.Pre != nil {
-			preKey, err := change.Pre.LedgerKey()
-			if err != nil {
-				return ingest.Change{}, errors.Wrap(err, "could not determine ledger key for change")
-			}
-			if key.Equals(preKey) {
-				return change, nil
-			}
+	entries := operationEntries{
+		offers: map[xdr.Int64]xdr.OfferEntry{},
+		pools:  map[xdr.PoolId]ingest.Change{},
+	}
+	// A later change replaces an earlier change for the same entry.
+	for _, change := range changes {
+		if change.Pre == nil {
+			continue
+		}
+		switch change.Type {
+		case xdr.LedgerEntryTypeOffer:
+			offer := change.Pre.Data.MustOffer()
+			entries.offers[offer.OfferId] = offer
+		case xdr.LedgerEntryTypeLiquidityPool:
+			entries.pools[change.Pre.Data.MustLiquidityPool().LiquidityPoolId] = change
 		}
 	}
-	return ingest.Change{}, errors.Errorf("could not find operation for key %v", key)
+	return entries, nil
 }
 
 func (p *TradeProcessor) liquidityPoolChange(
-	transaction ingest.LedgerTransaction,
-	opidx int,
+	entries operationEntries,
 	trade xdr.ClaimAtom,
 ) (*ingest.Change, error) {
 	if trade.Type != xdr.ClaimAtomTypeClaimAtomTypeLiquidityPool {
 		return nil, nil
 	}
 
-	poolID := trade.LiquidityPool.LiquidityPoolId
-
-	key := xdr.LedgerKey{}
-	if err := key.SetLiquidityPool(poolID); err != nil {
-		return nil, errors.Wrap(err, "Could not create liquidity pool ledger key")
-	}
-
-	change, err := p.findOperationChange(transaction, opidx, key)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not find change for liquidity pool")
+	change, ok := entries.pools[trade.LiquidityPool.LiquidityPoolId]
+	if !ok {
+		return nil, errors.New("could not find change for liquidity pool")
 	}
 	return &change, nil
 }
@@ -289,19 +286,12 @@ func (p *TradeProcessor) roundingSlippage(
 }
 
 func (p *TradeProcessor) findPoolFee(
-	transaction ingest.LedgerTransaction,
-	opidx int,
+	entries operationEntries,
 	poolID xdr.PoolId,
 ) (uint32, error) {
-	key := xdr.LedgerKey{}
-	if err := key.SetLiquidityPool(poolID); err != nil {
-		return 0, errors.Wrap(err, "Could not create liquidity pool ledger key")
-
-	}
-
-	change, err := p.findOperationChange(transaction, opidx, key)
-	if err != nil {
-		return 0, errors.Wrap(err, "could not find change for liquidity pool")
+	change, ok := entries.pools[poolID]
+	if !ok {
+		return 0, errors.New("could not find change for liquidity pool")
 	}
 
 	return uint32(change.Pre.Data.MustLiquidityPool().Body.MustConstantProduct().Params.Fee), nil
@@ -376,6 +366,13 @@ func (p *TradeProcessor) extractTrades(
 		opID := toid.New(
 			int32(ledger.Header.LedgerSeq), int32(transaction.Index), int32(opidx+1),
 		).ToInt64()
+		if len(trades) == 0 {
+			continue
+		}
+		entries, err := newOperationEntries(transaction, opidx)
+		if err != nil {
+			return result, err
+		}
 		for order, trade := range trades {
 			// stellar-core will opportunistically garbage collect invalid offers (in the
 			// event that a trader spends down their balance).  These garbage collected
@@ -387,7 +384,7 @@ func (p *TradeProcessor) extractTrades(
 				continue
 			}
 
-			sellPriceN, sellPriceD, err := p.findTradeSellPrice(transaction, opidx, trade)
+			sellPriceN, sellPriceD, err := p.findTradeSellPrice(entries, trade)
 			if err != nil {
 				return result, err
 			}
@@ -415,13 +412,13 @@ func (p *TradeProcessor) extractTrades(
 				id := trade.MustLiquidityPool().LiquidityPoolId
 				liquidityPoolID = PoolIDToString(id)
 				var fee uint32
-				if fee, err = p.findPoolFee(transaction, opidx, id); err != nil {
+				if fee, err = p.findPoolFee(entries, id); err != nil {
 					return nil, err
 				}
 				row.LiquidityPoolFee = null.IntFrom(int64(fee))
 				row.Type = history.LiquidityPoolTradeType
 
-				change, err := p.liquidityPoolChange(transaction, opidx, trade)
+				change, err := p.liquidityPoolChange(entries, trade)
 				if err != nil {
 					return nil, err
 				}

@@ -11,6 +11,7 @@ import (
 	"github.com/guregu/null"
 
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/stellar/go-stellar-sdk/ingest"
@@ -841,7 +842,9 @@ func TestTradeProcessor_RoundingSlippage_Big(t *testing.T) {
 	tx, err := createTransactionForTrade(trade, 3740000000, 162020000000)
 	s.Assert().NoError(err)
 	opIdx := 0
-	change, err := s.processor.liquidityPoolChange(tx, opIdx, trade)
+	entries, err := newOperationEntries(tx, opIdx)
+	s.Assert().NoError(err)
+	change, err := s.processor.liquidityPoolChange(entries, trade)
 	s.Assert().NoError(err)
 
 	result, err := s.processor.roundingSlippage(tx, opIdx, trade, change)
@@ -873,7 +876,9 @@ func TestTradeProcessor_RoundingSlippage_Small(t *testing.T) {
 	tx, err := createTransactionForTrade(trade, 200, 400)
 	s.Assert().NoError(err)
 	opIdx := 0
-	change, err := s.processor.liquidityPoolChange(tx, opIdx, trade)
+	entries, err := newOperationEntries(tx, opIdx)
+	s.Assert().NoError(err)
+	change, err := s.processor.liquidityPoolChange(entries, trade)
 	s.Assert().NoError(err)
 
 	result, err := s.processor.roundingSlippage(tx, opIdx, trade, change)
@@ -987,4 +992,68 @@ func makePool(A, B xdr.Asset, a, b int64) xdr.LiquidityPoolEntry {
 			},
 		},
 	}
+}
+
+func TestTradeProcessor_FindTradeSellPriceForEachClaim(t *testing.T) {
+	seller := xdr.MustAddress("GAUJETIZVEP2NRYLUESJ3LS66NVCEGMON4UDCBCSBEVPIID773P2W6AY")
+	offerEntry := func(offerID int64, price xdr.Price) *xdr.LedgerEntry {
+		return &xdr.LedgerEntry{
+			Data: xdr.LedgerEntryData{
+				Type: xdr.LedgerEntryTypeOffer,
+				Offer: &xdr.OfferEntry{
+					SellerId: seller,
+					OfferId:  xdr.Int64(offerID),
+					Selling:  xdr.MustNewNativeAsset(),
+					Buying:   xdr.MustNewCreditAsset("USD", seller.Address()),
+					Amount:   100,
+					Price:    price,
+				},
+			},
+		}
+	}
+	claim := func(offerID int64) xdr.ClaimAtom {
+		return xdr.ClaimAtom{
+			Type: xdr.ClaimAtomTypeClaimAtomTypeOrderBook,
+			OrderBook: &xdr.ClaimOfferAtom{
+				SellerId:     seller,
+				OfferId:      xdr.Int64(offerID),
+				AmountSold:   1,
+				AmountBought: 1,
+			},
+		}
+	}
+	offer1 := offerEntry(1, xdr.Price{N: 1, D: 2})
+	removed, err := offer1.LedgerKey()
+	require.NoError(t, err)
+
+	tx := ingest.LedgerTransaction{
+		UnsafeMeta: xdr.TransactionMeta{
+			V: 2,
+			V2: &xdr.TransactionMetaV2{
+				Operations: []xdr.OperationMeta{{
+					Changes: xdr.LedgerEntryChanges{
+						{Type: xdr.LedgerEntryChangeTypeLedgerEntryState, State: offer1},
+						{Type: xdr.LedgerEntryChangeTypeLedgerEntryRemoved, Removed: &removed},
+						{Type: xdr.LedgerEntryChangeTypeLedgerEntryState, State: offerEntry(2, xdr.Price{N: 3, D: 4})},
+						{Type: xdr.LedgerEntryChangeTypeLedgerEntryUpdated, Updated: offerEntry(2, xdr.Price{N: 3, D: 4})},
+					},
+				}},
+			},
+		},
+	}
+
+	processor := &TradeProcessor{}
+	entries, err := newOperationEntries(tx, 0)
+	require.NoError(t, err)
+
+	n, d, err := processor.findTradeSellPrice(entries, claim(1))
+	require.NoError(t, err)
+	require.Equal(t, [2]int64{1, 2}, [2]int64{n, d})
+
+	n, d, err = processor.findTradeSellPrice(entries, claim(2))
+	require.NoError(t, err)
+	require.Equal(t, [2]int64{3, 4}, [2]int64{n, d})
+
+	_, _, err = processor.findTradeSellPrice(entries, claim(3))
+	require.Error(t, err)
 }

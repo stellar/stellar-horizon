@@ -93,6 +93,7 @@ func (operation *transactionOperationWrapper) ingestEffects(accountLoader *histo
 		batch:         batch,
 		order:         1,
 		operation:     operation,
+		changes:       changes,
 	}
 
 	switch operation.OperationType() {
@@ -207,6 +208,7 @@ type effectsWrapper struct {
 	batch         history.EffectBatchInsertBuilder
 	order         uint32
 	operation     *transactionOperationWrapper
+	changes       []ingest.Change
 }
 
 func (e *effectsWrapper) add(address string, addressMuxed null.String, effectType history.EffectType, details map[string]interface{}) error {
@@ -1220,7 +1222,7 @@ func (e *effectsWrapper) addClaimTradeEffects(buyer xdr.MuxedAccount, claim xdr.
 }
 
 func (e *effectsWrapper) addClaimLiquidityPoolTradeEffect(claim xdr.ClaimAtom) error {
-	lp, _, err := e.operation.getLiquidityPoolAndProductDelta(&claim.LiquidityPool.LiquidityPoolId)
+	lp, _, err := liquidityPoolAndProductDelta(e.changes, &claim.LiquidityPool.LiquidityPoolId)
 	if err != nil {
 		return err
 	}
