@@ -3,6 +3,7 @@ package txsub
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stellar/stellar-horizon/internal/db2/history"
@@ -30,6 +31,25 @@ func TestGetIngestedTxHashes(t *testing.T) {
 	txs, err := q.AllTransactionsByHashesSinceLedger(tt.Ctx, hashes, 0)
 	tt.Assert.NoError(err)
 	tt.Assert.Equal(hashes[0], txs[0].TransactionHash)
+}
+
+// TestGetIngestedTxHashesManyHashes looks up many hashes in one call.
+func TestGetIngestedTxHashesManyHashes(t *testing.T) {
+	tt := test.Start(t)
+	tt.Scenario("base")
+	defer tt.Finish()
+	q := &history.Q{SessionInterface: tt.HorizonSession()}
+	hash := "2374e99349b9ef7dba9a5db3339b78fda8f34777b1af33ba468ad5c0df946d4d"
+	hashes := []string{hash}
+	for i := 1; i < 20000; i++ {
+		hashes = append(hashes, fmt.Sprintf("%064x", i))
+	}
+	txs, err := q.AllTransactionsByHashesSinceLedger(tt.Ctx, hashes, 0)
+	tt.Assert.NoError(err)
+	tt.Assert.NotEmpty(txs)
+	for _, tx := range txs {
+		tt.Assert.Equal(hash, tx.TransactionHash)
+	}
 }
 
 func TestGetMissingTx(t *testing.T) {

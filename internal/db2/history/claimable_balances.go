@@ -10,6 +10,7 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/guregu/null"
+	"github.com/lib/pq"
 
 	"github.com/stellar/go-stellar-sdk/support/errors"
 	"github.com/stellar/go-stellar-sdk/xdr"
@@ -250,7 +251,7 @@ func (q *Q) upsertCBs(ctx context.Context, cbs []ClaimableBalance) error {
 // Returns number of rows affected and error.
 func (q *Q) RemoveClaimableBalances(ctx context.Context, ids []string) (int64, error) {
 	sql := sq.Delete("claimable_balances").
-		Where(sq.Eq{"id": ids})
+		Where("id = ANY(?)", pq.Array(ids))
 	result, err := q.Exec(ctx, sql)
 	if err != nil {
 		return 0, err
@@ -263,7 +264,7 @@ func (q *Q) RemoveClaimableBalances(ctx context.Context, ids []string) (int64, e
 // Returns number of rows affected and error.
 func (q *Q) RemoveClaimableBalanceClaimants(ctx context.Context, ids []string) (int64, error) {
 	sql := sq.Delete("claimable_balance_claimants").
-		Where(sq.Eq{"id": ids})
+		Where("id = ANY(?)", pq.Array(ids))
 	result, err := q.Exec(ctx, sql)
 	if err != nil {
 		return 0, err

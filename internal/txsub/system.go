@@ -281,6 +281,12 @@ func (sys *System) Tick(ctx context.Context) {
 
 	defer sys.unsetTickInProgress()
 
+	// Time out stale submissions on every exit path.
+	defer func() {
+		stillOpen := sys.Pending.Clean(sys.SubmissionTimeout)
+		sys.Metrics.OpenSubmissionsGauge.Set(float64(stillOpen))
+	}()
+
 	logger.Debug("ticking txsub system")
 
 	db := sys.DB(ctx)
@@ -348,9 +354,6 @@ func (sys *System) Tick(ctx context.Context) {
 			}
 		}
 	}
-
-	stillOpen := sys.Pending.Clean(sys.SubmissionTimeout)
-	sys.Metrics.OpenSubmissionsGauge.Set(float64(stillOpen))
 }
 
 // Init initializes `sys`

@@ -21,7 +21,8 @@ jobs:
       # latest-go/latest-pg job.
       full_matrix: ${{ github.event_name == 'push' }}
     secrets:
-      INTERNAL_GO_MODULES_APP_PRIVATE_KEY: ${{ secrets.INTERNAL_GO_MODULES_APP_PRIVATE_KEY }}
+      INTERNAL_GO_MODULES_GH_APP_CLIENT_ID: ${{ secrets.INTERNAL_GO_MODULES_GH_APP_CLIENT_ID }}
+      INTERNAL_GO_MODULES_GH_APP_PRIVATE_KEY: ${{ secrets.INTERNAL_GO_MODULES_GH_APP_PRIVATE_KEY }}
 
   integration-p30-pkg:
     name: Integration tests (P30)
@@ -32,7 +33,8 @@ jobs:
       core_docker_img: 'stellar/stellar-core:30.0.0-3642.0e49751aa.noble'
       stellar_rpc_docker_img: 'stellar/stellar-rpc:30.0.0-220'
     secrets:
-      INTERNAL_GO_MODULES_APP_PRIVATE_KEY: ${{ secrets.INTERNAL_GO_MODULES_APP_PRIVATE_KEY }}
+      INTERNAL_GO_MODULES_GH_APP_CLIENT_ID: ${{ secrets.INTERNAL_GO_MODULES_GH_APP_CLIENT_ID }}
+      INTERNAL_GO_MODULES_GH_APP_PRIVATE_KEY: ${{ secrets.INTERNAL_GO_MODULES_GH_APP_PRIVATE_KEY }}
 
   verify-range:
     name: Test (and push) verify-range image

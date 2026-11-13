@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	sq "github.com/Masterminds/squirrel"
+	"github.com/lib/pq"
 
 	"github.com/stellar/go-stellar-sdk/support/errors"
 	"github.com/stellar/go-stellar-sdk/toid"
@@ -32,8 +33,11 @@ func (q *Q) PreFilteredTransactionByHash(ctx context.Context, dest interface{}, 
 // table which match the given hash since the given ledger sequence (for perf reasons).
 func (q *Q) AllTransactionsByHashesSinceLedger(ctx context.Context, hashes []string, sinceLedgerSeq uint32) ([]Transaction, error) {
 	var dest []Transaction
-	innerOrOuterAndSeqGtEq :=
-		sq.And{sq.GtOrEq{"ht.ledger_sequence": sinceLedgerSeq}, sq.Or{sq.Eq{"ht.transaction_hash": hashes}, sq.Eq{"ht.inner_transaction_hash": hashes}}}
+	innerOrOuter := sq.Or{
+		sq.Expr("ht.transaction_hash = ANY(?)", pq.Array(hashes)),
+		sq.Expr("ht.inner_transaction_hash = ANY(?)", pq.Array(hashes)),
+	}
+	innerOrOuterAndSeqGtEq := sq.And{sq.GtOrEq{"ht.ledger_sequence": sinceLedgerSeq}, innerOrOuter}
 
 	preFilteredTxs := selectTransactionPreFilteredTmp.Where(innerOrOuterAndSeqGtEq)
 	historyTxs := selectTransactionHistory.Where(innerOrOuterAndSeqGtEq)

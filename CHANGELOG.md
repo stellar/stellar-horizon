@@ -5,6 +5,16 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## 30.0.1
+
+### Fixed
+- Ingestion reads a ledger's meta from captive core whatever its size. A ledger whose meta was larger than 256 MiB stopped ingestion.
+- Ingestion no longer stops at a ledger that removes more than 65,535 trust lines. Removing them used one database parameter per trust line, and PostgreSQL allows at most 65,535 in one statement.
+- Ingestion finds the offer change of each trade in one lookup. For every offer an operation crossed, it rebuilt and sorted all of the operation's changes, so an operation that crossed thousands of offers stalled ingestion.
+- Ingestion applies the changes of a parallel Soroban phase in the order stellar-core applies them. An account changed by more than one transaction in the same phase could be stored with outdated state.
+- Transaction submission no longer gets stuck when more than 16,384 submissions are pending on one instance. The query for their results failed at that size, so they were never finished or timed out until a restart.
+- With history archive caching on (the default), the bucket cache no longer grows without bound. An abandoned download stops writing to it, partial files are no longer cached, and the cache stays within its 10 GiB budget.
+
 ### Updated
 - `POST /transactions` and `POST /transactions_async` no longer decode the submitted transaction envelope. They validate it and read its hash, source account and sequence numbers through XDR views. A well-formed envelope is no longer rejected because its decoded form would exceed 1 MB; stellar-core's size limits apply instead. An envelope that stellar-core could not decode, because it is nested deeper than core allows or has extra bytes after it, is rejected as `transaction_malformed`. A line break after the base64 envelope is now ignored, as stellar-core ignores it.
 

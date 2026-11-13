@@ -4,6 +4,7 @@ import (
 	"context"
 
 	sq "github.com/Masterminds/squirrel"
+	"github.com/lib/pq"
 
 	"github.com/stellar/go-stellar-sdk/support/errors"
 	"github.com/stellar/go-stellar-sdk/xdr"
@@ -119,7 +120,7 @@ func (q *Q) UpsertAccounts(ctx context.Context, accounts []AccountEntry) error {
 // RemoveAccounts deletes a row in the accounts table.
 // Returns number of rows affected and error.
 func (q *Q) RemoveAccounts(ctx context.Context, accountIDs []string) (int64, error) {
-	sql := sq.Delete("accounts").Where(sq.Eq{"account_id": accountIDs})
+	sql := sq.Delete("accounts").Where("account_id = ANY(?)", pq.Array(accountIDs))
 	result, err := q.Exec(ctx, sql)
 	if err != nil {
 		return 0, err

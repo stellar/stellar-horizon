@@ -535,6 +535,31 @@ func (suite *SystemTestSuite) TestTick_RemovesStaleSubmissions() {
 	}
 }
 
+// Test that Tick removes old submissions that have timed out when the database query fails.
+func (suite *SystemTestSuite) TestTick_RemovesStaleSubmissionsOnDBError() {
+	l := make(chan Result, 1)
+	suite.system.SubmissionTimeout = 100 * time.Millisecond
+	suite.system.Pending.Add(suite.successTx.Transaction.TransactionHash, l)
+	<-time.After(101 * time.Millisecond)
+
+	dbErr := errors.New("query failed")
+	suite.db.On("BeginTx", mock.AnythingOfType("*context.valueCtx"), &sql.TxOptions{
+		Isolation: sql.LevelRepeatableRead,
+		ReadOnly:  true,
+	}).Return(nil).Once()
+	suite.db.On("Rollback").Return(nil).Once()
+	suite.db.On("AllTransactionsByHashesSinceLedger", suite.ctx, []string{suite.successTx.Transaction.TransactionHash}, uint32(940)).
+		Return(nil, dbErr).Once()
+	suite.db.On("NoRows", dbErr).Return(false).Once()
+
+	suite.system.Tick(suite.ctx)
+
+	assert.Equal(suite.T(), 0, len(suite.system.Pending.Pending()))
+	assert.Equal(suite.T(), 1, len(l))
+	r := <-l
+	assert.Equal(suite.T(), ErrTimeout, r.Err)
+}
+
 func TestSystemTestSuite(t *testing.T) {
 	suite.Run(t, new(SystemTestSuite))
 }

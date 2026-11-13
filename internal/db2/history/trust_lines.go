@@ -4,6 +4,7 @@ import (
 	"context"
 
 	sq "github.com/Masterminds/squirrel"
+	"github.com/lib/pq"
 	"github.com/stellar/go-stellar-sdk/support/errors"
 	"github.com/stellar/go-stellar-sdk/xdr"
 )
@@ -97,7 +98,7 @@ func (q *Q) UpsertTrustLines(ctx context.Context, trustLines []TrustLine) error 
 // Returns number of rows affected and error.
 func (q *Q) RemoveTrustLines(ctx context.Context, ledgerKeys []string) (int64, error) {
 	sql := sq.Delete("trust_lines").
-		Where(map[string]interface{}{"ledger_key": ledgerKeys})
+		Where("ledger_key = ANY(?)", pq.Array(ledgerKeys))
 	result, err := q.Exec(ctx, sql)
 	if err != nil {
 		return 0, err

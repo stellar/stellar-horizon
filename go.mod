@@ -47,7 +47,7 @@ require (
 require (
 	github.com/creachadair/jrpc2 v1.2.0
 	github.com/fsouza/fake-gcs-server v1.49.2
-	github.com/stellar/go-stellar-sdk v0.8.1-0.20261027170931-f8efc493fca9
+	github.com/stellar/go-stellar-sdk v0.9.0
 )
 
 require (
