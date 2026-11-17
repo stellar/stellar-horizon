@@ -16,9 +16,9 @@ jobs:
       core_deb_version: '30.0.0-3642.0e49751aa.noble~buildtests'
       core_docker_img: 'stellar/stellar-core:30.0.0-3642.0e49751aa.noble'
       stellar_rpc_docker_img: 'stellar/stellar-rpc:30.0.0-220'
-      # The full go/postgres matrix runs only on pushes to main since they're
+      # The full postgres matrix runs only on pushes to main since they're
       # non-blocking and happen in the background. Everyday PRs get the single 
-      # latest-go/latest-pg job.
+      # latest-pg job.
       full_matrix: ${{ github.event_name == 'push' }}
     secrets:
       INTERNAL_GO_MODULES_GH_APP_CLIENT_ID: ${{ secrets.INTERNAL_GO_MODULES_GH_APP_CLIENT_ID }}
@@ -43,7 +43,6 @@ jobs:
     if: github.repository == 'stellar/stellar-horizon'
     runs-on: ubuntu-24.04
     env:
-      GO_VERSION: 1.25.0
       STELLAR_CORE_VERSION: 30.0.0-3642.0e49751aa.noble
     steps:
       - uses: actions/checkout@v3
@@ -53,7 +52,7 @@ jobs:
 
       - name: Build and test the Verify Range Docker image
         run: |
-          docker build --build-arg="GO_VERSION=$GO_VERSION" --build-arg="STELLAR_CORE_VERSION=$STELLAR_CORE_VERSION" -f docker/verify-range/Dockerfile -t stellar/horizon-verify-range docker/verify-range/
+          docker build --build-arg="GO_VERSION=$(sed -n 's/^toolchain go//p' go.mod)" --build-arg="STELLAR_CORE_VERSION=$STELLAR_CORE_VERSION" -f docker/verify-range/Dockerfile -t stellar/horizon-verify-range docker/verify-range/
           # Any range should do for basic testing, this range was chosen pretty early in history so that it only takes a few mins to run
           docker run -e BRANCH=$(git rev-parse HEAD) -e FROM=10000063 -e TO=10000127 stellar/horizon-verify-range
 

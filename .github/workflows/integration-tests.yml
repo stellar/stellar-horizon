@@ -32,7 +32,7 @@ on:
         required: false
         type: string
       full_matrix:
-        description: 'Run the full go/postgres version matrix. Defaults to false: a single job on the latest go and postgres, which is what external callers (e.g. stellar-core CI) want.'
+        description: 'Run the full postgres version matrix. Defaults to false: a single job on the latest postgres, which is what external callers (e.g. stellar-core CI) want.'
         required: false
         type: boolean
         default: false
@@ -48,7 +48,7 @@ jobs:
   integration:
     name: Integration tests
     strategy:
-      matrix: ${{ inputs.full_matrix && fromJSON('{"os":["ubuntu-24.04"],"go":["1.25","1.26"],"pg":[14,16]}') || fromJSON('{"os":["ubuntu-24.04"],"go":["1.26"],"pg":[16]}') }}
+      matrix: ${{ inputs.full_matrix && fromJSON('{"os":["ubuntu-24.04"],"pg":[14,16]}') || fromJSON('{"os":["ubuntu-24.04"],"pg":[16]}') }}
     runs-on: ${{ matrix.os }}
     services:
       postgres:
@@ -116,7 +116,7 @@ jobs:
 
       - uses: ./.github/actions/setup-go
         with:
-          go-version: ${{ matrix.go }}
+          go-version-file: go.mod
           internal-go-modules-client-id: ${{ secrets.INTERNAL_GO_MODULES_GH_APP_CLIENT_ID }}
           internal-go-modules-private-key: ${{ secrets.INTERNAL_GO_MODULES_GH_APP_PRIVATE_KEY }}
 
@@ -218,14 +218,13 @@ jobs:
         # caller-provided values can't inject into the script. hashFiles() has no
         # shell-variable equivalent, but its output is a fixed-format hash.
         env:
-          GO_VERSION: ${{ matrix.go }}
           MATRIX_COMBO: ${{ join(matrix.*, '|') }}
           PROTOCOL_VERSION: ${{ inputs.protocol_version }}
         run: |
           # The prefix uniquely identifies the job instance (what setup-go's PREFIX
           # captured: workflow, job, OS, go version), plus the full matrix combination
           # so that a pass on one go/pg combination never skips tests for another.
-          prefix="${GITHUB_WORKFLOW}-${GITHUB_JOB}-${RUNNER_OS}-go${GO_VERSION}-matrix(${MATRIX_COMBO})"
+          prefix="${GITHUB_WORKFLOW}-${GITHUB_JOB}-${RUNNER_OS}-$(go env GOVERSION)-matrix(${MATRIX_COMBO})"
           combined_hash=$(echo "horizon-hash-${{ hashFiles('./') }}-${{ hashFiles('./docker/**') }}-${{ hashFiles('./internal/**') }}-protocol-${PROTOCOL_VERSION}-${CORE_DOCKER_IMG}-${STELLAR_RPC_DOCKER_IMG}-${CORE_DEBIAN_PKG_VERSION}-${prefix}" | sha256sum | cut -d ' ' -f 1)
           echo "COMBINED_SOURCE_HASH=$combined_hash" >> "$GITHUB_ENV"
 

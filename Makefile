@@ -5,13 +5,14 @@ ifndef VERSION_STRING
 endif
 
 DOCKER_PLATFORM := $(shell docker system info --format '{{.OSType}}/{{.Architecture}}')
+GO_VERSION := $(shell sed -n 's/^toolchain go//p' go.mod)
 
 binary-build:
 	$(SUDO) docker run --platform $(DOCKER_PLATFORM) --rm $(DOCKER_OPTS) -v $(shell pwd)/../../:/go/src/github.com/stellar/stellar-horizon \
 		--pull always \
 		--env CGO_ENABLED=0 \
 		--env GOFLAGS="-ldflags=-X=github.com/stellar/go-stellar-sdk/support/app.version=$(VERSION_STRING)" \
-		golang:1.23-bullseye \
+		golang:$(GO_VERSION)-bookworm \
 		/bin/bash -c '\
 			git config --global --add safe.directory /go/src/github.com/stellar/stellar-horizon && \
 			cd /go/src/github.com/stellar/stellar-horizon && \
