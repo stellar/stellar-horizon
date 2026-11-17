@@ -550,12 +550,6 @@ func (a *App) init() error {
 		Port:      uint16(a.config.Port),
 		AdminPort: uint16(a.config.AdminPort),
 	}
-	if a.config.TLSCert != "" && a.config.TLSKey != "" {
-		config.TLSConfig = &httpx.TLSConfig{
-			CertPath: a.config.TLSCert,
-			KeyPath:  a.config.TLSKey,
-		}
-	}
 	a.webServer, err = httpx.NewServer(config, routerConfig, a.ledgerState)
 	if err != nil {
 		return err

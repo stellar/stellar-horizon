@@ -445,6 +445,8 @@ func TestSkipTxMetaAndEmitVerboseMetaCombination(t *testing.T) {
 }
 
 func TestRemovedFlags(t *testing.T) {
+	const tlsRemovedErr = "TLS_CERT and TLS_KEY (--tls-cert and --tls-key) are no longer supported: " +
+		"Horizon no longer terminates TLS. Run Horizon behind a reverse proxy or load balancer that terminates TLS"
 	tests := []struct {
 		name            string
 		environmentVars map[string]string
@@ -486,6 +488,33 @@ func TestRemovedFlags(t *testing.T) {
 				"DATABASE_URL":       "dburl",
 			},
 			errStr: "flag --skip-cursor-update has been removed and no longer valid, must use captive core configuration for ingestion",
+		},
+		{
+			name: "TLS_CERT removed",
+			environmentVars: map[string]string{
+				"INGEST":       "false",
+				"TLS_CERT":     "server.crt",
+				"DATABASE_URL": "dburl",
+			},
+			errStr: tlsRemovedErr,
+		},
+		{
+			name: "TLS_KEY removed",
+			environmentVars: map[string]string{
+				"INGEST":       "false",
+				"TLS_KEY":      "server.key",
+				"DATABASE_URL": "dburl",
+			},
+			errStr: tlsRemovedErr,
+		},
+		{
+			name: "--tls-cert removed",
+			environmentVars: map[string]string{
+				"INGEST":       "false",
+				"DATABASE_URL": "dburl",
+			},
+			errStr:  tlsRemovedErr,
+			cmdArgs: []string{"--tls-cert=server.crt"},
 		},
 	}
 

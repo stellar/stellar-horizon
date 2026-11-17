@@ -99,14 +99,10 @@ var (
 	DatabaseBoundCommands = append(ApiServerCommands, DbCmd, IngestCmd)
 )
 
-// validateBothOrNeither ensures that both options are provided, if either is provided.
-func validateBothOrNeither(option1, option2 string) error {
-	arg1, arg2 := viper.GetString(option1), viper.GetString(option2)
-	if arg1 != "" && arg2 == "" {
-		return fmt.Errorf("Invalid config: %s = %s, but corresponding option %s is not configured", option1, arg1, option2)
-	}
-	if arg1 == "" && arg2 != "" {
-		return fmt.Errorf("Invalid config: %s = %s, but corresponding option %s is not configured", option2, arg2, option1)
+func rejectTLSOption(opt *support.ConfigOption) error {
+	if viper.GetString(opt.Name) != "" {
+		return errors.New("TLS_CERT and TLS_KEY (--tls-cert and --tls-key) are no longer supported: " +
+			"Horizon no longer terminates TLS. Run Horizon behind a reverse proxy or load balancer that terminates TLS")
 	}
 	return nil
 }
@@ -592,17 +588,15 @@ func Flags() (*Config, support.ConfigOptions) {
 		},
 		&support.ConfigOption{
 			Name:           "tls-cert",
-			ConfigKey:      &config.TLSCert,
 			OptType:        types.String,
-			Usage:          "TLS certificate file to use for securing connections to horizon",
-			UsedInCommands: ApiServerCommands,
+			Hidden:         true,
+			CustomSetValue: rejectTLSOption,
 		},
 		&support.ConfigOption{
 			Name:           "tls-key",
-			ConfigKey:      &config.TLSKey,
 			OptType:        types.String,
-			Usage:          "TLS private key file to use for securing connections to horizon",
-			UsedInCommands: ApiServerCommands,
+			Hidden:         true,
+			CustomSetValue: rejectTLSOption,
 		},
 		&support.ConfigOption{
 			Name:           IngestFlagName,
@@ -938,11 +932,6 @@ func ApplyFlags(config *Config, flags support.ConfigOptions, options ApplyOption
 	}
 
 	if err := flags.SetValues(); err != nil {
-		return err
-	}
-
-	// Validate options that should be provided together
-	if err := validateBothOrNeither("tls-cert", "tls-key"); err != nil {
 		return err
 	}
 
