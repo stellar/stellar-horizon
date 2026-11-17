@@ -8,8 +8,8 @@ import (
 	_ "net/http/pprof"
 	"time"
 
-	"github.com/go-chi/chi"
-	chimiddleware "github.com/go-chi/chi/middleware"
+	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
