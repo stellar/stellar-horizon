@@ -41,8 +41,6 @@ func BaseURL(ctx context.Context) *url.URL {
 	switch {
 	case r.Header.Get("X-Forwarded-Proto") != "":
 		scheme = r.Header.Get("X-Forwarded-Proto")
-	case r.TLS != nil:
-		scheme = "https"
 	default:
 		scheme = "http"
 	}

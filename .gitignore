@@ -10,9 +10,6 @@ internal/docs/public
 *.swp
 *.swo
 
-/tls/*.crt
-/tls/*.key
-/tls/*.csr
 /local-archive
 **bucket-cache/
 .vscode
