@@ -20,6 +20,7 @@ services:
       # set build context to the root directory of the go monorepo
       context: ../../../
       args:
+         GO_VERSION: ${GO_VERSION:-}
          STELLAR_CORE_VERSION: ${STELLAR_CORE_VERSION:-}
       dockerfile: docker/Dockerfile.dev
     restart: on-failure
