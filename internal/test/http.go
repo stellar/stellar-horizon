@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 )
 
 type RequestHelper interface {

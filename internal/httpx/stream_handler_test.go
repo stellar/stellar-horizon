@@ -12,7 +12,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/stellar/go-stellar-sdk/support/db"

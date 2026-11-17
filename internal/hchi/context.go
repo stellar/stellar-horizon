@@ -5,7 +5,7 @@ package hchi
 import (
 	"context"
 
-	"github.com/go-chi/chi/middleware"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 // key is an unexported type for keys defined in this package.
