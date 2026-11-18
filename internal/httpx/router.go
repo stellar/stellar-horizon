@@ -10,8 +10,8 @@ import (
 
 	"github.com/stellar/go-stellar-sdk/clients/stellarcore"
 
-	"github.com/go-chi/chi"
-	chimiddleware "github.com/go-chi/chi/middleware"
+	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/cors"
@@ -100,7 +100,10 @@ func (r *Router) addMiddleware(config *RouterConfig,
 	}))
 	r.Use(loggerMiddleware(serverMetrics))
 	if config.MaxConcurrentRequests > 0 {
-		r.Use(chimiddleware.Throttle(int(config.MaxConcurrentRequests)))
+		r.Use(chimiddleware.ThrottleWithOpts(chimiddleware.ThrottleOpts{
+			Limit:      int(config.MaxConcurrentRequests),
+			StatusCode: http.StatusServiceUnavailable,
+		}))
 	}
 	r.Use(timeoutMiddleware(config.ConnectionTimeout))
 	if config.MaxHTTPRequestSize > 0 {

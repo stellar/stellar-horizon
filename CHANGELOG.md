@@ -5,6 +5,11 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Updated
+- Updated `go-stellar-sdk` and moved Horizon's HTTP router from `go-chi/chi` v4 to its maintained v5 line. This updates `golang.org/x/net`, `github.com/klauspost/compress` and `go.opentelemetry.io/otel/sdk` to versions without the known vulnerabilities that `govulncheck` reports. Building Horizon now requires Go 1.26.
+- Compressed responses now send `Vary: Accept-Encoding` in addition to `Vary: Origin`. Before, compression replaced `Vary: Origin`.
+- A `405 Method Not Allowed` response now lists the allowed methods in an `Allow` header.
+
 ## 30.0.1
 
 ### Fixed
