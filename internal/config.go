@@ -62,10 +62,6 @@ type Config struct {
 	SentryDSN         string
 	LogglyToken       string
 	LogglyTag         string
-	// TLSCert is a path to a certificate file to use for horizon's TLS config
-	TLSCert string
-	// TLSKey is the path to a private key file to use for horizon's TLS config
-	TLSKey string
 	// Ingest toggles whether this horizon instance should run the data ingestion subsystem.
 	Ingest bool
 	// HistoryRetentionCount represents the minimum number of ledgers worth of

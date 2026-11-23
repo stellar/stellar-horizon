@@ -5,6 +5,9 @@ file. This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Breaking Changes
+- Horizon no longer terminates TLS. The `TLS_CERT` and `TLS_KEY` environment variables and the `--tls-cert` and `--tls-key` flags have been removed, and Horizon exits at startup with an error if any of them is set. Run Horizon behind a reverse proxy or load balancer that terminates TLS and forwards plain HTTP to Horizon. Have it set the `X-Forwarded-Proto` header, so that links in Horizon's responses keep the `https` scheme.
+
 ## 30.0.1
 
 ### Fixed

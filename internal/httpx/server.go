@@ -27,12 +27,8 @@ type ServerMetrics struct {
 	RequestsReceivedCounter *prometheus.CounterVec
 }
 
-type TLSConfig struct {
-	CertPath, KeyPath string
-}
 type ServerConfig struct {
 	Port      uint16
-	TLSConfig *TLSConfig
 	AdminPort uint16
 }
 
@@ -92,7 +88,6 @@ type Server struct {
 	Router         *Router
 	Metrics        *ServerMetrics
 	server         *http.Server
-	config         ServerConfig
 	internalServer *http.Server
 }
 
@@ -151,7 +146,6 @@ func NewServer(serverConfig ServerConfig, routerConfig RouterConfig, ledgerState
 	result := &Server{
 		Router:  router,
 		Metrics: sm,
-		config:  serverConfig,
 		server:  newHTTPServer(addr, router, routerConfig.ConnectionTimeout),
 	}
 
@@ -180,13 +174,7 @@ func (s *Server) Serve() error {
 		}()
 	}
 
-	var err error
-	if s.config.TLSConfig != nil {
-		err = s.server.ListenAndServeTLS(s.config.TLSConfig.CertPath, s.config.TLSConfig.KeyPath)
-	} else {
-		err = s.server.ListenAndServe()
-	}
-	return err
+	return s.server.ListenAndServe()
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
