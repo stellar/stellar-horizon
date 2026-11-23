@@ -1,5 +1,5 @@
 ARG GO_VERSION
-FROM golang:${GO_VERSION}-bookworm AS builder
+FROM golang:${GO_VERSION:?}-bookworm AS builder
 
 ARG VERSION="devel"
 WORKDIR /go/src/github.com/stellar/stellar-horizon
