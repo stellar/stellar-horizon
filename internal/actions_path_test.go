@@ -11,7 +11,7 @@ import (
 
 	"github.com/guregu/null"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
