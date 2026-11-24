@@ -1,6 +1,5 @@
-# Change to Go version used in CI or rebuild with --build-arg.
-ARG GO_IMAGE=golang:1.25-bullseye
-FROM $GO_IMAGE
+ARG GO_VERSION
+FROM golang:${GO_VERSION}-bookworm
 
 WORKDIR /go/src/github.com/stellar/go
 

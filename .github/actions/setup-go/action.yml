@@ -2,7 +2,10 @@ name: 'Setup the Go environment'
 description: 'Installs go and restores/saves the build/module cache'
 inputs:
   go-version:
-    required: true
+    required: false
+  go-version-file:
+    description: 'File to read the version from, such as go.mod, when go-version is not given'
+    required: false
   internal-go-modules-client-id:
     description: 'See ../internal-go-modules'
     required: false
@@ -13,9 +16,11 @@ runs:
   using: "composite"
   steps:
   - name: Set up Go
+    id: setup-go
     uses: actions/setup-go@v6
     with:
       go-version: ${{ inputs.go-version }}
+      go-version-file: ${{ inputs.go-version-file }}
       stable: ${{ !(contains(inputs.go-version, 'beta') || contains(inputs.go-version, 'rc')) }}
 
   - id: internal-go-modules
@@ -41,7 +46,7 @@ runs:
 
   # The PREFIX must uniquely identify the specific instance of a job executing.
   - shell: bash
-    run: echo 'PREFIX=${{ github.workflow }}-${{ github.job }}-${{ runner.os }}-${{ inputs.go-version }}-matrix(${{ join(matrix.*,'|') }})' >> $GITHUB_ENV
+    run: echo 'PREFIX=${{ github.workflow }}-${{ github.job }}-${{ runner.os }}-${{ steps.setup-go.outputs.go-version }}-matrix(${{ join(matrix.*,'|') }})' >> $GITHUB_ENV
 
   # Cache the Go Modules downloaded during the job.
   - uses: actions/cache@v4

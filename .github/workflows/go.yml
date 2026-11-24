@@ -18,7 +18,6 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-24.04]
-        go: ["1.25", "1.26"]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v3
@@ -27,7 +26,7 @@ jobs:
         ref: ${{ github.event.pull_request.head.sha || github.ref }}
     - uses: ./.github/actions/setup-go
       with:
-        go-version: ${{ matrix.go }}
+        go-version-file: go.mod
         internal-go-modules-client-id: ${{ secrets.INTERNAL_GO_MODULES_GH_APP_CLIENT_ID }}
         internal-go-modules-private-key: ${{ secrets.INTERNAL_GO_MODULES_GH_APP_PRIVATE_KEY }}
     - run: ./gomod.sh
@@ -40,7 +39,6 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-24.04]
-        go: ["1.25", "1.26"]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v3
@@ -49,7 +47,7 @@ jobs:
         ref: ${{ github.event.pull_request.head.sha || github.ref }}
     - uses: ./.github/actions/setup-go
       with:
-        go-version: ${{ matrix.go }}
+        go-version-file: go.mod
         internal-go-modules-client-id: ${{ secrets.INTERNAL_GO_MODULES_GH_APP_CLIENT_ID }}
         internal-go-modules-private-key: ${{ secrets.INTERNAL_GO_MODULES_GH_APP_PRIVATE_KEY }}
     - run: go build ./...
@@ -60,7 +58,6 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-24.04]
-        go: ["1.25", "1.26"]
         pg: [12, 16]
     runs-on: ${{ matrix.os }}
     services:
@@ -104,7 +101,7 @@ jobs:
         fetch-depth: '0'
     - uses: ./.github/actions/setup-go
       with:
-        go-version: ${{ matrix.go }}
+        go-version-file: go.mod
         internal-go-modules-client-id: ${{ secrets.INTERNAL_GO_MODULES_GH_APP_CLIENT_ID }}
         internal-go-modules-private-key: ${{ secrets.INTERNAL_GO_MODULES_GH_APP_PRIVATE_KEY }}
       # Go's default is 10m per package, which internal/ingest and

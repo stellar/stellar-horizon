@@ -35,4 +35,6 @@ case $NETWORK in
     ;;
 esac
 
+GO_VERSION=$(sed -n 's/^toolchain go//p' "${DOCKER_DIR}../go.mod")
+export GO_VERSION
 docker-compose $DOCKER_FLAGS up --build -d

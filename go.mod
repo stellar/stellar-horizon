@@ -2,6 +2,8 @@ module github.com/stellar/stellar-horizon
 
 go 1.25.0
 
+toolchain go1.26.11
+
 require (
 	cloud.google.com/go/storage v1.56.0 // indirect
 	github.com/2opremio/pretty v0.2.2-0.20230601220618-e1d5758b2a95
