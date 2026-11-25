@@ -1,0 +1,84 @@
+name: Horizon Docker image
+
+# Builds the stellar-horizon image for a published package and pushes it to ECR as
+# dev/stellar-horizon:<version> and stg/stellar-horizon:<version> (with ~ replaced by -).
+# docker/Dockerfile installs that version from apt.stellar.org's noble/testing, with
+# stellar-core from noble stable (or the given core version), so it builds nothing from source.
+# horizon-package.yml calls this after publishing; it can also be run by hand.
+#
+# The same file runs in stellar-horizon and stellar-horizon-internal. Pushes use
+# stellar/actions' sdf-ecr-login, which allows them when the ECR repository's Repository tag
+# names this repo.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Package version, including the revision, for example 30.0.1-1001
+        type: string
+        required: true
+      stellar_core_version:
+        description: stellar-core package version to bundle. Empty takes the latest stable
+        type: string
+        default: ''
+      allow_core_unstable:
+        description: Also look for stellar-core in unstable
+        type: boolean
+        default: false
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Package version, including the revision, for example 30.0.1-1001
+        required: true
+      stellar_core_version:
+        description: stellar-core package version to bundle. Empty takes the latest stable
+        default: ''
+      allow_core_unstable:
+        description: Also look for stellar-core in unstable
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    permissions:
+      id-token: write # to sign in to ECR
+      contents: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Check the inputs
+        env:
+          VERSION: ${{ inputs.version }}
+          CORE: ${{ inputs.stellar_core_version }}
+        run: |
+          [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(~[a-z0-9~]+)?-[0-9]+$ ]] ||
+            { echo "::error::version ${VERSION} isn't X.Y.Z[~tag]-revision"; exit 1; }
+          [[ -z "${CORE}" || "${CORE}" =~ ^[0-9A-Za-z.~+-]+$ ]] ||
+            { echo "::error::stellar_core_version ${CORE} has characters a Debian version can't"; exit 1; }
+
+      - id: ecr
+        uses: stellar/actions/sdf-ecr-login@main
+
+      - name: Build
+        working-directory: docker
+        env:
+          VERSION: ${{ inputs.version }}
+          STELLAR_CORE_VERSION: ${{ inputs.stellar_core_version }}
+          ALLOW_CORE_UNSTABLE: ${{ inputs.allow_core_unstable && 'yes' || 'no' }}
+          REGISTRY: ${{ steps.ecr.outputs.ecr-registry }}
+        run: make docker-build DOCKER_OPTS=--no-cache TAG="${REGISTRY}/dev/stellar-horizon:${VERSION//\~/-}"
+
+      - name: Push to dev and stg
+        env:
+          VERSION: ${{ inputs.version }}
+          REGISTRY: ${{ steps.ecr.outputs.ecr-registry }}
+        run: |
+          set -euo pipefail
+          tag=${VERSION//\~/-}
+          ecr-push "${REGISTRY}/dev/stellar-horizon:${tag}"
+          docker tag "${REGISTRY}/dev/stellar-horizon:${tag}" "${REGISTRY}/stg/stellar-horizon:${tag}"
+          ecr-push "${REGISTRY}/stg/stellar-horizon:${tag}"

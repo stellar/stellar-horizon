@@ -1,0 +1,152 @@
+name: Horizon package
+
+# Builds stellar-horizon's .deb from a branch or tag and publishes it to apt.stellar.org (jammy
+# and noble, `unstable` and, unless turned off, `testing`) with stellar/actions' deb-s3-publish,
+# then builds the Docker image with horizon-docker.yml.
+#
+# The same file runs in stellar-horizon and stellar-horizon-internal. Run it from main: the
+# staging role and the publisher only trust main. The `ref` input picks what to build. Which
+# repo, distros and components the package goes to is set in the publisher's policy, not here.
+#
+# Package revisions start at 1000 (1000 + the run number), above those of packages built
+# elsewhere, so no two builds publish the same version.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or tag to build, for example v30.0.1 or release/v31.0.0
+        required: true
+      version:
+        description: >-
+          Package version, for example 31.0.0~rc1. Leave empty to take it from a v<version> tag
+          or a release/v<version> branch.
+        default: ''
+      promote_to_testing:
+        description: Also publish to testing (off publishes to unstable only)
+        type: boolean
+        default: true
+      build_docker:
+        description: Build the Docker image after publishing (needs promote_to_testing)
+        type: boolean
+        default: true
+
+permissions: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    outputs:
+      deb-version: ${{ steps.package.outputs.deb-version }}
+    env:
+      DEBFULLNAME: Package Maintainer
+      DEBEMAIL: packages@stellar.org
+    steps:
+      # This workflow's own commit, for the local actions; the code to build goes in src/
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ inputs.ref }}
+          path: src
+          persist-credentials: false
+      # The debian/ packaging lives in stellar/packages
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: stellar/packages
+          path: packages
+          persist-credentials: false
+
+      - name: Work out the version
+        id: version
+        env:
+          REF: ${{ inputs.ref }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VERSION}" ]; then
+            # v30.0.1 or release/v30.0.1-rc1 becomes 30.0.1 or 30.0.1~rc1
+            name=${REF##*/}
+            [[ "${name}" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(-([a-z0-9]+))?$ ]] ||
+              { echo "::error::Set version: ${REF} isn't a v<version> tag or release/v<version> branch"; exit 1; }
+            VERSION=${BASH_REMATCH[1]}${BASH_REMATCH[3]:+~${BASH_REMATCH[3]}}
+          fi
+          # Hyphens would break Debian's version ordering
+          [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(~[a-z0-9~]+)?$ ]] ||
+            { echo "::error::Version ${VERSION} doesn't match X.Y.Z or X.Y.Z~tag"; exit 1; }
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+
+      # go.mod's toolchain line, or else the newest patch of its go line: `go 1.25.0` alone
+      # would install that exact, outdated patch
+      - name: Pick the Go version
+        id: go
+        run: |
+          set -euo pipefail
+          v=$(sed -n 's/^toolchain go//p' src/go.mod)
+          [ -n "${v}" ] || v="$(sed -n 's/^go \([0-9]*\.[0-9]*\).*/\1/p' src/go.mod).x"
+          echo "version=${v}" >> "${GITHUB_OUTPUT}"
+
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: ${{ steps.go.outputs.version }}
+          internal-go-modules-client-id: ${{ secrets.INTERNAL_GO_MODULES_GH_APP_CLIENT_ID }}
+          internal-go-modules-private-key: ${{ secrets.INTERNAL_GO_MODULES_GH_APP_PRIVATE_KEY }}
+
+      - name: Build horizon
+        working-directory: src
+        env:
+          CGO_ENABLED: '0'
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          go build -trimpath -v -o ../horizon \
+            -ldflags "-X=github.com/stellar/go-stellar-sdk/support/app.version=${VERSION}-$(git rev-parse HEAD)" .
+          sha256sum ../horizon
+          ../horizon version
+
+      - name: Package
+        id: package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          REVISION: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends devscripts debhelper
+          DEB_VERSION="${VERSION}-$((1000 + REVISION))"
+          dch --changelog packages/stellar-horizon/debian/changelog --distribution jammy \
+            --newversion "${DEB_VERSION}" "New horizon version"
+          mv packages/stellar-horizon "stellar-horizon-${VERSION}"
+          mv horizon "stellar-horizon-${VERSION}/stellar-horizon"
+          (cd "stellar-horizon-${VERSION}" && dpkg-buildpackage -b -us -uc)
+          mkdir debs && mv "stellar-horizon_${DEB_VERSION}_amd64.deb" debs/
+          dpkg-deb --info "debs/stellar-horizon_${DEB_VERSION}_amd64.deb"
+          echo "deb-version=${DEB_VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: debs
+          path: debs/*.deb
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    permissions:
+      id-token: write
+    uses: stellar/actions/.github/workflows/deb-s3-publish.yml@main
+    with:
+      artifact-name: debs
+      staging-role: arn:aws:iam::746476062914:role/github-actions-deb-s3-staging
+      targets: ${{ !inputs.promote_to_testing && 'jammy/unstable noble/unstable' || '' }}
+
+  # The image installs the package from noble/testing
+  docker:
+    needs: [build, publish]
+    if: inputs.build_docker && inputs.promote_to_testing
+    permissions:
+      id-token: write
+      contents: read
+    uses: ./.github/workflows/horizon-docker.yml
+    with:
+      version: ${{ needs.build.outputs.deb-version }}
